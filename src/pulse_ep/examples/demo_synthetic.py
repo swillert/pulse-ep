@@ -17,6 +17,7 @@ just the array-only public API. Invoke from the shell with::
 from __future__ import annotations
 
 import argparse
+
 import numpy as np
 
 from pulse_ep import EPMap
@@ -63,7 +64,7 @@ def gaussian_score_field(
         origin_xyz = tuple(vertices[0])
     origin = np.asarray(origin_xyz)
     distances_euclidean = np.linalg.norm(vertices - origin, axis=1)
-    scores = 100.0 * np.exp(-(distances_euclidean ** 2) / (2.0 * sigma_mm ** 2))
+    scores = 100.0 * np.exp(-(distances_euclidean**2) / (2.0 * sigma_mm**2))
     if noise_std > 0:
         scores += rng.normal(0.0, noise_std * 100.0, size=scores.shape)
     scores = np.clip(scores, 0.0, 100.0)
@@ -88,7 +89,7 @@ def area_breakdown(
     """Sum triangle area per score interval. Triangle score = mean of its vertices."""
     tri_scores = scores[triangles].mean(axis=1)
     out: dict[tuple[float, float], float] = {}
-    for lo, hi in zip(bins[:-1], bins[1:]):
+    for lo, hi in zip(bins[:-1], bins[1:]):  # noqa: B905
         mask = (tri_scores >= lo) & (tri_scores < hi)
         out[(float(lo), float(hi))] = float(tri_areas[mask].sum())
     return out
@@ -112,9 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     vertices, triangles = make_synthetic_atrium(resolution=args.resolution)
     print(f"mesh:           {len(vertices)} vertices, {len(triangles)} triangles")
 
-    scores, origin_idx = gaussian_score_field(
-        vertices, sigma_mm=args.sigma, noise_std=args.noise
-    )
+    scores, origin_idx = gaussian_score_field(vertices, sigma_mm=args.sigma, noise_std=args.noise)
     print(f"score field:    σ = {args.sigma:.1f} mm, origin vertex = {origin_idx}")
     print(
         f"                min/median/max = {scores.min():.1f} / "
