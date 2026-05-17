@@ -45,12 +45,9 @@ python examples/paraview/export_to_vtk.py \
 This path talks directly to PostgreSQL through `pulse_ep.core` — no
 running HTTP server needed.
 
-## Notes
+## Note
 
-- The `distance` parameter to `/get_mesh_data` controls how far around
-  measurement points the per-vertex interpolation happens; ParaView
-  receives `NaN` outside that radius (which ParaView colors as the
-  background). Default is `5.0` mm.
-- For Heat-Method geodesics and σ-decay analysis use the
-  [`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay)
-  package; these examples deliberately stop at "load and display".
+The `distance` parameter to `/get_mesh_data` controls how far around
+measurement points the per-vertex interpolation happens; ParaView
+receives `NaN` outside that radius (which ParaView colors as the
+background). Default is `5.0` mm.
