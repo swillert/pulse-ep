@@ -47,10 +47,7 @@ def _resolve_database_url() -> str | None:
     required = ("user", "password", "host", "port", "dbname")
     if not all(k in db for k in required):
         return None
-    return (
-        f"postgresql://{db['user']}:{db['password']}"
-        f"@{db['host']}:{db['port']}/{db['dbname']}"
-    )
+    return f"postgresql://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['dbname']}"
 
 
 def create_db_engine(url: str | None = None):
