@@ -7,15 +7,27 @@ language you work in.
 | Folder        | Language           | What it shows                                                        |
 | ------------- | ------------------ | -------------------------------------------------------------------- |
 | `paraview/`   | Python (ParaView)  | Load a CARTO map directly into ParaView via the REST API, plus a CLI VTU exporter that uses `pulse_ep.core` without a running server. |
-| `r/`          | R (httr2 + rgl)    | Minimal REST client and a demo that renders the mesh and plots the per-vertex scalar distribution. |
-| `matlab/`     | MATLAB (R2020a+)   | `webread` / `webwrite` client and a `trisurf` 3D visualisation.      |
-| `notebooks/`  | Jupyter / Python   | End-to-end notebook: login → study browsing → 3D plot with PyVista. |
+| `r/`          | R (httr2 + rgl)    | Minimal REST client, mesh rendering, per-vertex scalar histogram and area-per-interval table — re-computed independently in R. |
+| `matlab/`     | MATLAB (R2020a+)   | `webread` / `webwrite` client, `trisurf` 3D, scalar histogram and area-per-interval table — the same numbers, in MATLAB. |
+| `notebooks/`  | Jupyter / Python   | End-to-end notebook: login → study browsing → 3D plot with PyVista, scalar histogram and area-per-interval table. |
 
-> The σ-resolution analysis (Heat-Method geodesics + Gaussian decay fit)
-> is a separate scientific contribution and lives in
+## Why these examples exist (and what they prove)
+
+These examples form the **cross-language reproducibility statement of
+the software paper**: from one CARTO study, served by one REST endpoint,
+four independent toolchains compute identical platform-level reductions
+— the per-vertex scalar histogram and the per-interval surface-area
+breakdown (`/calculate_areas_for_intervals`). If a clinical co-author
+in MATLAB and a stats co-author in R get the same numbers as the
+Python toolkit and the bundled web viewer, the platform itself is
+faithful — independent of any one stack.
+
+> Scope boundary: the *scientific* σ-resolution analysis (Heat-Method
+> geodesics + Gaussian decay fit) is the contribution of the method
+> paper and lives in
 > [`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay).
-> These pulse-ep examples deliberately stop at data access and basic
-> visualisation.
+> That repository ships its own cross-language reproducibility demos
+> for σ̂; this one stays at platform-level reductions on purpose.
 
 The Python end-to-end demo without any external dependencies lives at
 [`src/pulse_ep/examples/demo_synthetic.py`](../src/pulse_ep/examples/demo_synthetic.py)
@@ -64,7 +76,7 @@ language-specific examples.
 
 ## REST endpoints used by these examples
 
-These are the four endpoints every example touches. See `src/pulse_ep/server/app.py`
+These are the five endpoints every example touches. See `src/pulse_ep/server/app.py`
 for the full surface.
 
 | Method | Path                                | Purpose                                                  |
@@ -73,6 +85,7 @@ for the full surface.
 | `GET`  | `/list_studies`                     | List all studies in the database.                        |
 | `GET`  | `/list_epmaps_in_study/<study_id>`  | List EP maps in a study.                                 |
 | `GET`  | `/get_mesh_data?map_id=&scalar_name=&distance=` | Mesh + per-vertex scalars + measurement points. |
+| `POST` | `/calculate_areas_for_intervals`    | Surface area per score bin — the clinical-report reduction. |
 
 All scientific analysis (Heat-Method geodesics, σ-decay fits, focality)
 is in the companion package
