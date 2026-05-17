@@ -111,6 +111,7 @@ include = ["pulse_ep*"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+extend-exclude = ["*.ipynb"]  # client-facing notebooks intentionally use a different style
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
