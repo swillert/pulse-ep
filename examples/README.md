@@ -7,9 +7,15 @@ language you work in.
 | Folder        | Language           | What it shows                                                        |
 | ------------- | ------------------ | -------------------------------------------------------------------- |
 | `paraview/`   | Python (ParaView)  | Load a CARTO map directly into ParaView via the REST API, plus a CLI VTU exporter that uses `pulse_ep.core` without a running server. |
-| `r/`          | R (httr2 + rgl)    | Minimal REST client and a demo that plots scalar distributions and fits a Gaussian decay to pacemap similarity vs. distance. |
+| `r/`          | R (httr2 + rgl)    | Minimal REST client and a demo that renders the mesh and plots the per-vertex scalar distribution. |
 | `matlab/`     | MATLAB (R2020a+)   | `webread` / `webwrite` client and a `trisurf` 3D visualisation.      |
 | `notebooks/`  | Jupyter / Python   | End-to-end notebook: login → study browsing → 3D plot with PyVista. |
+
+> The σ-resolution analysis (Heat-Method geodesics + Gaussian decay fit)
+> is a separate scientific contribution and lives in
+> [`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay).
+> These pulse-ep examples deliberately stop at data access and basic
+> visualisation.
 
 The Python end-to-end demo without any external dependencies lives at
 [`src/pulse_ep/examples/demo_synthetic.py`](../src/pulse_ep/examples/demo_synthetic.py)
