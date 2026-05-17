@@ -21,11 +21,6 @@ from the same REST payload Python, MATLAB and the web viewer consume.
 A clinical co-author who works in R should reproduce the same numbers
 without a Python install.
 
-The σ-resolution analysis (Heat-Method geodesics + Gaussian fit) is
-out of scope here — it is a scientific contribution of
-[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay) and
-has its own cross-language demos there.
-
 ## Required R packages
 
 ```r
