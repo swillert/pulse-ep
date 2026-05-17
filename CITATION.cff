@@ -9,9 +9,7 @@ abstract: >-
   custom analyses. It enables quantitative research on triangulated atrial
   surface meshes — including geodesic distance computation, surface-area
   integration over scalar intervals, and reference-catheter geometry analysis —
-  that are not available in the clinical mapping system. The scientific
-  extension package pulse-ep-decay adds Heat-Method geodesics and Gaussian
-  decay-fit analysis for spatial-resolution quantification.
+  that are not available in the clinical mapping system.
 authors:
   - family-names: Willert
     given-names: Sven
