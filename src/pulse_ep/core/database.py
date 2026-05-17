@@ -1,11 +1,12 @@
 """Database engine & session factory for pulse-ep.
 
-Configuration is resolved (in order) from:
+Database configuration is resolved via :mod:`pulse_ep.core.config`. The
+URL can come from any of these sources (highest priority first):
 
-1. ``PULSE_EP_DATABASE_URL`` environment variable — a full SQLAlchemy URL.
-2. ``config.ini`` (path overridable via ``PULSE_EP_CONFIG``) with a
-   ``[database]`` section containing ``user``, ``password``, ``host``,
-   ``port``, ``dbname``.
+1. ``PULSE_EP_DATABASE_URL`` environment variable (full SQLAlchemy URL).
+2. ``PULSE_EP_DATABASE_{USER,PASSWORD,HOST,PORT,NAME}`` components.
+3. A ``.env`` file in the working directory.
+4. Legacy ``config.ini`` with a ``[database]`` section.
 
 Engine and session factory are **lazily created** on first
 :func:`get_db_session` call, so importing :mod:`pulse_ep` in an
@@ -15,13 +16,12 @@ fresh ``pip install`` smoke tests) does not fail.
 
 from __future__ import annotations
 
-import configparser
-import os
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from pulse_ep.core.config import get_settings
 from pulse_ep.core.models import AttributeMetadata, Base
 
 _engine = None
@@ -29,25 +29,14 @@ _Session: sessionmaker | None = None
 
 
 def _resolve_database_url() -> str | None:
-    """Resolve the SQLAlchemy URL or return ``None`` if no config is present."""
-    env_url = os.environ.get("PULSE_EP_DATABASE_URL")
-    if env_url:
-        return env_url
+    """Resolve the SQLAlchemy URL or return ``None`` if no config is present.
 
-    config_path = os.environ.get("PULSE_EP_CONFIG", "config.ini")
-    if not os.path.exists(config_path):
-        return None
-
-    config = configparser.ConfigParser()
-    config.read(config_path)
-    if "database" not in config:
-        return None
-
-    db = config["database"]
-    required = ("user", "password", "host", "port", "dbname")
-    if not all(k in db for k in required):
-        return None
-    return f"postgresql://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['dbname']}"
+    Delegates to :func:`pulse_ep.core.config.get_settings`, so the
+    resolution order is whatever the :class:`Settings` model defines.
+    Kept as a module-level helper for backwards compatibility with code
+    that imported it directly (and for ease of monkey-patching in tests).
+    """
+    return get_settings().resolved_database_url
 
 
 def create_db_engine(url: str | None = None):
