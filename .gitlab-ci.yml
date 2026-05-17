@@ -1,15 +1,17 @@
 # GitLab CI for pulse-ep
 #
-# Stages: lint -> test (Python matrix 3.10 / 3.11 / 3.12)
+# Stages:
+#   lint  -> ruff format + check
+#   test  -> Python matrix 3.10 / 3.11 / 3.12, pytest
+#   pages -> mkdocs-material site, deployed to GitLab Pages
 #
 # The test job installs pulse-ep with the [server,figures,dev] extras so
-# the demo / EPMap tests have pyvista, vtk and matplotlib available. The
-# server extra is pulled in to keep the test path realistic; if it ever
-# slows builds significantly, split it into a dedicated server-tests job.
+# the demo / EPMap tests have pyvista, vtk and matplotlib available.
 
 stages:
   - lint
   - test
+  - pages
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
@@ -59,3 +61,25 @@ test:py3.11:
 test:py3.12:
   image: python:3.12
   <<: *test_template
+
+# ---------------------------------------------------------------------
+# Documentation site: mkdocs-material → GitLab Pages
+# ---------------------------------------------------------------------
+#
+# The mkdocstrings plugin imports pulse_ep at build time to extract
+# docstrings, so we install the package itself (slim — no server/figures
+# extras needed for doc generation) plus the [docs] extra.
+pages:
+  stage: pages
+  image: python:3.12-slim
+  <<: *python_setup
+  script:
+    - apt-get update && apt-get install -y --no-install-recommends libgl1 libxrender1
+    - pip install -e ".[docs]"
+    - mkdocs build --strict --site-dir public
+  artifacts:
+    paths:
+      - public
+    expire_in: 30 days
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
