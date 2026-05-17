@@ -22,13 +22,6 @@ in MATLAB and a stats co-author in R get the same numbers as the
 Python toolkit and the bundled web viewer, the platform itself is
 faithful — independent of any one stack.
 
-> Scope boundary: the *scientific* σ-resolution analysis (Heat-Method
-> geodesics + Gaussian decay fit) is the contribution of the method
-> paper and lives in
-> [`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay).
-> That repository ships its own cross-language reproducibility demos
-> for σ̂; this one stays at platform-level reductions on purpose.
-
 The Python end-to-end demo without any external dependencies lives at
 [`src/pulse_ep/examples/demo_synthetic.py`](../src/pulse_ep/examples/demo_synthetic.py)
 and is wired as the `pulse-ep-demo` console script.
@@ -86,8 +79,3 @@ for the full surface.
 | `GET`  | `/list_epmaps_in_study/<study_id>`  | List EP maps in a study.                                 |
 | `GET`  | `/get_mesh_data?map_id=&scalar_name=&distance=` | Mesh + per-vertex scalars + measurement points. |
 | `POST` | `/calculate_areas_for_intervals`    | Surface area per score bin — the clinical-report reduction. |
-
-All scientific analysis (Heat-Method geodesics, σ-decay fits, focality)
-is in the companion package
-[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay) and
-intentionally not duplicated in these client examples.
