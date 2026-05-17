@@ -5,7 +5,6 @@ from __future__ import annotations
 
 def test_top_level_imports() -> None:
     from pulse_ep import (
-        __version__,
         AttributeMetadata,
         Base,
         ColormapModel,
@@ -17,6 +16,7 @@ def test_top_level_imports() -> None:
         Study,
         StudyModel,
         UserModel,
+        __version__,
         discover_carto_exports,
         get_db_session,
         get_filenames_from_csv,
