@@ -1,19 +1,29 @@
-from typing import Optional, List, Tuple, Dict
-from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Float, Index, JSON, BigInteger, Text
+from typing import Optional
+
+import numpy as np
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, FLOAT, JSONB
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Session, declarative_base, relationship
 from sqlalchemy.orm.attributes import flag_modified
+
 from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.study import Study
-import numpy as np
 
 Base = declarative_base()
 
 
 class StudyModel(Base):
-    __tablename__ = 'studies'
+    __tablename__ = "studies"
 
     id: int = Column(Integer, primary_key=True, index=True)
     name: str = Column(String, nullable=False)
@@ -37,15 +47,15 @@ class StudyModel(Base):
         session.commit()
 
     @classmethod
-    def find_by_name(cls, name: str, session: Session) -> Optional['StudyModel']:
+    def find_by_name(cls, name: str, session: Session) -> Optional["StudyModel"]:
         return session.query(cls).filter_by(name=name).first()
 
     @classmethod
-    def find_by_id(cls, id: int, session: Session) -> Optional['StudyModel']:
+    def find_by_id(cls, id: int, session: Session) -> Optional["StudyModel"]:
         return session.query(cls).filter_by(id=id).first()
 
     @classmethod
-    def get_study_list(cls, session: Session) -> List[Tuple[int, str]]:
+    def get_study_list(cls, session: Session) -> list[tuple[int, str]]:
         studies = session.query(cls).with_entities(cls.id, cls.name).all()
         return [(study.id, study.name) for study in studies]
 
@@ -54,8 +64,11 @@ class StudyModel(Base):
         study = cls.retrieve(session, study_id)
         if study is None:
             return None
-        epmaps = session.query(EPMapModel.id, EPMapModel.map_name, EPMapModel.number_of_points).filter(
-            EPMapModel.study_id == study_id).all()
+        epmaps = (
+            session.query(EPMapModel.id, EPMapModel.map_name, EPMapModel.number_of_points)
+            .filter(EPMapModel.study_id == study_id)
+            .all()
+        )
         return epmaps
 
     def get_epmap_list(self, session: Session):
@@ -63,24 +76,24 @@ class StudyModel(Base):
         return [(epmap.id, epmap.map_name) for epmap in self.epmaps]
 
     @classmethod
-    def from_study(cls, study: Study) -> 'StudyModel':
+    def from_study(cls, study: Study) -> "StudyModel":
         return cls(name=study.name)
 
     @classmethod
-    def get_all_studies_and_epmaps(cls, session: Session) -> List[Tuple[int, str, int, str, int]]:
-        query = session.query(
-            cls.id.label('study_id'),
-            cls.name.label('study_name'),
-            EPMapModel.id.label('epmap_id'),
-            EPMapModel.map_name.label('epmap_map_name'),
-            EPMapModel.number_of_points.label('number_of_points')
-        ).join(
-            EPMapModel, EPMapModel.study_id == cls.id
-        ).join(
-            EPMapAttributes, EPMapAttributes.map_id == EPMapModel.id
-        ).group_by(
-            cls.id, cls.name, EPMapModel.id, EPMapModel.map_name
-        ).order_by(cls.name, EPMapModel.map_name)
+    def get_all_studies_and_epmaps(cls, session: Session) -> list[tuple[int, str, int, str, int]]:
+        query = (
+            session.query(
+                cls.id.label("study_id"),
+                cls.name.label("study_name"),
+                EPMapModel.id.label("epmap_id"),
+                EPMapModel.map_name.label("epmap_map_name"),
+                EPMapModel.number_of_points.label("number_of_points"),
+            )
+            .join(EPMapModel, EPMapModel.study_id == cls.id)
+            .join(EPMapAttributes, EPMapAttributes.map_id == EPMapModel.id)
+            .group_by(cls.id, cls.name, EPMapModel.id, EPMapModel.map_name)
+            .order_by(cls.name, EPMapModel.map_name)
+        )
         return query.all()
 
 
@@ -88,31 +101,35 @@ class StudyModel(Base):
 #  EPMapModel — per-map mesh & scalar data
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class EPMapModel(Base):
-    __tablename__ = 'epmaps'
+    __tablename__ = "epmaps"
 
     id: int = Column(Integer, primary_key=True, index=True)
-    study_id: int = Column(Integer, ForeignKey('studies.id'), nullable=False, index=True)
+    study_id: int = Column(Integer, ForeignKey("studies.id"), nullable=False, index=True)
 
     map_name: str = Column(String, nullable=False)
     study_name: str = Column(String, nullable=False)
-    number_of_points: Optional[int] = Column(Integer)
-    mesh_file: Optional[str] = Column(String)
+    number_of_points: int | None = Column(Integer)
+    mesh_file: str | None = Column(String)
 
     # ── Per-vertex mesh data (stays here — these are interpolated onto mesh) ──
-    triangles: List[int] = Column(ARRAY(Integer))
-    vertices: List[float] = Column(ARRAY(FLOAT))
-    triangle_areas: List[float] = Column(ARRAY(FLOAT))
-    is_vertex_at_edge: List[bool] = Column(ARRAY(Boolean))
-    act_bip: List[float] = Column(ARRAY(FLOAT))
-    normals: List[float] = Column(ARRAY(FLOAT))
-    uni_imp_frc: List[float] = Column(ARRAY(FLOAT))
+    triangles: list[int] = Column(ARRAY(Integer))
+    vertices: list[float] = Column(ARRAY(FLOAT))
+    triangle_areas: list[float] = Column(ARRAY(FLOAT))
+    is_vertex_at_edge: list[bool] = Column(ARRAY(Boolean))
+    act_bip: list[float] = Column(ARRAY(FLOAT))
+    normals: list[float] = Column(ARRAY(FLOAT))
+    uni_imp_frc: list[float] = Column(ARRAY(FLOAT))
 
     # ── Relationships ──
-    study = relationship('StudyModel', backref='epmaps')
-    points = relationship('EPMapPoint', back_populates='map',
-                          order_by='EPMapPoint.point_index',
-                          cascade='all, delete-orphan')
+    study = relationship("StudyModel", backref="epmaps")
+    points = relationship(
+        "EPMapPoint",
+        back_populates="map",
+        order_by="EPMapPoint.point_index",
+        cascade="all, delete-orphan",
+    )
 
     def __init__(self, map_name: str, study_id: int, **kwargs) -> None:
         self.map_name = map_name
@@ -136,20 +153,20 @@ class EPMapModel(Base):
         session.commit()
 
     @classmethod
-    def find_by_name(cls, map_name: str, session: Session) -> Optional['EPMapModel']:
+    def find_by_name(cls, map_name: str, session: Session) -> Optional["EPMapModel"]:
         return session.query(cls).filter_by(map_name=map_name).first()
 
     @classmethod
-    def find_by_id(cls, id: int, session: Session) -> Optional['EPMapModel']:
+    def find_by_id(cls, id: int, session: Session) -> Optional["EPMapModel"]:
         return session.query(cls).filter_by(id=id).first()
 
     @classmethod
-    def get_number_of_points_by_id(cls, session: Session, id: int) -> Optional[int]:
+    def get_number_of_points_by_id(cls, session: Session, id: int) -> int | None:
         epmap_model = session.query(cls).filter_by(id=id).first()
         return epmap_model.number_of_points if epmap_model else None
 
     @classmethod
-    def from_epmap(cls, epmap, study_id: int) -> 'EPMapModel':
+    def from_epmap(cls, epmap, study_id: int) -> "EPMapModel":
         return cls(
             map_name=epmap.map_name,
             study_id=study_id,
@@ -174,10 +191,12 @@ class EPMapModel(Base):
         """
         xyz = None
         if include_points and self.points:
-            xyz = np.array([
-                [p.position_x or np.nan, p.position_y or np.nan, p.position_z or np.nan]
-                for p in sorted(self.points, key=lambda p: p.point_index)
-            ])
+            xyz = np.array(
+                [
+                    [p.position_x or np.nan, p.position_y or np.nan, p.position_z or np.nan]
+                    for p in sorted(self.points, key=lambda p: p.point_index)
+                ]
+            )
 
         return EPMap(
             map_name=self.map_name,
@@ -199,20 +218,23 @@ class EPMapModel(Base):
 #  EPMapPoint — per-measurement-point raw data (NEW)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class EPMapPoint(Base):
     """
     One measurement point within an EP map.
     Stores raw CARTO data: positions, annotations, catheter positions, ECG.
     """
-    __tablename__ = 'ep_map_points'
+
+    __tablename__ = "ep_map_points"
 
     id = Column(Integer, primary_key=True, index=True)
-    map_id = Column(Integer, ForeignKey('epmaps.id', ondelete='CASCADE'),
-                    nullable=False, index=True)
-    point_index = Column(Integer, nullable=False)       # 0-based order within map
+    map_id = Column(
+        Integer, ForeignKey("epmaps.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    point_index = Column(Integer, nullable=False)  # 0-based order within map
 
-    carto_point_id = Column(Integer)                     # CARTO Point ID
-    start_time = Column(BigInteger)                      # CARTO ms timestamp
+    carto_point_id = Column(Integer)  # CARTO Point ID
+    start_time = Column(BigInteger)  # CARTO ms timestamp
 
     # ── Position (from study XML Position3D) ──
     position_x = Column(Float)
@@ -231,30 +253,29 @@ class EPMapPoint(Base):
 
     # ── Catheter positions at annotation time (OnAnnotation) ──
     # Each stores a flat list [x1,y1,z1, x2,y2,z2, ...] of electrode coords
-    cs_positions = Column(ARRAY(FLOAT))           # CS: typically 10 electrodes × 3
-    magnetic20_positions = Column(ARRAY(FLOAT))   # 20A: 20 electrodes × 3
-    roving_positions = Column(ARRAY(FLOAT))       # MEC/NAVISTAR: variable × 3
+    cs_positions = Column(ARRAY(FLOAT))  # CS: typically 10 electrodes × 3
+    magnetic20_positions = Column(ARRAY(FLOAT))  # 20A: 20 electrodes × 3
+    roving_positions = Column(ARRAY(FLOAT))  # MEC/NAVISTAR: variable × 3
 
     # ── Connector types present for this point ──
-    connector_types = Column(ARRAY(String))       # e.g. ['CS_CONNECTOR', 'MAGNETIC_20_POLE_A_CONNECTOR']
+    connector_types = Column(ARRAY(String))  # e.g. ['CS_CONNECTOR', 'MAGNETIC_20_POLE_A_CONNECTOR']
 
     # ── Relationships ──
-    map = relationship('EPMapModel', back_populates='points')
+    map = relationship("EPMapModel", back_populates="points")
 
-    __table_args__ = (
-        Index('ix_ep_map_points_map_point', 'map_id', 'point_index'),
-    )
+    __table_args__ = (Index("ix_ep_map_points_map_point", "map_id", "point_index"),)
 
     def __repr__(self):
-        return f'<EPMapPoint map_id={self.map_id} idx={self.point_index} carto_id={self.carto_point_id}>'
+        return f"<EPMapPoint map_id={self.map_id} idx={self.point_index} carto_id={self.carto_point_id}>"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  AttributeMetadata + EPMapAttributes (unchanged)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class AttributeMetadata(Base):
-    __tablename__ = 'attribute_metadata'
+    __tablename__ = "attribute_metadata"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
     data_type = Column(String, nullable=False)
@@ -262,18 +283,18 @@ class AttributeMetadata(Base):
 
 
 class EPMapAttributes(Base):
-    __tablename__ = 'epmap_attributes'
-    map_id = Column(Integer, ForeignKey('epmaps.id'), primary_key=True, index=True)
+    __tablename__ = "epmap_attributes"
+    map_id = Column(Integer, ForeignKey("epmaps.id"), primary_key=True, index=True)
     attributes = Column(JSONB, default={})
 
     __table_args__ = (
-        Index('ix_epmap_attributes_attributes', 'attributes', postgresql_using='gin'),
+        Index("ix_epmap_attributes_attributes", "attributes", postgresql_using="gin"),
     )
 
-    def get_all_attributes(self) -> Dict[str, any]:
+    def get_all_attributes(self) -> dict[str, any]:
         return self.attributes or {}
 
-    def set_attributes(self, attribute_values: Dict[str, any]):
+    def set_attributes(self, attribute_values: dict[str, any]):
         if self.attributes is None:
             self.attributes = {}
         self.attributes.update(attribute_values)
@@ -293,8 +314,9 @@ class EPMapAttributes(Base):
 #  UserModel, ColormapModel, ReportModel (unchanged)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class UserModel(Base):
-    __tablename__ = 'users'
+    __tablename__ = "users"
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
@@ -307,7 +329,7 @@ class UserModel(Base):
 
 
 class ColormapModel(Base):
-    __tablename__ = 'colormaps'
+    __tablename__ = "colormaps"
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
     colors = Column(ARRAY(String), nullable=False)
@@ -317,8 +339,16 @@ class ColormapModel(Base):
     is_relative = Column(Boolean, default=False)
     clipping = Column(Boolean, default=True)
 
-    def __init__(self, name, colors, intervals=None, use_gradient=True,
-                 annotations=None, is_relative=False, clipping=True):
+    def __init__(
+        self,
+        name,
+        colors,
+        intervals=None,
+        use_gradient=True,
+        annotations=None,
+        is_relative=False,
+        clipping=True,
+    ):
         self.name = name
         self.colors = colors
         self.intervals = intervals
@@ -350,15 +380,19 @@ class ColormapModel(Base):
 
     def to_dict(self):
         return {
-            "id": self.id, "name": self.name, "colors": self.colors,
-            "intervals": self.intervals, "use_gradient": self.use_gradient,
-            "annotations": self.annotations, "is_relative": self.is_relative,
+            "id": self.id,
+            "name": self.name,
+            "colors": self.colors,
+            "intervals": self.intervals,
+            "use_gradient": self.use_gradient,
+            "annotations": self.annotations,
+            "is_relative": self.is_relative,
             "clipping": self.clipping,
         }
 
 
 class ReportModel(Base):
-    __tablename__ = 'reports'
+    __tablename__ = "reports"
     id = Column(Integer, primary_key=True, autoincrement=True)
     map_ids = Column(ARRAY(Integer), nullable=False)
     additional_data = Column(JSON, nullable=True)
