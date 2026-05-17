@@ -35,10 +35,10 @@ classifiers = [
 ]
 
 dependencies = [
-    "numpy>=2.2,<3",
-    "scipy>=1.15,<2",
-    "scikit-learn>=1.6,<2",
-    "matplotlib>=3.10,<4",
+    "numpy>=1.26,<3",
+    "scipy>=1.11,<2",
+    "scikit-learn>=1.4,<2",
+    "matplotlib>=3.8,<4",
     "pyvista>=0.44,<1",
     "vtk>=9.4,<10",
     "trimesh>=4.5,<5",
@@ -48,7 +48,7 @@ dependencies = [
     "SQLAlchemy>=2.0,<3",
     "psycopg2-binary>=2.9,<3",
     "pillow>=11.0,<12",
-    "pandas>=2.2,<3",
+    "pandas>=2.0,<3",
 ]
 # Note: potpourri3d (Heat Method via geometry-central) is intentionally NOT here.
 # It belongs to pulse-ep-decay, the scientific extension package.
