@@ -1,66 +1,68 @@
+import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import Rbf
-from scipy.spatial import cKDTree
 import pymeshfix
 import pyvista as pv
+from scipy.spatial import cKDTree
+
 from pulse_ep.core import mesh_proc as mesh_proc
 from pulse_ep.core import plot_proc as plot_proc
-from typing import Optional, Union, Tuple
-from collada import Collada, geometry, material, source, scene
-from matplotlib.colors import ListedColormap, Normalize
-import matplotlib.pyplot as plt
+
 
 class EPMap:
-    def __init__(self,
-                 map_name: str,
-                 study_name: str,
-                 map_number_of_points: Optional[int] = None,
-                 mesh_file: Optional[str] = None,
-                 triangles: Optional[np.ndarray] = None,
-                 vertices: Optional[np.ndarray] = None,
-                 triangle_areas: Optional[np.ndarray] = None,
-                 is_vertex_at_edge: Optional[np.ndarray] = None,
-                 act_bip: Optional[np.ndarray] = None,
-                 normals: Optional[np.ndarray] = None,
-                 uni_imp_frc: Optional[np.ndarray] = None,
-                 xyz: Optional[np.ndarray] = None,
-                 pv_mesh: Optional[pv.PolyData] = None):
+    def __init__(
+        self,
+        map_name: str,
+        study_name: str,
+        map_number_of_points: int | None = None,
+        mesh_file: str | None = None,
+        triangles: np.ndarray | None = None,
+        vertices: np.ndarray | None = None,
+        triangle_areas: np.ndarray | None = None,
+        is_vertex_at_edge: np.ndarray | None = None,
+        act_bip: np.ndarray | None = None,
+        normals: np.ndarray | None = None,
+        uni_imp_frc: np.ndarray | None = None,
+        xyz: np.ndarray | None = None,
+        pv_mesh: pv.PolyData | None = None,
+    ):
 
         if map_name is None:
             raise ValueError("map_name must be provided.")
 
         self.map_name: str = map_name
         self.study_name: str = study_name
-        self.number_of_points: Optional[int] = map_number_of_points
-        self.mesh_file: Optional[str] = mesh_file
-        self.triangles: Optional[np.ndarray] = triangles
-        self.vertices: Optional[np.ndarray] = vertices
-        self.triangle_areas: Optional[np.ndarray] = triangle_areas
-        self.is_vertex_at_edge: Optional[np.ndarray] = is_vertex_at_edge
-        self.act_bip: Optional[np.ndarray] = act_bip
-        self.normals: Optional[np.ndarray] = normals
-        self.uni_imp_frc: Optional[np.ndarray] = uni_imp_frc
-        self.xyz: Optional[np.ndarray] = xyz
-        self.pv_mesh: Optional[pv.PolyData] = pv_mesh
+        self.number_of_points: int | None = map_number_of_points
+        self.mesh_file: str | None = mesh_file
+        self.triangles: np.ndarray | None = triangles
+        self.vertices: np.ndarray | None = vertices
+        self.triangle_areas: np.ndarray | None = triangle_areas
+        self.is_vertex_at_edge: np.ndarray | None = is_vertex_at_edge
+        self.act_bip: np.ndarray | None = act_bip
+        self.normals: np.ndarray | None = normals
+        self.uni_imp_frc: np.ndarray | None = uni_imp_frc
+        self.xyz: np.ndarray | None = xyz
+        self.pv_mesh: pv.PolyData | None = pv_mesh
 
     def process_carto_mesh_file(self, carto_mesh_file: str) -> None:
-        triangles, vertices, triangle_areas, isVertexAtEdge, act_bip, normals, uni_imp_frc = mesh_proc.read_carto_mesh_file(carto_mesh_file)
-        self.triangles: Optional[np.ndarray] = triangles
-        self.vertices: Optional[np.ndarray] = vertices
-        self.triangle_areas: Optional[np.ndarray] = triangle_areas
-        self.is_vertex_at_edge: Optional[np.ndarray] = isVertexAtEdge
-        self.act_bip: Optional[np.ndarray] = act_bip
-        self.normals: Optional[np.ndarray] = normals
-        self.uni_imp_frc: Optional[np.ndarray] = uni_imp_frc
+        triangles, vertices, triangle_areas, isVertexAtEdge, act_bip, normals, uni_imp_frc = (
+            mesh_proc.read_carto_mesh_file(carto_mesh_file)
+        )
+        self.triangles: np.ndarray | None = triangles
+        self.vertices: np.ndarray | None = vertices
+        self.triangle_areas: np.ndarray | None = triangle_areas
+        self.is_vertex_at_edge: np.ndarray | None = isVertexAtEdge
+        self.act_bip: np.ndarray | None = act_bip
+        self.normals: np.ndarray | None = normals
+        self.uni_imp_frc: np.ndarray | None = uni_imp_frc
 
     def generate_anatomical_pv_mesh(self, simplify: bool = True) -> pv.PolyData:
-        faces = np.pad(self.triangles, ((0, 0), (1, 0)), 'constant', constant_values=3)
+        faces = np.pad(self.triangles, ((0, 0), (1, 0)), "constant", constant_values=3)
         self.pv_mesh = pv.PolyData(self.vertices, faces)  # Store pv_mesh in the instance variable
         if simplify:
             self.repair_and_simplify_mesh()
         return self.pv_mesh
 
-    def project_measurements_to_mesh(self) -> Tuple[np.ndarray, np.ndarray]:
+    def project_measurements_to_mesh(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Project the measurements defined in self.xyz to the nearest vertices on the pv_mesh.
 
@@ -81,7 +83,9 @@ class EPMap:
 
         return closest_points, projected_vertices_coords
 
-    def create_polydata_for_projected_points(self, scalar_data: np.ndarray, scalar_name: str = "act", scalars_on_vertices: bool = True) -> pv.PolyData:
+    def create_polydata_for_projected_points(
+        self, scalar_data: np.ndarray, scalar_name: str = "act", scalars_on_vertices: bool = True
+    ) -> pv.PolyData:
         """
         Create a PyVista PolyData object for projected vertices and assign them corresponding scalar values.
 
@@ -108,12 +112,16 @@ class EPMap:
 
         # Length checks
         if len(p_points.points) != len(p_sim):
-            raise ValueError(f"Length mismatch: Number of points ({len(p_points.points)}) does not match number of scalar data points ({len(p_sim)}) for scalar '{scalar_name}'.")
+            raise ValueError(
+                f"Length mismatch: Number of points ({len(p_points.points)}) does not match number of scalar data points ({len(p_sim)}) for scalar '{scalar_name}'."
+            )
         else:
             print("all ok")
 
         if scalars_on_vertices and len(closest_points) != len(p_sim):
-            raise ValueError(f"Length mismatch: Number of closest points ({len(closest_points)}) does not match number of scalar data points ({len(p_sim)}) for scalar '{scalar_name}'.")
+            raise ValueError(
+                f"Length mismatch: Number of closest points ({len(closest_points)}) does not match number of scalar data points ({len(p_sim)}) for scalar '{scalar_name}'."
+            )
         else:
             print("all ok")
 
@@ -121,8 +129,6 @@ class EPMap:
         p_points.point_data[scalar_name] = p_sim
 
         return p_points
-
-
 
     def set_scalars(self, scalar_name: str, scalar_values: np.ndarray) -> None:
         """
@@ -139,13 +145,20 @@ class EPMap:
         if max_value - min_value != 0:
             normalized_values = (scalar_values - min_value) / (max_value - min_value)
         else:
-            normalized_values = scalar_values  # If all values are the same, no normalization is needed
+            normalized_values = (
+                scalar_values  # If all values are the same, no normalization is needed
+            )
 
         # Set the normalized scalars with a '-norm' suffix
         self.pv_mesh.point_data[f"{scalar_name}-norm"] = normalized_values
 
-
-    def interpolate_scalar_values(self, scalar: np.ndarray, scalar_name: str = 'act', distance_threshold: Optional[float] = None, scalars_on_vertices: bool = True) -> pv.PolyData:
+    def interpolate_scalar_values(
+        self,
+        scalar: np.ndarray,
+        scalar_name: str = "act",
+        distance_threshold: float | None = None,
+        scalars_on_vertices: bool = True,
+    ) -> pv.PolyData:
         """
         Interpolate scalar values for all vertices (points) that are within a certain distance from the points in the map.
 
@@ -213,7 +226,9 @@ class EPMap:
         """
         # Check that the mesh is loaded and available
         if self.pv_mesh is None:
-            raise ValueError("Mesh data not loaded. Please load the mesh before running this method.")
+            raise ValueError(
+                "Mesh data not loaded. Please load the mesh before running this method."
+            )
 
         # Step 1: Repair the mesh using pymeshfix
         print("Repairing mesh...")
@@ -225,7 +240,9 @@ class EPMap:
 
         # Step 2: Simplify the mesh
         print(f"Simplifying mesh with target reduction ratio: {target_reduction_ratio}")
-        repaired_pv_mesh = pv.PolyData(repaired_vertices, np.hstack([np.full((repaired_faces.shape[0], 1), 3), repaired_faces]))
+        repaired_pv_mesh = pv.PolyData(
+            repaired_vertices, np.hstack([np.full((repaired_faces.shape[0], 1), 3), repaired_faces])
+        )
         simplified_mesh = repaired_pv_mesh.decimate_pro(target_reduction_ratio)
 
         # Step 3: Interpolate scalar data back onto the simplified mesh
@@ -248,8 +265,8 @@ class EPMap:
         simplified_scalars_1 = scalar_data_1[nearest_indices]
 
         # Step 4: Set the scalars to the simplified mesh
-        simplified_mesh.point_data['act_bip_0'] = simplified_scalars_0
-        simplified_mesh.point_data['act_bip_1'] = simplified_scalars_1
+        simplified_mesh.point_data["act_bip_0"] = simplified_scalars_0
+        simplified_mesh.point_data["act_bip_1"] = simplified_scalars_1
 
         # Step 5: Update the act_bip attribute with simplified scalars
         self.act_bip = np.column_stack([simplified_scalars_0, simplified_scalars_1])
@@ -259,8 +276,9 @@ class EPMap:
 
         print("Mesh repair and simplification completed.")
 
-
-    def get_average_face_scalars(self, scalar_name: str = 'act', pv_mesh: Optional[pv.core.pointset.PolyData] = None) -> np.ndarray:
+    def get_average_face_scalars(
+        self, scalar_name: str = "act", pv_mesh: pv.core.pointset.PolyData | None = None
+    ) -> np.ndarray:
         """
         Calculate the average scalar value for each face in the mesh.
 
@@ -280,24 +298,31 @@ class EPMap:
 
         return face_scalars
 
-    def plot_histogram(self, scalar_name: str = 'act', clim: Optional[Union[Tuple[float, float], None]] = None, step_size: float = 5) -> Tuple[plt.figure, dict]:
+    def plot_histogram(
+        self,
+        scalar_name: str = "act",
+        clim: tuple[float, float] | None | None = None,
+        step_size: float = 5,
+    ) -> tuple[plt.figure, dict]:
 
         clim = clim or [65, 100]
-        intervals = list(range(min(clim), max(clim)+1, step_size))
+        intervals = list(range(min(clim), max(clim) + 1, step_size))
         areas = []
 
         total_surface = self.area_of_surface()
 
-        for i in range(len(intervals)-1):
+        for i in range(len(intervals) - 1):
             min_val = intervals[i]
-            max_val = intervals[i+1]
-            #area = self.area_of_range(min_val, max_val, scalar_name=scalar_name)
-            area = self.area_of_range(min_val, max_val, scalar_name=scalar_name) / total_surface * 100
+            max_val = intervals[i + 1]
+            # area = self.area_of_range(min_val, max_val, scalar_name=scalar_name)
+            area = (
+                self.area_of_range(min_val, max_val, scalar_name=scalar_name) / total_surface * 100
+            )
             areas.append(area)
 
         # Compute the lesser proportion
-        #lesser_area = total_surface - sum(areas)
-        #lesser_proportion = lesser_area / total_surface
+        # lesser_area = total_surface - sum(areas)
+        # lesser_proportion = lesser_area / total_surface
 
         lesser_proportion = 1 - sum(areas) / 100
 
@@ -307,23 +332,22 @@ class EPMap:
         cdf_values = np.insert(cdf_values, 0, lesser_proportion)
         cdf_values = 1 - cdf_values[:-1]
 
-        #cdf_values = np.insert(np.cumsum(areas), 0, lesser_proportion * 100) / 100
-        #cdf_values = cdf_values[:-1]  # To make it have the same length as 'areas'
-
+        # cdf_values = np.insert(np.cumsum(areas), 0, lesser_proportion * 100) / 100
+        # cdf_values = cdf_values[:-1]  # To make it have the same length as 'areas'
 
         fig, ax1 = plt.subplots(figsize=(10, 6))
 
-        ax1.set_xlabel('Similarity [%]')
-        ax1.set_ylabel('Area [%]', color='blue')
-        labels = [f"{intervals[i]}-{intervals[i+1]}" for i in range(len(intervals)-1)]
-        ax1.bar(labels, areas, alpha=0.6, color='blue', label='Area')
-        ax1.tick_params(axis='y', labelcolor='blue')
+        ax1.set_xlabel("Similarity [%]")
+        ax1.set_ylabel("Area [%]", color="blue")
+        labels = [f"{intervals[i]}-{intervals[i + 1]}" for i in range(len(intervals) - 1)]
+        ax1.bar(labels, areas, alpha=0.6, color="blue", label="Area")
+        ax1.tick_params(axis="y", labelcolor="blue")
 
         ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-        ax2.set_ylabel('1-CDF', color='red')
-        ax2.plot(labels, cdf_values, color='red', marker='o', linestyle='-', label='1-CDF')
-        #ax2.plot(intervals[:-1], cdf_values, color='red', marker='o', linestyle='-', label='CDF')
-        ax2.tick_params(axis='y', labelcolor='red')
+        ax2.set_ylabel("1-CDF", color="red")
+        ax2.plot(labels, cdf_values, color="red", marker="o", linestyle="-", label="1-CDF")
+        # ax2.plot(intervals[:-1], cdf_values, color='red', marker='o', linestyle='-', label='CDF')
+        ax2.tick_params(axis="y", labelcolor="red")
 
         # Adjust title and layout
         plt.suptitle(self.study_name)
@@ -333,19 +357,23 @@ class EPMap:
         # Create a combined legend for both ax1 and ax2
         lines, labels = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        #ax2.legend(lines + lines2, labels + labels2, loc='upper left')
+        # ax2.legend(lines + lines2, labels + labels2, loc='upper left')
 
-        bin_info = {
-            'bin_edges': intervals,
-            'area_values': areas,
-            'cdf_values': cdf_values
-        }
+        bin_info = {"bin_edges": intervals, "area_values": areas, "cdf_values": cdf_values}
 
         return (fig, bin_info)
 
-
-
-    def plot_mesh(self, scalar_name: str = 'act', distance: Optional[float] = None, off_screen: bool = True, clim: Optional[Union[Tuple[float, float], None]] = None, plotter=None, norm: bool = False, atrium: str = 'RA', direction: str = 'AP') -> pv.Plotter:
+    def plot_mesh(
+        self,
+        scalar_name: str = "act",
+        distance: float | None = None,
+        off_screen: bool = True,
+        clim: tuple[float, float] | None | None = None,
+        plotter=None,
+        norm: bool = False,
+        atrium: str = "RA",
+        direction: str = "AP",
+    ) -> pv.Plotter:
         """
         Generate a PyVista mesh, align it, and set up the plotter.
 
@@ -354,19 +382,19 @@ class EPMap:
         :param clim: Optional color range limits (default: None).
         :return: The PyVista plotter object and the face scalars.
         """
-        #print("Working on: " + self.map_name)
+        # print("Working on: " + self.map_name)
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
 
         # voltage
-        #scalar_data = self.act_bip[:, 1]
+        # scalar_data = self.act_bip[:, 1]
 
         # activation
-        scalar_data = self.act_bip[:,0]
+        scalar_data = self.act_bip[:, 0]
 
         # Calculate the 98th percentile value
-        #threshold = np.nanpercentile(scalar_data, 98)
+        # threshold = np.nanpercentile(scalar_data, 98)
 
         # Calculate the mean and standard deviation, ignoring NaNs
         mean_value = np.nanmean(scalar_data)
@@ -390,12 +418,13 @@ class EPMap:
                 scalar_data = (scalar_data / max_value) * 100
                 max_value = np.nanmax(scalar_data)
 
-
         # Set both the original and normalized scalar values
         self.set_scalars(scalar_name, scalar_data)
 
         # Interpolate data
-        pv_mesh, scalar_data = self.interpolate_scalar_values(scalar_data, scalar_name=scalar_name, distance_threshold=distance)
+        pv_mesh, scalar_data = self.interpolate_scalar_values(
+            scalar_data, scalar_name=scalar_name, distance_threshold=distance
+        )
 
         # Create a PolyData object for the points
         p_points = self.create_polydata_for_projected_points(scalar_data, scalar_name=scalar_name)
@@ -408,14 +437,21 @@ class EPMap:
         if plotter is None:
             plotter = pv.Plotter(window_size=(1300, 1000), off_screen=off_screen)
 
-        plotter.add_text(self.map_name, position='upper_edge', font_size=20, color="black")
+        plotter.add_text(self.map_name, position="upper_edge", font_size=20, color="black")
         plotter.add_text(self.study_name, position=(0.5, 0.8), font_size=20, color="black")
 
         plotter.add_mesh(pv_mesh, scalars="act", show_scalar_bar=False, cmap=cmap, clim=clim)
         plotter.add_points(p_points, scalars="act", cmap=cmap, clim=clim, point_size=5)
 
-        plotter.add_scalar_bar(title="act", position_x=0.90, position_y=0.1, label_font_size=20,
-                               title_font_size=25, vertical=True, n_labels=10)
+        plotter.add_scalar_bar(
+            title="act",
+            position_x=0.90,
+            position_y=0.1,
+            label_font_size=20,
+            title_font_size=25,
+            vertical=True,
+            n_labels=10,
+        )
         plotter.show_grid()
         plotter.add_mesh(pv_mesh.outline(), color="black")
         plotter.set_scale(xscale=1, yscale=1, zscale=1)
@@ -435,50 +471,55 @@ class EPMap:
         # Set the view vector for focusing on the maximum scalar
         # plotter.view_vector(view_vector)
 
-        print("Plot: "+atrium+"/"+direction)
+        print("Plot: " + atrium + "/" + direction)
 
-        if direction == 'AP':
+        if direction == "AP":
             view_vector = np.array([0, 0, 1])  # Assuming the Z-axis is front to back
-            up_vector = np.array([0, -1, 0])   # Assuming the Y-axis is up in AP view
-        elif direction == 'PA':
-            view_vector = np.array([0, 0, -1]) # Looking from back to front
-            up_vector = np.array([0, -1, 0])   # Still the same up direction
-        elif direction == 'RL':
-            if atrium == 'RA':
+            up_vector = np.array([0, -1, 0])  # Assuming the Y-axis is up in AP view
+        elif direction == "PA":
+            view_vector = np.array([0, 0, -1])  # Looking from back to front
+            up_vector = np.array([0, -1, 0])  # Still the same up direction
+        elif direction == "RL":
+            if atrium == "RA":
                 view_vector = np.array([1, 0, 0])  # Right to left
-                up_vector = np.array([-1, -1, 0])   # Rotate 90 degrees clockwise around the X-axis
-                camera_position = np.array([1, 0, 0])  # Camera at (1, 0, 0) looking towards the origin
+                up_vector = np.array([-1, -1, 0])  # Rotate 90 degrees clockwise around the X-axis
+                camera_position = np.array(  # noqa: F841
+                    [1, 0, 0]
+                )  # Camera at (1, 0, 0) looking towards the origin
             else:  # LA
-                view_vector = np.array([-1, 0, 0]) # Left to right
-                up_vector = np.array([0, 0, 1])    # Default up direction
+                view_vector = np.array([-1, 0, 0])  # Left to right
+                up_vector = np.array([0, 0, 1])  # Default up direction
 
         # Set the view vector for the plotter
         plotter.view_vector(view_vector, up_vector)
 
         return plotter
 
-
-    def extract_mesh_data(self, scalar_name: Optional[str] = None, distance: Optional[float] = None) -> dict:
+    def extract_mesh_data(
+        self, scalar_name: str | None = None, distance: float | None = None
+    ) -> dict:
         # Set default scalar_name to 'act' if not provided
         if scalar_name is None:
-            scalar_name = 'act'
+            scalar_name = "act"
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
 
         # Determine scalar_data based on scalar_name
-        if scalar_name == 'act':
+        if scalar_name == "act":
             if np.nanmax(self.act_bip[:, 0]) < 0:
                 scalar_data = -self.act_bip[:, 0]
             else:
                 scalar_data = self.act_bip[:, 0]
-        elif scalar_name == 'vol':
+        elif scalar_name == "vol":
             scalar_data = self.act_bip[:, 1]
         else:
             raise ValueError(f"Unsupported scalar_name: {scalar_name}")
 
         # Interpolate data to match mesh points
-        pv_mesh, interpolated_scalar_data = self.interpolate_scalar_values(scalar_data, scalar_name=scalar_name, distance_threshold=distance)
+        pv_mesh, interpolated_scalar_data = self.interpolate_scalar_values(
+            scalar_data, scalar_name=scalar_name, distance_threshold=distance
+        )
 
         # Ensure normalized scalars are available for the mesh
         norm_key = f"{scalar_name}-norm"
@@ -488,23 +529,31 @@ class EPMap:
             self.set_scalars(scalar_name, interpolated_scalar_data)
             normalized_mesh_scalar_data = pv_mesh.point_data.get(norm_key, None)
             if normalized_mesh_scalar_data is None:
-                raise KeyError(f"Failed to find or create normalized data for key '{norm_key}' in the mesh")
+                raise KeyError(
+                    f"Failed to find or create normalized data for key '{norm_key}' in the mesh"
+                )
 
         vertices = pv_mesh.points
         faces = pv_mesh.faces.reshape((-1, 4))[:, 1:]
 
         if len(vertices) != len(interpolated_scalar_data):
-            raise ValueError(f"Length mismatch: vertices ({len(vertices)}) vs scalars ({len(interpolated_scalar_data)}).")
+            raise ValueError(
+                f"Length mismatch: vertices ({len(vertices)}) vs scalars ({len(interpolated_scalar_data)})."
+            )
 
         # Build point data (measurement points projected onto mesh)
         # If xyz is not available, return empty point data
         if self.xyz is not None and len(self.xyz) > 0:
-            p_points = self.create_polydata_for_projected_points(interpolated_scalar_data, scalar_name=scalar_name)
+            p_points = self.create_polydata_for_projected_points(
+                interpolated_scalar_data, scalar_name=scalar_name
+            )
 
             min_value = np.nanmin(interpolated_scalar_data)
             max_value = np.nanmax(interpolated_scalar_data)
             if max_value - min_value != 0:
-                normalized_point_data = (p_points.point_data[scalar_name] - min_value) / (max_value - min_value)
+                normalized_point_data = (p_points.point_data[scalar_name] - min_value) / (
+                    max_value - min_value
+                )
             else:
                 normalized_point_data = p_points.point_data[scalar_name]
 
@@ -526,9 +575,9 @@ class EPMap:
                 "vertices": vertices,
                 "faces": faces,
                 "scalar_data": interpolated_scalar_data,
-                "normalized_scalar_data": normalized_mesh_scalar_data
+                "normalized_scalar_data": normalized_mesh_scalar_data,
             },
-            "point_data": point_data
+            "point_data": point_data,
         }
 
     def precompute_areas(self) -> None:
@@ -537,12 +586,13 @@ class EPMap:
             self.generate_anatomical_pv_mesh()
 
         # Check if 'Area' is already computed
-        if 'Area' not in self.pv_mesh.cell_data:
+        if "Area" not in self.pv_mesh.cell_data:
             areas = self.pv_mesh.compute_cell_sizes(length=False, area=True, volume=False)
-            self.pv_mesh.cell_data['Area'] = areas['Area']
+            self.pv_mesh.cell_data["Area"] = areas["Area"]
 
-
-    def calculate_areas_for_intervals(self, intervals: list, scalar_name: Optional[str] = None, distance: Optional[float] = None) -> list:
+    def calculate_areas_for_intervals(
+        self, intervals: list, scalar_name: str | None = None, distance: float | None = None
+    ) -> list:
         """
         Prepare the mesh and calculate the areas for a given list of intervals.
 
@@ -553,18 +603,18 @@ class EPMap:
         """
         # Set default scalar_name to 'act' if not provided
         if scalar_name is None:
-            scalar_name = 'act'
+            scalar_name = "act"
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh(simplify=False)
 
         # Determine scalar_data based on scalar_name
-        if scalar_name == 'act':
+        if scalar_name == "act":
             if np.nanmax(self.act_bip[:, 0]) < 0:
                 scalar_data = -self.act_bip[:, 0]
             else:
                 scalar_data = self.act_bip[:, 0]
-        elif scalar_name == 'vol':
+        elif scalar_name == "vol":
             scalar_data = self.act_bip[:, 1]
         else:
             raise ValueError(f"Unsupported scalar_name: {scalar_name}")
@@ -572,7 +622,9 @@ class EPMap:
         pv_mesh.point_data[scalar_name] = scalar_data
 
         # Interpolate data
-        pv_mesh, scalar_data = self.interpolate_scalar_values(scalar_data, scalar_name=scalar_name, distance_threshold=distance)
+        pv_mesh, scalar_data = self.interpolate_scalar_values(
+            scalar_data, scalar_name=scalar_name, distance_threshold=distance
+        )
 
         # Calculate areas for each interval
         areas = []
@@ -582,13 +634,15 @@ class EPMap:
 
         return areas
 
-    def save_mesh_to_OBJ(self, filename: str, scalar_name: str = 'act', distance: Optional[float] = None) -> None:
+    def save_mesh_to_OBJ(
+        self, filename: str, scalar_name: str = "act", distance: float | None = None
+    ) -> None:
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
         pv_mesh.save(filename)
 
-    def area_of_range(self, min_value, max_value, scalar_name: str = 'act'):
-        if 'Area' not in self.pv_mesh.cell_data:
+    def area_of_range(self, min_value, max_value, scalar_name: str = "act"):
+        if "Area" not in self.pv_mesh.cell_data:
             self.precompute_areas()
 
         # Convert point data to cell data
@@ -598,11 +652,10 @@ class EPMap:
         mask = (cell_data >= min_value) & (cell_data <= max_value)
 
         # Retrieve and sum the precomputed areas
-        selected_areas = self.pv_mesh.cell_data['Area'][mask]
+        selected_areas = self.pv_mesh.cell_data["Area"][mask]
         total_area = np.sum(selected_areas)
 
-        return total_area/100
-
+        return total_area / 100
 
     def point_data_to_cell_data(self, scalar_name: str) -> np.ndarray:
         """Convert per-point data to per-cell data by averaging point values for each triangle, handling NaNs."""
@@ -610,8 +663,8 @@ class EPMap:
             self.generate_anatomical_pv_mesh()
 
         # Check if the cell data is already computed and stored
-        if f'{scalar_name}_cell' in self.pv_mesh.cell_data:
-            return self.pv_mesh.cell_data[f'{scalar_name}_cell']
+        if f"{scalar_name}_cell" in self.pv_mesh.cell_data:
+            return self.pv_mesh.cell_data[f"{scalar_name}_cell"]
 
         # Get the scalar data at the points
         point_data = self.pv_mesh.point_data[scalar_name]
@@ -631,23 +684,22 @@ class EPMap:
             cell_data[has_data] = np.nanmean(vertex_values[has_data], axis=1)
 
         # Store the computed cell data in the mesh for future use
-        self.pv_mesh.cell_data[f'{scalar_name}_cell'] = cell_data
+        self.pv_mesh.cell_data[f"{scalar_name}_cell"] = cell_data
 
         return cell_data
 
-
     def area_of_surface(self):
         # Use precomputed areas when available (avoids redundant compute_cell_sizes call)
-        if 'Area' not in self.pv_mesh.cell_data:
+        if "Area" not in self.pv_mesh.cell_data:
             self.precompute_areas()
-        return np.sum(self.pv_mesh.cell_data['Area']) / 100
+        return np.sum(self.pv_mesh.cell_data["Area"]) / 100
 
     def report(self):
         min_scalar, max_scalar, avg_scalar, std_scalar = self.get_scalar_statistics()
         report = f"Name: {self.study_name}/{self.map_name}, min: {min_scalar}, max: {max_scalar}, avg: {avg_scalar}, std: {std_scalar}"
         return report
 
-    def distance_within_range(self, min_value, max_value, scalar_name: str = 'act'):
+    def distance_within_range(self, min_value, max_value, scalar_name: str = "act"):
         # Extract points within the range
         thresholded_mesh = self.pv_mesh.threshold([min_value, max_value], scalars=scalar_name)
         points = thresholded_mesh.points
@@ -670,7 +722,9 @@ class EPMap:
         pairwise_distances = np.linalg.norm(points[:, np.newaxis] - points, axis=2)
         max_distance = np.max(pairwise_distances)
 
-        average_distance = np.mean(pairwise_distances[np.triu_indices_from(pairwise_distances, k=1)])
+        average_distance = np.mean(
+            pairwise_distances[np.triu_indices_from(pairwise_distances, k=1)]
+        )
 
         # Extract the upper triangular values (excluding the diagonal)
         distances_flat = pairwise_distances[np.triu_indices_from(pairwise_distances, k=1)]
@@ -680,7 +734,7 @@ class EPMap:
 
         return min_distance, max_distance, average_distance, median_distance
 
-    def get_scalar_statistics(self, scalar_name: str = 'act'):
+    def get_scalar_statistics(self, scalar_name: str = "act"):
         """
         Calculate the minimum, maximum, average, and standard deviation of scalar values.
 
@@ -689,7 +743,9 @@ class EPMap:
         """
         # Ensure self.pv_mesh is not None
         if self.pv_mesh is None:
-            raise ValueError("PV mesh is not generated. Please generate it before calculating statistics.")
+            raise ValueError(
+                "PV mesh is not generated. Please generate it before calculating statistics."
+            )
 
         # Extract scalar values and convert to a regular NumPy array
         scalar_values = np.array(self.pv_mesh.point_data[scalar_name])
@@ -701,5 +757,3 @@ class EPMap:
         std_scalar = np.nanstd(scalar_values)
 
         return min_scalar, max_scalar, avg_scalar, std_scalar
-
-
