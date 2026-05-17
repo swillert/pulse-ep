@@ -1,12 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import ListedColormap
-from reportlab.pdfgen import canvas
 
 from pulse_ep.core import mesh_proc as mesh_proc
 
 
 def export_to_pdf(file_png, file_pdf, width, height):
+    from reportlab.pdfgen import canvas
+
     c = canvas.Canvas(file_pdf)
     c.drawImage(file_png, 0, 0, width=width, height=height)  # Change width and height as needed
     c.save()
