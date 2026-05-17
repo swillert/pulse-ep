@@ -1,8 +1,9 @@
-from lxml import etree
+import os
 import re
 from datetime import datetime
+
 import numpy as np
-import os
+from lxml import etree
 
 
 def process_xml(filename):
@@ -24,8 +25,9 @@ def process_xml(filename):
 
 
 def get_map_element(xml_tree, iMap):
-    map_element = xml_tree.find(f".//Maps/Map[{iMap+1}]")
+    map_element = xml_tree.find(f".//Maps/Map[{iMap + 1}]")
     return map_element
+
 
 def get_xyz(map_element):
     points = map_element.find("CartoPoints").findall("Point")
@@ -40,23 +42,25 @@ def get_xyz(map_element):
 
     return xyz
 
+
 def get_maps(xml_tree):
-    maps = xml_tree.findall('.//Maps/Map')
+    maps = xml_tree.findall(".//Maps/Map")
     names = []
     numPtsPerMap = []
     filenames = []
 
     for map_elem in maps:
-        names.append(map_elem.get('Name'))
-        num_pts = int(map_elem.find('CartoPoints').get('Count'))
-        filenames.append(map_elem.get('FileNames'))
+        names.append(map_elem.get("Name"))
+        num_pts = int(map_elem.find("CartoPoints").get("Count"))
+        filenames.append(map_elem.get("FileNames"))
         numPtsPerMap.append(num_pts)
         # print(f"Map Name: {names[-1]}, Number of Points: {num_pts}")
 
     return len(names), names, numPtsPerMap, filenames
 
+
 def get_study_name(xml_tree):
-    return xml_tree.getroot().attrib['name']
+    return xml_tree.getroot().attrib["name"]
 
 
 def get_point_filenames(xml_input):
@@ -65,7 +69,9 @@ def get_point_filenames(xml_input):
     elif isinstance(xml_input, etree._ElementTree):
         tree = xml_input
     else:
-        raise ValueError("Invalid input. Expected either a filename or an lxml.etree._ElementTree object.")
+        raise ValueError(
+            "Invalid input. Expected either a filename or an lxml.etree._ElementTree object."
+        )
 
     filenames = []
     points_element = tree.xpath("/Points")[0]
@@ -88,7 +94,9 @@ def get_connector_filenames(xml_tree, point_file_name):
     for connector in connectors:
         attributes = connector.attrib
         for name, position_file in attributes.items():
-            if 'Eleclectrode_positions_OnAnnotation.txt'.lower() in position_file.lower(): # then it is an Eleclectrode_Positions_OnAnnotation.txt file
+            if (
+                "Eleclectrode_positions_OnAnnotation.txt".lower() in position_file.lower()
+            ):  # then it is an Eleclectrode_Positions_OnAnnotation.txt file
                 full_file_path = os.path.join(home_dir, position_file)
                 connector_filenames.append([name, full_file_path])
 
@@ -97,34 +105,36 @@ def get_connector_filenames(xml_tree, point_file_name):
 
 def process_tags(xml_tree):
     # Get the tags information
-    tags_table = xml_tree.find('.//Maps/TagsTable')
-    nTags = int(tags_table.get('Count'))
+    tags_table = xml_tree.find(".//Maps/TagsTable")
+    nTags = int(tags_table.get("Count"))  # noqa: F841
 
     tagNames = []
     tagID = []
 
-    for tag_elem in tags_table.findall('Tag'):
-        tagNames.append(tag_elem.get('Full_Name'))
-        tag_id = int(tag_elem.get('ID'))
+    for tag_elem in tags_table.findall("Tag"):
+        tagNames.append(tag_elem.get("Full_Name"))
+        tag_id = int(tag_elem.get("ID"))
         tagID.append(tag_id)
 
-    #print(f"Tag Names: {tagNames}")
-    return(tagNames, tagID)
+    # print(f"Tag Names: {tagNames}")
+    return (tagNames, tagID)
+
 
 def str2var(s):
     if len(s) == 0:  # if string is empty, return the string as is
         return s
 
+
 def process_string(s):
     if len(s) > 10000:  # if string is very long, return the string as is
         return s
 
-    digits = r'(Inf)|(NaN)|(pi)|[\t\n\d\+\-\*\.ei EI\[\]\;\,]'
-    remaining_str = re.sub(digits, '', s)  # remove all digits and other allowed characters
+    digits = r"(Inf)|(NaN)|(pi)|[\t\n\d\+\-\*\.ei EI\[\]\;\,]"
+    remaining_str = re.sub(digits, "", s)  # remove all digits and other allowed characters
 
     # if nothing left, it is probably a number
-    if remaining_str == '':
-        s = s.replace('\n', ';')  # parse data tables into 2D arrays, if any
+    if remaining_str == "":
+        s = s.replace("\n", ";")  # parse data tables into 2D arrays, if any
 
         # try to convert to a date, if not a date then try to convert to a number
         try:
@@ -137,31 +147,34 @@ def process_string(s):
                 if isinstance(num, np.ndarray):
                     return np.array2string(num)
                 return num
-            except:
+            except:  # noqa: E722
                 return s
 
-    elif s[0] in ['[', '{'] and s[-1] in [']', '}']:  # this looks like an array encoded as a string
+    elif s[0] in ["[", "{"] and s[-1] in ["]", "}"]:  # this looks like an array encoded as a string
         try:
             val = eval(s)
             return val
-        except:
+        except:  # noqa: E722
             return s
 
     else:  # see if it is a boolean array with no [] brackets
         s1 = s.lower()
-        s1 = s1.replace('false', '0')
-        s1 = s1.replace('true', '1')
-        remaining_str = re.sub(r'[01 \;\,]', '', s1)  # remove all 0/1, spaces, commas and semicolons
+        s1 = s1.replace("false", "0")
+        s1 = s1.replace("true", "1")
+        remaining_str = re.sub(
+            r"[01 \;\,]", "", s1
+        )  # remove all 0/1, spaces, commas and semicolons
         # if nothing left, this is probably a boolean array
-        if remaining_str == '':
+        if remaining_str == "":
             try:
                 num = np.array(eval(s1))
                 return num > 0
-            except:
+            except:  # noqa: E722
                 return s
 
     return s
 
+
 def remove_empty_leaf_elements(element):
-    for child in element.xpath('.//*[not(node()) and not(@*)]'):
+    for child in element.xpath(".//*[not(node()) and not(@*)]"):
         child.getparent().remove(child)
