@@ -188,12 +188,17 @@ examples/           # Cross-language client examples — see examples/README.md
 
 `pulse-ep` is designed as a programmatic hub, not just a Python library.
 The [`examples/`](examples/) directory shows how to consume the REST API
-from **ParaView**, **R**, **MATLAB** and **Jupyter**. These examples
-deliberately stop at data access and basic visualisation; the scientific
-σ-resolution analysis (Heat-Method geodesics + Gaussian decay fit) lives
-in the companion package
+from **ParaView**, **R**, **MATLAB** and **Jupyter**, and is structured
+as the **cross-language reproducibility statement of the software paper**:
+identical inputs (one REST payload per map) produce identical platform
+reductions — the per-vertex scalar histogram and the per-interval
+surface-area breakdown — in four independent toolchains. The bundled
+web viewer is a fifth.
+
+The scientific σ-resolution analysis (Heat-Method geodesics + Gaussian
+decay fit) is a separate contribution and lives in
 [`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay), which
-ships its own cross-language reproducibility demos.
+ships its own cross-language reproducibility demos for σ̂.
 
 ## Citation
 
