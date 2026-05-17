@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse Ultimate · Register</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <i class="fas fa-heartbeat"></i>
+      <h1>Pulse <span>Ultimate</span></h1>
+    </div>
+
+    <form id="registerForm">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Choose a username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Choose a password" required autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label for="role">Role</label>
+        <select id="role" required>
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-primary btn-full" id="submitBtn">Create Account</button>
+    </form>
+
+    <p class="auth-footer">Already have an account? <a href="/login">Sign in</a></p>
+  </div>
+
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true; btn.textContent = 'Creating…';
+      try {
+        const response = await fetch('/register_user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+            role: document.getElementById('role').value
+          })
+        });
+        if (response.ok) {
+          window.location.href = '/login';
+        } else {
+          alert('Registration failed. Username may already be taken.');
+          btn.disabled = false; btn.textContent = 'Create Account';
+        }
+      } catch (err) {
+        alert('Connection error. Please try again.');
+        btn.disabled = false; btn.textContent = 'Create Account';
+      }
+    });
+  </script>
+</body>
+</html>

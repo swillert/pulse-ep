@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+pip-wheel-metadata/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Database runtime / logs
+pulse-db/
+pg-logs/
+*.log
+
+# Analysis outputs — regenerable
+decay_profiles/
+decay_profiles_heat/
+reports/
+validation_full/
+/tmp/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+config.local.ini
+
+# Data paths (never commit patient-identifiable data)
+study.csv
+studies.csv
+*.patient.csv
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.bak
+*.orig

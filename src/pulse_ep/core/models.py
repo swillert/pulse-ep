@@ -1,0 +1,415 @@
+from typing import Optional, List, Tuple, Dict
+from sqlalchemy.orm import Session
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Float, Index, JSON, BigInteger, Text
+from sqlalchemy.dialects.postgresql import ARRAY, FLOAT, JSONB
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm.attributes import flag_modified
+from pulse_ep.core.epmap import EPMap
+from pulse_ep.core.study import Study
+import numpy as np
+
+Base = declarative_base()
+
+
+class StudyModel(Base):
+    __tablename__ = 'studies'
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    name: str = Column(String, nullable=False)
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def create(self, session):
+        session.add(self)
+        session.commit()
+
+    @classmethod
+    def retrieve(cls, session, id):
+        return session.query(cls).filter_by(id=id).first()
+
+    def update(self, session):
+        session.commit()
+
+    def delete(self, session):
+        session.delete(self)
+        session.commit()
+
+    @classmethod
+    def find_by_name(cls, name: str, session: Session) -> Optional['StudyModel']:
+        return session.query(cls).filter_by(name=name).first()
+
+    @classmethod
+    def find_by_id(cls, id: int, session: Session) -> Optional['StudyModel']:
+        return session.query(cls).filter_by(id=id).first()
+
+    @classmethod
+    def get_study_list(cls, session: Session) -> List[Tuple[int, str]]:
+        studies = session.query(cls).with_entities(cls.id, cls.name).all()
+        return [(study.id, study.name) for study in studies]
+
+    @classmethod
+    def get_epmap_list_by_id(cls, session: Session, study_id: int):
+        study = cls.retrieve(session, study_id)
+        if study is None:
+            return None
+        epmaps = session.query(EPMapModel.id, EPMapModel.map_name, EPMapModel.number_of_points).filter(
+            EPMapModel.study_id == study_id).all()
+        return epmaps
+
+    def get_epmap_list(self, session: Session):
+        session.refresh(self)
+        return [(epmap.id, epmap.map_name) for epmap in self.epmaps]
+
+    @classmethod
+    def from_study(cls, study: Study) -> 'StudyModel':
+        return cls(name=study.name)
+
+    @classmethod
+    def get_all_studies_and_epmaps(cls, session: Session) -> List[Tuple[int, str, int, str, int]]:
+        query = session.query(
+            cls.id.label('study_id'),
+            cls.name.label('study_name'),
+            EPMapModel.id.label('epmap_id'),
+            EPMapModel.map_name.label('epmap_map_name'),
+            EPMapModel.number_of_points.label('number_of_points')
+        ).join(
+            EPMapModel, EPMapModel.study_id == cls.id
+        ).join(
+            EPMapAttributes, EPMapAttributes.map_id == EPMapModel.id
+        ).group_by(
+            cls.id, cls.name, EPMapModel.id, EPMapModel.map_name
+        ).order_by(cls.name, EPMapModel.map_name)
+        return query.all()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  EPMapModel — per-map mesh & scalar data
+# ═══════════════════════════════════════════════════════════════════════════
+
+class EPMapModel(Base):
+    __tablename__ = 'epmaps'
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    study_id: int = Column(Integer, ForeignKey('studies.id'), nullable=False, index=True)
+
+    map_name: str = Column(String, nullable=False)
+    study_name: str = Column(String, nullable=False)
+    number_of_points: Optional[int] = Column(Integer)
+    mesh_file: Optional[str] = Column(String)
+
+    # ── Per-vertex mesh data (stays here — these are interpolated onto mesh) ──
+    triangles: List[int] = Column(ARRAY(Integer))
+    vertices: List[float] = Column(ARRAY(FLOAT))
+    triangle_areas: List[float] = Column(ARRAY(FLOAT))
+    is_vertex_at_edge: List[bool] = Column(ARRAY(Boolean))
+    act_bip: List[float] = Column(ARRAY(FLOAT))
+    normals: List[float] = Column(ARRAY(FLOAT))
+    uni_imp_frc: List[float] = Column(ARRAY(FLOAT))
+
+    # ── Relationships ──
+    study = relationship('StudyModel', backref='epmaps')
+    points = relationship('EPMapPoint', back_populates='map',
+                          order_by='EPMapPoint.point_index',
+                          cascade='all, delete-orphan')
+
+    def __init__(self, map_name: str, study_id: int, **kwargs) -> None:
+        self.map_name = map_name
+        self.study_id = study_id
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def create(self, session):
+        session.add(self)
+        session.commit()
+
+    @classmethod
+    def retrieve(cls, session, id):
+        return session.query(cls).filter_by(id=id).first()
+
+    def update(self, session):
+        session.commit()
+
+    def delete(self, session):
+        session.delete(self)
+        session.commit()
+
+    @classmethod
+    def find_by_name(cls, map_name: str, session: Session) -> Optional['EPMapModel']:
+        return session.query(cls).filter_by(map_name=map_name).first()
+
+    @classmethod
+    def find_by_id(cls, id: int, session: Session) -> Optional['EPMapModel']:
+        return session.query(cls).filter_by(id=id).first()
+
+    @classmethod
+    def get_number_of_points_by_id(cls, session: Session, id: int) -> Optional[int]:
+        epmap_model = session.query(cls).filter_by(id=id).first()
+        return epmap_model.number_of_points if epmap_model else None
+
+    @classmethod
+    def from_epmap(cls, epmap, study_id: int) -> 'EPMapModel':
+        return cls(
+            map_name=epmap.map_name,
+            study_id=study_id,
+            study_name=epmap.study_name,
+            number_of_points=epmap.number_of_points,
+            mesh_file=epmap.mesh_file,
+            triangles=epmap.triangles.tolist(),
+            vertices=epmap.vertices.tolist(),
+            triangle_areas=epmap.triangle_areas.tolist(),
+            is_vertex_at_edge=epmap.is_vertex_at_edge.tolist(),
+            act_bip=epmap.act_bip.tolist(),
+            normals=epmap.normals.tolist(),
+            uni_imp_frc=epmap.uni_imp_frc.tolist() if epmap.uni_imp_frc is not None else None,
+        )
+
+    def to_epmap(self, include_points: bool = False) -> EPMap:
+        """Convert DB model to EPMap domain object.
+
+        Args:
+            include_points: If True, build xyz array from related EPMapPoints.
+                            Requires that self.points is loaded.
+        """
+        xyz = None
+        if include_points and self.points:
+            xyz = np.array([
+                [p.position_x or np.nan, p.position_y or np.nan, p.position_z or np.nan]
+                for p in sorted(self.points, key=lambda p: p.point_index)
+            ])
+
+        return EPMap(
+            map_name=self.map_name,
+            study_name=self.study_name,
+            map_number_of_points=self.number_of_points,
+            mesh_file=self.mesh_file,
+            triangles=np.array(self.triangles),
+            vertices=np.array(self.vertices),
+            triangle_areas=np.array(self.triangle_areas),
+            is_vertex_at_edge=np.array(self.is_vertex_at_edge),
+            act_bip=np.array(self.act_bip),
+            normals=np.array(self.normals),
+            uni_imp_frc=np.array(self.uni_imp_frc) if self.uni_imp_frc else None,
+            xyz=xyz,
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  EPMapPoint — per-measurement-point raw data (NEW)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class EPMapPoint(Base):
+    """
+    One measurement point within an EP map.
+    Stores raw CARTO data: positions, annotations, catheter positions, ECG.
+    """
+    __tablename__ = 'ep_map_points'
+
+    id = Column(Integer, primary_key=True, index=True)
+    map_id = Column(Integer, ForeignKey('epmaps.id', ondelete='CASCADE'),
+                    nullable=False, index=True)
+    point_index = Column(Integer, nullable=False)       # 0-based order within map
+
+    carto_point_id = Column(Integer)                     # CARTO Point ID
+    start_time = Column(BigInteger)                      # CARTO ms timestamp
+
+    # ── Position (from study XML Position3D) ──
+    position_x = Column(Float)
+    position_y = Column(Float)
+    position_z = Column(Float)
+
+    # ── Annotations ──
+    woi_from = Column(Float)
+    woi_to = Column(Float)
+    reference_annotation = Column(Float)
+    map_annotation = Column(Float)
+
+    # ── Voltages ──
+    unipolar_voltage = Column(Float)
+    bipolar_voltage = Column(Float)
+
+    # ── Catheter positions at annotation time (OnAnnotation) ──
+    # Each stores a flat list [x1,y1,z1, x2,y2,z2, ...] of electrode coords
+    cs_positions = Column(ARRAY(FLOAT))           # CS: typically 10 electrodes × 3
+    magnetic20_positions = Column(ARRAY(FLOAT))   # 20A: 20 electrodes × 3
+    roving_positions = Column(ARRAY(FLOAT))       # MEC/NAVISTAR: variable × 3
+
+    # ── Connector types present for this point ──
+    connector_types = Column(ARRAY(String))       # e.g. ['CS_CONNECTOR', 'MAGNETIC_20_POLE_A_CONNECTOR']
+
+    # ── Relationships ──
+    map = relationship('EPMapModel', back_populates='points')
+
+    __table_args__ = (
+        Index('ix_ep_map_points_map_point', 'map_id', 'point_index'),
+    )
+
+    def __repr__(self):
+        return f'<EPMapPoint map_id={self.map_id} idx={self.point_index} carto_id={self.carto_point_id}>'
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  AttributeMetadata + EPMapAttributes (unchanged)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class AttributeMetadata(Base):
+    __tablename__ = 'attribute_metadata'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    data_type = Column(String, nullable=False)
+    default_value = Column(JSONB, nullable=True)
+
+
+class EPMapAttributes(Base):
+    __tablename__ = 'epmap_attributes'
+    map_id = Column(Integer, ForeignKey('epmaps.id'), primary_key=True, index=True)
+    attributes = Column(JSONB, default={})
+
+    __table_args__ = (
+        Index('ix_epmap_attributes_attributes', 'attributes', postgresql_using='gin'),
+    )
+
+    def get_all_attributes(self) -> Dict[str, any]:
+        return self.attributes or {}
+
+    def set_attributes(self, attribute_values: Dict[str, any]):
+        if self.attributes is None:
+            self.attributes = {}
+        self.attributes.update(attribute_values)
+        flag_modified(self, "attributes")
+
+    def initialize_attributes_with_metadata(self, session: Session):
+        metadata = session.query(AttributeMetadata).all()
+        if self.attributes is None:
+            self.attributes = {}
+        for meta in metadata:
+            if meta.name not in self.attributes:
+                self.attributes[meta.name] = meta.default_value
+        flag_modified(self, "attributes")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  UserModel, ColormapModel, ReportModel (unchanged)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class UserModel(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    password = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+
+    def __init__(self, username, password, role):
+        self.username = username
+        self.password = password
+        self.role = role
+
+
+class ColormapModel(Base):
+    __tablename__ = 'colormaps'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+    colors = Column(ARRAY(String), nullable=False)
+    intervals = Column(ARRAY(Float), nullable=True)
+    use_gradient = Column(Boolean, default=True)
+    annotations = Column(ARRAY(String), nullable=True)
+    is_relative = Column(Boolean, default=False)
+    clipping = Column(Boolean, default=True)
+
+    def __init__(self, name, colors, intervals=None, use_gradient=True,
+                 annotations=None, is_relative=False, clipping=True):
+        self.name = name
+        self.colors = colors
+        self.intervals = intervals
+        self.use_gradient = use_gradient
+        self.annotations = annotations
+        self.is_relative = is_relative
+        self.clipping = clipping
+
+    def create(self, session):
+        session.add(self)
+        session.commit()
+
+    def update(self, session, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        session.commit()
+
+    def delete(self, session):
+        session.delete(self)
+        session.commit()
+
+    @classmethod
+    def find_by_name(cls, name, session):
+        return session.query(cls).filter_by(name=name).first()
+
+    @classmethod
+    def find_by_id(cls, id, session):
+        return session.query(cls).filter_by(id=id).first()
+
+    def to_dict(self):
+        return {
+            "id": self.id, "name": self.name, "colors": self.colors,
+            "intervals": self.intervals, "use_gradient": self.use_gradient,
+            "annotations": self.annotations, "is_relative": self.is_relative,
+            "clipping": self.clipping,
+        }
+
+
+class ReportModel(Base):
+    __tablename__ = 'reports'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    map_ids = Column(ARRAY(Integer), nullable=False)
+    additional_data = Column(JSON, nullable=True)
+
+    def __init__(self, map_ids, additional_data=None):
+        self.map_ids = map_ids
+        self.additional_data = additional_data or {}
+
+    def create(self, session):
+        session.add(self)
+        session.commit()
+
+    def update(self, session, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+        session.commit()
+
+    def delete(self, session):
+        session.delete(self)
+        session.commit()
+
+    @classmethod
+    def find_by_id(cls, id, session):
+        return session.query(cls).filter_by(id=id).first()
+
+    @classmethod
+    def find_all(cls, session):
+        return session.query(cls).all()
+
+    def to_dict(self):
+        ad = dict(self.additional_data or {})
+        return {
+            "id": self.id,
+            "map_ids": self.map_ids,
+            "report_name": ad.pop("report_name", "Unnamed Report"),
+            "colormap_id": ad.pop("colormap_id", None),
+            "colormap_name": ad.pop("colormap_name", "Unnamed Colormap"),
+            "additional_data": ad,
+        }
+
+    def add_map_id(self, session, map_id):
+        if self.map_ids is None:
+            self.map_ids = []
+        if map_id not in self.map_ids:
+            self.map_ids.append(map_id)
+            flag_modified(self, "map_ids")
+            session.commit()
+
+    def update_additional_data(self, session, key, value):
+        if self.additional_data is None:
+            self.additional_data = {}
+        self.additional_data[key] = value
+        flag_modified(self, "additional_data")
+        session.commit()
