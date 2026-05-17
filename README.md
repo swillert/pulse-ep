@@ -175,8 +175,23 @@ src/pulse_ep/
 ├── cli/            # Console scripts for data ingestion and utilities
 ├── figures/        # Clinical / journal heatmap generators
 ├── server/         # Flask app, REST API, Three.js viewer
-└── examples/       # Synthetic end-to-end demo
+└── examples/       # Synthetic end-to-end demo (pulse-ep-demo)
+
+examples/           # Cross-language client examples — see examples/README.md
+├── paraview/         ParaView Programmable Source + CLI .vtu export
+├── r/                httr2 REST client + rgl/ggplot/nls demo
+├── matlab/           webread/webwrite client + trisurf demo
+└── notebooks/        Jupyter walkthrough (PyVista + scipy.curve_fit)
 ```
+
+## Interoperability examples
+
+`pulse-ep` is designed as a programmatic hub, not just a Python library.
+The [`examples/`](examples/) directory shows how to consume the REST API
+from **ParaView**, **R**, **MATLAB** and **Jupyter** — including a
+Gaussian σ-decay fit reproduced in three languages so the analytical
+results are demonstrably tool-independent. See
+[`examples/README.md`](examples/README.md) for the full index.
 
 ## Citation
 
