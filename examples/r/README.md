@@ -6,9 +6,7 @@ Two files:
   (login, list studies, list maps, fetch mesh) built on `httr2`.
 - [`pulse_ep_demo.R`](pulse_ep_demo.R) — a runnable example: lists the
   studies, picks the first map, renders the triangle mesh with `rgl`,
-  plots the scalar distribution with `ggplot2`, and fits a Gaussian
-  decay (`A·exp(-d²/(2σ²)) + B`) of the scalar against Euclidean
-  distance from the point of maximum value via `nls()`.
+  and plots the scalar distribution with `ggplot2`.
 
 ## Required R packages
 
@@ -33,13 +31,11 @@ Rscript pulse_ep_demo.R
 `PULSE_EP_PASSWORD` from the environment, but you can also pass
 explicit values when calling `pe_login()`.
 
-## Note on the σ-fit
+## Scope
 
-The fit in this demo uses **Euclidean** distance from the maximum-scalar
-vertex. That is a deliberately simple stand-in for the geodesic
-(Heat-Method) distances used by the actual σ-resolution analysis in
-[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay). The
-point here is to show that a third-party stats stack (R + `nls`)
-operating on raw mesh data reaches a σ close to what the Python
-pipeline computes — i.e. the published values are not Python-specific
-artefacts.
+These examples stop at "load and display". The Gaussian σ-resolution
+analysis (Heat-Method geodesics + non-linear least-squares fit) is a
+separate scientific contribution and lives in
+[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay); see
+that repository's `examples/` directory for the corresponding R / Python
+walkthroughs.
