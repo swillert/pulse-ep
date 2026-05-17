@@ -1,14 +1,16 @@
-from pulse_ep.core import xml_proc as xml_proc
-from pulse_ep.core import mesh_proc as mesh_proc
-from pulse_ep.core.epmap import EPMap
-from pulse_ep.core.study import Study
-import numpy as np
-import re
 import csv
 import os
+import re
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Union
+
+import numpy as np
+
+from pulse_ep.core import mesh_proc as mesh_proc
+from pulse_ep.core import xml_proc as xml_proc
+from pulse_ep.core.epmap import EPMap
+from pulse_ep.core.study import Study
 
 
 def import_carto_points(path, carto_point_export_filenames):
@@ -26,23 +28,39 @@ def import_carto_points(path, carto_point_export_filenames):
                 print(f"File not found: {carto_point_export_filename}")
                 continue  # Skip missing files
             else:
-                pointExportTree = xml_proc.process_xml(os.path.join(path, carto_point_export_filename))
+                pointExportTree = xml_proc.process_xml(
+                    os.path.join(path, carto_point_export_filename)
+                )
                 root = pointExportTree.getroot()
-                pointExport_WOI.append([float(root.find("WOI").get("From")), float(root.find("WOI").get("To"))])
-                pointExport_ReferenceAnnotation.append(float(root.find("Annotations").get("Reference_Annotation")))
-                pointExport_MapAnnotation.append(float(root.find("Annotations").get("Map_Annotation")))
+                pointExport_WOI.append(
+                    [float(root.find("WOI").get("From")), float(root.find("WOI").get("To"))]
+                )
+                pointExport_ReferenceAnnotation.append(
+                    float(root.find("Annotations").get("Reference_Annotation"))
+                )
+                pointExport_MapAnnotation.append(
+                    float(root.find("Annotations").get("Map_Annotation"))
+                )
                 pointExport_Unipolar.append(float(root.find("Voltages").get("Unipolar")))
                 pointExport_Bipolar.append(float(root.find("Voltages").get("Bipolar")))
 
                 try:
-                    impedance_time = [float(impedance.get("Time")) for impedance in root.findall("Impedances/Impedance")]
-                    impedance_value = [float(impedance.get("Value")) for impedance in root.findall("Impedances/Impedance")]
+                    impedance_time = [
+                        float(impedance.get("Time"))
+                        for impedance in root.findall("Impedances/Impedance")
+                    ]
+                    impedance_value = [
+                        float(impedance.get("Value"))
+                        for impedance in root.findall("Impedances/Impedance")
+                    ]
                     pointExport_ImpedanceTime.append(impedance_time)
                     pointExport_ImpedanceValue.append(impedance_value)
                 except Exception as impedance_error:
-                    print(f"Warning: Failed to import impedance data for {carto_point_export_filename}: {impedance_error}")
-                    pointExport_ImpedanceTime.append([float('nan')])
-                    pointExport_ImpedanceValue.append([float('nan')])
+                    print(
+                        f"Warning: Failed to import impedance data for {carto_point_export_filename}: {impedance_error}"
+                    )
+                    pointExport_ImpedanceTime.append([float("nan")])
+                    pointExport_ImpedanceValue.append([float("nan")])
 
         except Exception as point_error:
             print(f"Error processing {carto_point_export_filename}: {point_error}")
@@ -55,9 +73,8 @@ def import_carto_points(path, carto_point_export_filenames):
         np.array(pointExport_Unipolar),
         np.array(pointExport_Bipolar),
         np.array(pointExport_ImpedanceTime, dtype=object),  # Variable-length sequences
-        np.array(pointExport_ImpedanceValue, dtype=object)  # Variable-length sequences
+        np.array(pointExport_ImpedanceValue, dtype=object),  # Variable-length sequences
     )
-
 
 
 def import_studies(file_path, map_filter=None):
@@ -86,13 +103,13 @@ def import_carto(filename: str, filter=None):
     """
     Import Carto data and convert it into a format suitable for further analysis.
     """
-    if filter == None:
+    if filter == None:  # noqa: E711
         interactive = True
     else:
         interactive = False
 
     # Skip macOS metadata files (AppleDouble ._* files)
-    if os.path.basename(filename).startswith('._'):
+    if os.path.basename(filename).startswith("._"):
         print(f"Skipping macOS metadata file: {filename}")
         return None
 
@@ -119,7 +136,8 @@ def import_carto(filename: str, filter=None):
     # Filter map names based on the regular expression
     if filter is not None:
         map_indices = [
-            index for index, (name, numPts) in enumerate(zip(names, numPtsPerMap))
+            index
+            for index, (name, numPts) in enumerate(zip(names, numPtsPerMap))  # noqa: B905
             if re.search(filter, name, re.IGNORECASE) and numPts >= 5
         ]
     else:
@@ -150,7 +168,7 @@ def import_carto(filename: str, filter=None):
             epmap.process_carto_mesh_file(carto_mesh_file)
 
             # Import Carto Points
-            carto_points_file = os.path.join(path, epmap.map_name + '_Points_Export.xml')
+            carto_points_file = os.path.join(path, epmap.map_name + "_Points_Export.xml")
             carto_point_export_filenames = xml_proc.get_point_filenames(carto_points_file)
 
             # Import the data into EPMap
@@ -161,7 +179,7 @@ def import_carto(filename: str, filter=None):
                 epmap.unipolar,
                 epmap.bipolar,
                 epmap.impedance_time,
-                epmap.impedance_value
+                epmap.impedance_value,
             ) = import_carto_points(path, carto_point_export_filenames)
 
             # Add map to the Study
@@ -175,7 +193,7 @@ def import_carto(filename: str, filter=None):
 
 
 def discover_carto_exports(
-    directory: Union[str, Path],
+    directory: str | Path,
     pattern: str = "*.xml",
     recursive: bool = True,
 ) -> list[str]:
@@ -211,9 +229,7 @@ def discover_carto_exports(
     if not root.is_dir():
         raise FileNotFoundError(f"Not a directory: {root}")
 
-    iterator: Iterable[Path] = (
-        root.rglob(pattern) if recursive else root.glob(pattern)
-    )
+    iterator: Iterable[Path] = root.rglob(pattern) if recursive else root.glob(pattern)
 
     seen: set[str] = set()
     files: list[str] = []
@@ -248,13 +264,13 @@ def get_filenames_from_csv(file_with_studies):
     files = []
     seen = set()
 
-    with open(file_with_studies, 'r') as f:
+    with open(file_with_studies) as f:
         reader = csv.reader(f)
         next(reader)  # Skip the header row
         for row in reader:
             file_path = row[0].strip()
             # Skip macOS AppleDouble metadata files and duplicates
-            if os.path.basename(file_path).startswith('._'):
+            if os.path.basename(file_path).startswith("._"):
                 continue
             if file_path in seen:
                 continue
@@ -265,6 +281,7 @@ def get_filenames_from_csv(file_with_studies):
         raise ValueError("No filenames could be imported from the CSV file.")
 
     return files
+
 
 def extract_subfolder(file, n):
     # Normalize the path to ensure correct handling of path separators
@@ -278,4 +295,3 @@ def extract_subfolder(file, n):
         return directories[n]
     else:
         return None
-
