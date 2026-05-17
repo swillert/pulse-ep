@@ -1,8 +1,5 @@
 """pulse-ep — open-source platform for CARTO electroanatomical mapping data.
 
-Companion to the SoftwareX paper. The scientific analysis layer lives in
-the separate package :mod:`pulse_ep_decay`.
-
 Quick-access re-exports of the most commonly used items::
 
     from pulse_ep import (
