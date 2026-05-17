@@ -41,14 +41,10 @@ import os
 import re
 import sys
 import time
-from typing import Optional
 
-import numpy as np
-
-from pulse_ep.core import xml_proc, mesh_proc
+from pulse_ep.core import mesh_proc, xml_proc
 from pulse_ep.core.importer import discover_carto_exports, extract_subfolder
 from pulse_ep.core.point_importer import import_map_points
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -102,7 +98,10 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
     # DB imports happen here so that --dry-run does not require DB config.
     from pulse_ep.core.database import get_db_session
     from pulse_ep.core.models import (
-        EPMapModel, EPMapPoint, StudyModel, EPMapAttributes,
+        EPMapAttributes,
+        EPMapModel,
+        EPMapPoint,
+        StudyModel,
     )
 
     progress = _progress["enabled"]
@@ -127,7 +126,8 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
         return
 
     map_indices = [
-        i for i, (name, npts) in enumerate(zip(names, numPtsPerMap))
+        i
+        for i, (name, npts) in enumerate(zip(names, numPtsPerMap))  # noqa: B905
         if re.search(map_filter, name, re.IGNORECASE) and npts >= 5
     ]
 
@@ -171,8 +171,13 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
                 mesh_file = filenames[map_index]
                 mesh_path = os.path.join(study_dir, mesh_file)
                 (
-                    triangles, vertices, triangle_areas, is_vertex_at_edge,
-                    act_bip, normals, uni_imp_frc,
+                    triangles,
+                    vertices,
+                    triangle_areas,
+                    is_vertex_at_edge,
+                    act_bip,
+                    normals,
+                    uni_imp_frc,
                 ) = mesh_proc.read_carto_mesh_file(mesh_path)
 
                 map_element = xml_proc.get_map_element(xml_tree, map_index)
@@ -190,9 +195,7 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
                     is_vertex_at_edge=is_vertex_at_edge.tolist(),
                     act_bip=act_bip.tolist(),
                     normals=normals.tolist(),
-                    uni_imp_frc=(
-                        uni_imp_frc.tolist() if uni_imp_frc is not None else None
-                    ),
+                    uni_imp_frc=(uni_imp_frc.tolist() if uni_imp_frc is not None else None),
                 )
                 session.add(epmap_model)
                 session.flush()
@@ -246,17 +249,25 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
 def _wipe_database(progress: bool) -> None:
     """Drop and recreate all pulse-ep tables, then reseed metadata."""
     from sqlalchemy import text
+
     from pulse_ep.core.database import (
-        create_db_engine, get_db_session, seed_attribute_metadata,
+        create_db_engine,
+        get_db_session,
+        seed_attribute_metadata,
     )
     from pulse_ep.core.models import Base
 
     engine = create_db_engine()
     with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         for tbl in [
-            "ep_map_points", "epmap_attributes", "reports",
-            "epmaps", "studies", "attribute_metadata",
-            "colormaps", "users",
+            "ep_map_points",
+            "epmap_attributes",
+            "reports",
+            "epmaps",
+            "studies",
+            "attribute_metadata",
+            "colormaps",
+            "users",
         ]:
             conn.execute(text(f"DROP TABLE IF EXISTS {tbl} CASCADE"))
     if not progress:
@@ -279,40 +290,48 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
-        "--input", "-i", required=True, metavar="DIR",
+        "--input",
+        "-i",
+        required=True,
+        metavar="DIR",
         help="Root directory containing CARTO study XML files.",
     )
     p.add_argument(
-        "--pattern", default="*.xml", metavar="GLOB",
+        "--pattern",
+        default="*.xml",
+        metavar="GLOB",
         help="Glob pattern for study XML files (default: %(default)s).",
     )
     p.add_argument(
-        "--no-recursive", action="store_true",
+        "--no-recursive",
+        action="store_true",
         help="Do not recurse into subdirectories.",
     )
     p.add_argument(
-        "--map-filter", default=".*", metavar="REGEX",
-        help=(
-            "Case-insensitive regex for filtering map names "
-            "(default: %(default)s — match all)."
-        ),
+        "--map-filter",
+        default=".*",
+        metavar="REGEX",
+        help=("Case-insensitive regex for filtering map names (default: %(default)s — match all)."),
     )
     p.add_argument(
-        "--clear", action="store_true",
+        "--clear",
+        action="store_true",
         help="Drop and recreate all tables before importing.",
     )
     p.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Discover and parse, but do not write to the database.",
     )
     p.add_argument(
-        "--progress", action="store_true",
+        "--progress",
+        action="store_true",
         help="Compact one-line progress display.",
     )
     return p
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
 
     if args.progress:
@@ -331,9 +350,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     if not files:
-        log.error(
-            f"No CARTO study files matched {args.pattern!r} under {args.input!r}."
-        )
+        log.error(f"No CARTO study files matched {args.pattern!r} under {args.input!r}.")
         return 3
 
     if args.clear:
