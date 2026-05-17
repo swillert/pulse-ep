@@ -1,0 +1,44 @@
+# Keep the build context lean — anything not needed for `pip install`.
+
+.git/
+.gitlab-ci.yml
+.gitignore
+.idea/
+.vscode/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+
+# Test / coverage / build artefacts
+htmlcov/
+.coverage
+.coverage.*
+dist/
+build/
+*.egg-info/
+
+# Local config and secrets — Docker should never bake these in.
+.env
+.env.*
+!.env.example
+config.ini
+config.local.ini
+
+# Runtime outputs (regenerable)
+reports/
+decay_profiles/
+decay_profiles_heat/
+validation_full/
+pulse-db/
+pg-logs/
+
+# Documentation source / scratch
+docs/
+*.bak
+*.orig
+.DS_Store
