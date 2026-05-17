@@ -35,8 +35,6 @@ def sqlite_engine_and_session():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    from pulse_ep import Base
-
     engine = create_engine("sqlite:///:memory:")
     # NOTE: a subset of pulse-ep models use PostgreSQL-specific types
     # (JSONB, ARRAY). The SQLite test here covers the schema-creation
