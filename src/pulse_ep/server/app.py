@@ -1,6 +1,7 @@
-import configparser
 import os
+import re
 import threading
+import warnings
 
 import numpy as np
 from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
@@ -10,6 +11,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from sqlalchemy.orm.attributes import flag_modified
 
+from pulse_ep.core.config import get_settings
 from pulse_ep.core.database import get_db_session
 from pulse_ep.core.models import (
     AttributeMetadata,
@@ -21,18 +23,29 @@ from pulse_ep.core.models import (
     UserModel,
 )
 
-REPORTS_DIR = "reports"
-os.makedirs(REPORTS_DIR, exist_ok=True)
-import re  # noqa: E402
+_settings = get_settings()
 
-_config = configparser.ConfigParser()
-_config.read("config.ini")
+REPORTS_DIR = _settings.reports_dir
+os.makedirs(REPORTS_DIR, exist_ok=True)
+
+_DEV_JWT_PLACEHOLDER = "pulse-ep-dev-insecure-jwt-secret-CHANGE-ME"  # noqa: S105
+_jwt_secret = _settings.resolved_jwt_secret_key
+if _jwt_secret is None:
+    warnings.warn(
+        "PULSE_EP_JWT_SECRET_KEY is not set — using an insecure development "
+        "placeholder. Set a real secret before exposing this server to any "
+        "real users or networks.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    _jwt_secret = _DEV_JWT_PLACEHOLDER
 
 app = Flask(__name__)
-app.config["JWT_SECRET_KEY"] = _config["jwt"]["secret_key"]
+app.config["JWT_SECRET_KEY"] = _jwt_secret
+app.config["BCRYPT_LOG_ROUNDS"] = _settings.bcrypt_log_rounds
 jwt = JWTManager(app)
 bcrypt = Bcrypt(app)
-CORS(app)
+CORS(app, origins=_settings.cors_origins)
 
 
 @app.route("/")
@@ -900,24 +913,26 @@ def download_report(report_id):
 
 
 def main():
-    """CLI entry point for pulse-ep-server.
+    """CLI entry point for ``pulse-ep-server``.
 
-    Reads optional environment variables:
-      * PULSE_EP_HOST  (default 127.0.0.1)
-      * PULSE_EP_PORT  (default 5000)
-      * PULSE_EP_DEBUG (1 to enable Flask debug mode)
+    All settings are read via :func:`pulse_ep.core.config.get_settings`,
+    so they can be supplied through environment variables (``PULSE_EP_*``),
+    a ``.env`` file, or — for backwards compatibility — ``config.ini``.
     """
+    from pulse_ep.core.config import reset_settings
     from pulse_ep.core.database import init_db
+
+    # Pick up any env mutations made by the surrounding process / launcher
+    # *after* this module was first imported (e.g. by ``docker run -e``).
+    reset_settings()
+    settings = get_settings()
 
     try:
         init_db()
     except Exception as exc:
         print(f"WARNING: init_db skipped — {exc}")
 
-    host = os.environ.get("PULSE_EP_HOST", "127.0.0.1")
-    port = int(os.environ.get("PULSE_EP_PORT", "5000"))
-    debug = os.environ.get("PULSE_EP_DEBUG", "0") == "1"
-    app.run(host=host, port=port, debug=debug)
+    app.run(host=settings.host, port=settings.port, debug=settings.debug)
 
 
 if __name__ == "__main__":
