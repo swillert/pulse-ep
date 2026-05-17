@@ -95,6 +95,7 @@ pulse-ep-extract-meshes = "pulse_ep.cli.extract_meshes_for_validation:main"
 pulse-ep-tag-maps = "pulse_ep.cli.tag_maps:main"
 pulse-ep-populate-colormaps = "pulse_ep.cli.populate_colormaps:main"
 pulse-ep-check-mesh = "pulse_ep.cli.check_mesh:main"
+pulse-ep-create-user = "pulse_ep.cli.create_user:main"
 pulse-ep-demo = "pulse_ep.examples.demo_synthetic:main"
 pulse-ep-server = "pulse_ep.server.app:main"
 
