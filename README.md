@@ -179,19 +179,21 @@ src/pulse_ep/
 
 examples/           # Cross-language client examples — see examples/README.md
 ├── paraview/         ParaView Programmable Source + CLI .vtu export
-├── r/                httr2 REST client + rgl/ggplot/nls demo
+├── r/                httr2 REST client + rgl/ggplot demo
 ├── matlab/           webread/webwrite client + trisurf demo
-└── notebooks/        Jupyter walkthrough (PyVista + scipy.curve_fit)
+└── notebooks/        Jupyter walkthrough (PyVista)
 ```
 
 ## Interoperability examples
 
 `pulse-ep` is designed as a programmatic hub, not just a Python library.
 The [`examples/`](examples/) directory shows how to consume the REST API
-from **ParaView**, **R**, **MATLAB** and **Jupyter** — including a
-Gaussian σ-decay fit reproduced in three languages so the analytical
-results are demonstrably tool-independent. See
-[`examples/README.md`](examples/README.md) for the full index.
+from **ParaView**, **R**, **MATLAB** and **Jupyter**. These examples
+deliberately stop at data access and basic visualisation; the scientific
+σ-resolution analysis (Heat-Method geodesics + Gaussian decay fit) lives
+in the companion package
+[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay), which
+ships its own cross-language reproducibility demos.
 
 ## Citation
 
