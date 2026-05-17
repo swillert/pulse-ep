@@ -44,7 +44,7 @@ surfaces:
   simplekml; `pulse-ep[dev]` adds the test and lint tooling.
   Heavyweight, optional dependencies stay out of the core install.
 - **REST first.** The bundled web viewer is a client of the same
-  endpoints the [`examples/`](examples/) directory consumes. There is
+  endpoints the `examples/` directory consumes. There is
   no privileged "internal" API; every reader can be substituted.
 
 ## 4 Repository conventions
