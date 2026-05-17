@@ -1,8 +1,10 @@
 import configparser
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from pulse_ep.core.models import Base, AttributeMetadata
 from contextlib import contextmanager
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from pulse_ep.core.models import AttributeMetadata, Base
 
 
 @contextmanager
@@ -42,17 +44,19 @@ def seed_attribute_metadata(session):
 
 def create_db_engine():
     config = configparser.ConfigParser()
-    config.read('config.ini')
-    db = config['database']
+    config.read("config.ini")
+    db = config["database"]
     uri = f"postgresql://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['dbname']}"
-    engine = create_engine(uri,
-                           pool_pre_ping=True,
-                           connect_args={
-                               "keepalives": 1,
-                               "keepalives_idle": 30,
-                               "keepalives_interval": 10,
-                               "keepalives_count": 5,
-                           })
+    engine = create_engine(
+        uri,
+        pool_pre_ping=True,
+        connect_args={
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+        },
+    )
     return engine
 
 
