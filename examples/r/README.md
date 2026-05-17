@@ -1,12 +1,30 @@
 # pulse-ep + R
 
-Two files:
+Files in this directory:
 
 - [`pulse_ep_client.R`](pulse_ep_client.R) — a ~80-line REST client
   (login, list studies, list maps, fetch mesh) built on `httr2`.
-- [`pulse_ep_demo.R`](pulse_ep_demo.R) — a runnable example: lists the
-  studies, picks the first map, renders the triangle mesh with `rgl`,
-  and plots the scalar distribution with `ggplot2`.
+- [`pulse_ep_demo.R`](pulse_ep_demo.R) — fetch a map, render the
+  triangle mesh with `rgl`, plot the per-vertex scalar histogram with
+  `ggplot2`.
+- [`areas_per_interval.R`](areas_per_interval.R) — call
+  `/calculate_areas_for_intervals` and tabulate the surface area per
+  score bin — the same per-map reduction the bundled web viewer and the
+  clinical Excel reports show, computed independently in R.
+
+## What this demonstrates
+
+These two demos are the R-side contribution to the **cross-language
+reproducibility statement** of the software paper: identical platform
+reductions (scalar histogram + area-per-interval table) computed in R
+from the same REST payload Python, MATLAB and the web viewer consume.
+A clinical co-author who works in R should reproduce the same numbers
+without a Python install.
+
+The σ-resolution analysis (Heat-Method geodesics + Gaussian fit) is
+out of scope here — it is a scientific contribution of
+[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay) and
+has its own cross-language demos there.
 
 ## Required R packages
 
@@ -24,18 +42,13 @@ in your shell, then:
 
 ```bash
 cd examples/r
+
+# 1) mesh + histogram
 Rscript pulse_ep_demo.R
+
+# 2) area-per-interval table (using the colormap intervals of the platform)
+Rscript areas_per_interval.R
 ```
 
-`pulse_ep_demo.R` reads `PULSE_EP_BASE_URL`, `PULSE_EP_USERNAME` and
-`PULSE_EP_PASSWORD` from the environment, but you can also pass
-explicit values when calling `pe_login()`.
-
-## Scope
-
-These examples stop at "load and display". The Gaussian σ-resolution
-analysis (Heat-Method geodesics + non-linear least-squares fit) is a
-separate scientific contribution and lives in
-[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay); see
-that repository's `examples/` directory for the corresponding R / Python
-walkthroughs.
+Both scripts read `PULSE_EP_BASE_URL`, `PULSE_EP_USERNAME` and
+`PULSE_EP_PASSWORD` from the environment.
