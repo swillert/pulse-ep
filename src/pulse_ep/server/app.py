@@ -899,5 +899,26 @@ def download_report(report_id):
     )
 
 
+def main():
+    """CLI entry point for pulse-ep-server.
+
+    Reads optional environment variables:
+      * PULSE_EP_HOST  (default 127.0.0.1)
+      * PULSE_EP_PORT  (default 5000)
+      * PULSE_EP_DEBUG (1 to enable Flask debug mode)
+    """
+    from pulse_ep.core.database import init_db
+
+    try:
+        init_db()
+    except Exception as exc:
+        print(f"WARNING: init_db skipped — {exc}")
+
+    host = os.environ.get("PULSE_EP_HOST", "127.0.0.1")
+    port = int(os.environ.get("PULSE_EP_PORT", "5000"))
+    debug = os.environ.get("PULSE_EP_DEBUG", "0") == "1"
+    app.run(host=host, port=port, debug=debug)
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    main()
