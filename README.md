@@ -4,8 +4,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 An open-source platform for programmatic access to **CARTO 3**
-electroanatomical mapping data — the successor to
-[pulse-ultimate](https://gitlab.willert.net/sw/pulse-ultimate).
+electroanatomical mapping data.
 
 `pulse-ep` parses CARTO 3 (Biosense Webster / Johnson & Johnson) export
 archives into a relational PostgreSQL database and exposes the data
@@ -16,10 +15,6 @@ through three independent surfaces:
 - a **Python toolkit** (`pulse_ep.core`) for custom analyses — geodesic
   distances, surface-area integration, per-point catheter geometry, and
   per-vertex scalar fields.
-
-Quantitative methods that build on top of `pulse-ep` — Heat Method
-geodesics, Gaussian decay fits, σ-validation — live in the companion
-package [`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay).
 
 ## Why?
 
@@ -49,19 +44,8 @@ CARTO export ──►│  pulse_ep.core.importer   (XML + mesh parsing)  │─
   HTML reports                   check_mesh, demo               SQLAlchemy models
 ```
 
-The optional scientific layer is in a **separate package**:
-
-```
-                        pulse-ep-decay  (independent install)
-        ┌───────────────────────────────────────────────────────────┐
-        │  geodesic · heatmethod · decay_fit · validation           │
-        │  + optional pulse_ep_decay.integration.pulse_ep adapter   │
-        └───────────────────────────────────────────────────────────┘
-```
-
-`pulse-ep` never imports from `pulse-ep-decay`; the decay package imports
-from `pulse-ep` only inside the optional adapter submodule. This keeps the
-platform install slim and the scientific kernel independently reproducible.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the internal engineering
+documentation (module layout, design choices, quality gate).
 
 ## Installation
 
@@ -77,12 +61,6 @@ pip install "pulse-ep[figures]"
 
 # everything (server, figures, dev tools)
 pip install "pulse-ep[all]"
-```
-
-For the scientific σ-resolution analysis, install the companion package:
-
-```bash
-pip install pulse-ep-decay
 ```
 
 ### From source
@@ -110,7 +88,7 @@ Resolution order (highest priority first):
 
 1. Process environment (`PULSE_EP_*` variables)
 2. `.env` file (path overridable via `PULSE_EP_ENV_FILE`)
-3. Legacy `config.ini` (`PULSE_EP_CONFIG`) — kept for pulse-ultimate compatibility
+3. Legacy `config.ini` (`PULSE_EP_CONFIG`)
 4. Field defaults defined on `pulse_ep.core.config.Settings`
 
 The same `.env` file is consumed by `docker compose` (see below), so a
@@ -195,11 +173,6 @@ reductions — the per-vertex scalar histogram and the per-interval
 surface-area breakdown — in four independent toolchains. The bundled
 web viewer is a fifth.
 
-The scientific σ-resolution analysis (Heat-Method geodesics + Gaussian
-decay fit) is a separate contribution and lives in
-[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay), which
-ships its own cross-language reproducibility demos for σ̂.
-
 ## Citation
 
 If you use `pulse-ep` in academic work, please cite the
@@ -209,13 +182,6 @@ preparation for SoftwareX.
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Related
-
-- [`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay) —
-  scientific extension package (Heat Method, σ-resolution analysis).
-- [`pulse-ultimate`](https://gitlab.willert.net/sw/pulse-ultimate) —
-  predecessor monorepo, frozen for paper reproducibility.
 
 ## Contributing
 
