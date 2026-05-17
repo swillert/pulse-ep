@@ -3,13 +3,11 @@ import os
 import threading
 
 import numpy as np
-import openpyxl
 from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
 from flask import json as flask_json
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required
-from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy.orm.attributes import flag_modified
 
 from pulse_ep.core.database import get_db_session
@@ -668,6 +666,9 @@ def save_report():
 
 
 def _build_report_excel(report_id):
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+
     """
     Background worker: loads map data, computes areas, writes Excel to disk,
     and updates the report status in the DB.
