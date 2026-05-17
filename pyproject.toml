@@ -76,15 +76,21 @@ dev = [
     "ruff>=0.6,<1",
     "mypy>=1.10,<2",
 ]
+docs = [
+    "mkdocs-material>=9.5,<10",
+    "mkdocstrings[python]>=0.26,<1",
+    "mkdocs-include-markdown-plugin>=7.0,<8",
+    "pymdown-extensions>=10.9,<11",
+]
 all = [
-    "pulse-ep[server,figures,dev]",
+    "pulse-ep[server,figures,dev,docs]",
 ]
 
 [project.urls]
 Homepage = "https://gitlab.willert.net/sw/pulse-ep"
 Repository = "https://gitlab.willert.net/sw/pulse-ep"
 Issues = "https://gitlab.willert.net/sw/pulse-ep/-/issues"
-Documentation = "https://gitlab.willert.net/sw/pulse-ep#readme"
+Documentation = "https://sw.gitlab-pages.willert.net/pulse-ep/"
 
 [project.scripts]
 pulse-ep-import-carto = "pulse_ep.cli.import_carto:main"
