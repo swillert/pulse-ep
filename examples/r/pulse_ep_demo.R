@@ -6,10 +6,6 @@
 #   3. Plots the triangulated chamber mesh in 3D with `rgl`.
 #   4. Plots the per-vertex scalar distribution with `ggplot2`.
 #
-# For the σ-resolution analysis (Heat-Method geodesics + Gaussian decay
-# fit), see the pulse-ep-decay examples — that workflow belongs to the
-# scientific method package, not the platform.
-#
 # Run:
 #   Rscript pulse_ep_demo.R
 #
