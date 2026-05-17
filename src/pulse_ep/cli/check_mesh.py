@@ -1,7 +1,7 @@
 import requests
-import json
 
 BASE_URL = "http://127.0.0.1:5000"  # Replace with your server's URL if different
+
 
 # Authentication (replace with actual username and password)
 def authenticate(username, password):
@@ -9,6 +9,7 @@ def authenticate(username, password):
     response = requests.post(login_url, json={"username": username, "password": password})
     response.raise_for_status()  # Raise an error for bad responses
     return response.json()["access_token"]
+
 
 # Fetch Mesh Data
 def fetch_mesh_data(token, map_id, distance, scalar_name="act"):
@@ -18,6 +19,7 @@ def fetch_mesh_data(token, map_id, distance, scalar_name="act"):
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()  # Raise an error for bad responses
     return response.json()
+
 
 def analyze_structure(data, indent=0):
     """
@@ -38,6 +40,7 @@ def analyze_structure(data, indent=0):
     else:
         print(f"{indent_str}{data}")
 
+
 def compare_scalar_data(act_data, vol_data):
     """
     Compare act and vol scalar data arrays and print if they are the same or different.
@@ -53,6 +56,7 @@ def compare_scalar_data(act_data, vol_data):
 
     print("The act and vol data arrays are the same.")
     return True
+
 
 def main():
     username = "sw"  # Replace with actual username
@@ -80,6 +84,7 @@ def main():
         compare_scalar_data(act_data["scalar_data"], vol_data["scalar_data"])
     else:
         print("Error: scalar_data not found in the fetched data.")
+
 
 if __name__ == "__main__":
     main()
