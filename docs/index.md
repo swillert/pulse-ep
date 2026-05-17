@@ -1,0 +1,134 @@
+---
+hide:
+  - navigation
+---
+
+# pulse-ep
+
+**An open-source platform for programmatic access to CARTO 3 electroanatomical mapping data.**
+
+`pulse-ep` parses CARTO 3 (Biosense Webster / Johnson & Johnson) export archives into a
+relational PostgreSQL database and exposes the data through three independent surfaces:
+
+<div class="grid cards" markdown>
+
+-   :material-api:{ .lg .middle } __REST API__
+
+    ---
+
+    A JWT-authenticated Flask service exposing studies, maps, meshes,
+    scalar fields, and per-interval area reductions over JSON.
+
+    [:octicons-arrow-right-24: REST API reference](reference/rest-api.md)
+
+-   :material-cube-outline:{ .lg .middle } __3D Web Viewer__
+
+    ---
+
+    A browser-based Three.js / WebGL viewer for interactive
+    inspection of chamber meshes and scalar fields — no install on
+    the clinician's side.
+
+    [:octicons-arrow-right-24: Viewer guide](guides/web-viewer.md)
+
+-   :material-language-python:{ .lg .middle } __Python toolkit__
+
+    ---
+
+    `pulse_ep.core` — domain classes (`EPMap`, `Study`), CARTO XML
+    parsing, geodesic distances, surface-area integration, ORM models.
+
+    [:octicons-arrow-right-24: Python API](reference/python-api.md)
+
+-   :material-console:{ .lg .middle } __CLI utilities__
+
+    ---
+
+    `pulse-ep-import-carto`, `pulse-ep-server`, `pulse-ep-create-user`,
+    `pulse-ep-demo`, … — scriptable platform operations.
+
+    [:octicons-arrow-right-24: CLI reference](reference/cli.md)
+
+</div>
+
+## Why pulse-ep?
+
+CARTO 3 records ablation procedures as triangulated chamber meshes with
+per-vertex activation times, bipolar voltages, and pace-mapping similarity
+scores. It is excellent for real-time clinical decision-making but provides
+**no programmatic interface** — quantitative research requires external access
+to raw mesh geometry and measurement-point coordinates.
+
+`pulse-ep` turns the proprietary archive into a queryable hub. From there,
+heterogeneous clients — Python and MATLAB scripts, R workflows, Excel reports,
+the bundled web viewer, ParaView, or your own client — can analyse the data
+on equal footing.
+
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    A[CARTO 3 export] --> B[pulse_ep.core.importer<br/>XML + mesh parsing]
+    B --> C[(PostgreSQL)]
+    C --> D[pulse_ep.server<br/>Flask + JWT REST]
+    C --> E[pulse_ep.cli<br/>scriptable ops]
+    C --> F[pulse_ep.core<br/>Python toolkit]
+    D --> G[Three.js viewer]
+    D --> H[R / MATLAB / ParaView / Jupyter clients]
+```
+
+The bundled web viewer and the [`examples/`](examples/index.md) for R,
+MATLAB, ParaView and Jupyter are all clients of the same REST API.
+There is no privileged internal channel; what the viewer does, any
+client can do.
+
+## A 60-second taste
+
+```bash
+# Run a self-contained synthetic walkthrough — no database needed
+pip install "pulse-ep[server]"
+pulse-ep-demo
+```
+
+This builds a synthetic atrial mesh with a Gaussian score field, ingests it
+into an in-memory SQLite, and prints the per-interval area breakdown. It is
+the smallest working example of the full pipeline, intended for first-time
+users and CI smoke tests.
+
+For real CARTO data and the web viewer, see the [Quickstart](getting-started/quickstart.md).
+
+## How to read this documentation
+
+- **[Getting started](getting-started/installation.md)** — install, configure
+  and run pulse-ep against either a synthetic dataset or your own CARTO export.
+- **[Guides](guides/carto-import.md)** — task-oriented walkthroughs: importing
+  a study, navigating the web viewer, deploying with Docker, managing users,
+  building reports.
+- **[Reference](reference/rest-api.md)** — exhaustive specification of the
+  REST API, command-line tools, Python API (auto-generated from docstrings),
+  database schema, and every `PULSE_EP_*` configuration variable.
+- **[Examples](examples/index.md)** — runnable client code in R, MATLAB,
+  ParaView and Jupyter. The same scalar histogram and the same area-per-interval
+  table computed in four independent toolchains.
+- **[Architecture](architecture.md)** — design rationale for contributors.
+
+## Citation
+
+If you use `pulse-ep` in academic work, please cite the
+[`CITATION.cff`](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/CITATION.cff)
+entry. The accompanying software paper is in preparation for *SoftwareX*.
+
+```bibtex
+@software{willert_pulse_ep,
+  author  = {Willert, Sven and Lian, Evgeny and Frank, Derk},
+  title   = {{pulse-ep: An open-source platform for programmatic access to CARTO electroanatomical mapping data}},
+  year    = {2026},
+  version = {0.1.0},
+  url     = {https://gitlab.willert.net/sw/pulse-ep},
+}
+```
+
+## License
+
+`pulse-ep` is released under the [MIT License](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/LICENSE).
+Use, modify, redistribute — within or outside academia — without restriction beyond attribution.
