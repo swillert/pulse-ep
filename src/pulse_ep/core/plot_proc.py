@@ -1,15 +1,12 @@
-from matplotlib.colors import ListedColormap
-import numpy as np
 import matplotlib.pyplot as plt
-from reportlab.pdfgen import canvas
-import pyvista as pv
-from pulse_ep.core import mesh_proc as mesh_proc
 import numpy as np
-from scipy.spatial import cKDTree
-from scipy.interpolate import Rbf
+from matplotlib.colors import ListedColormap
+from reportlab.pdfgen import canvas
+
+from pulse_ep.core import mesh_proc as mesh_proc
 
 
-def export_to_pdf(file_png, file_pdf,width,height):
+def export_to_pdf(file_png, file_pdf, width, height):
     c = canvas.Canvas(file_pdf)
     c.drawImage(file_png, 0, 0, width=width, height=height)  # Change width and height as needed
     c.save()
@@ -30,22 +27,34 @@ def create_custom_colormap(lower_limit, upper_limit):
     newcolors = np.empty((256, 4))
     newcolors[mapping >= lower_limit] = grey
     newcolors[mapping < lower_limit] = black
-    newcolors[(mapping >= lower_limit + (upper_limit - lower_limit) / 5) & (mapping < lower_limit + 2 * (upper_limit - lower_limit) / 5)] = red
-    newcolors[(mapping >= lower_limit + 2 * (upper_limit - lower_limit) / 5) & (mapping < lower_limit + 3 * (upper_limit - lower_limit) / 5)] = yellow
-    newcolors[(mapping >= lower_limit + 3 * (upper_limit - lower_limit) / 5) & (mapping < lower_limit + 4 * (upper_limit - lower_limit) / 5)] = green
-    newcolors[(mapping >= lower_limit + 4 * (upper_limit - lower_limit) / 5) & (mapping < upper_limit)] = blue
+    newcolors[
+        (mapping >= lower_limit + (upper_limit - lower_limit) / 5)
+        & (mapping < lower_limit + 2 * (upper_limit - lower_limit) / 5)
+    ] = red
+    newcolors[
+        (mapping >= lower_limit + 2 * (upper_limit - lower_limit) / 5)
+        & (mapping < lower_limit + 3 * (upper_limit - lower_limit) / 5)
+    ] = yellow
+    newcolors[
+        (mapping >= lower_limit + 3 * (upper_limit - lower_limit) / 5)
+        & (mapping < lower_limit + 4 * (upper_limit - lower_limit) / 5)
+    ] = green
+    newcolors[
+        (mapping >= lower_limit + 4 * (upper_limit - lower_limit) / 5) & (mapping < upper_limit)
+    ] = blue
     newcolors[mapping >= upper_limit] = purple
 
     # Make the colormap from the listed colors
     cmap = ListedColormap(newcolors)
     return cmap
 
+
 def create_modified_hsv_colormap():
     # Create a  colormap
     # cmap = plot_proc.create_custom_colormap(np.nanmin(sim_data)-10, np.nanmax(sim_data)+10)
 
     # Get the hsv colormap from matplotlib
-    cMap = plt.cm.get_cmap('hsv', 1024)
+    cMap = plt.cm.get_cmap("hsv", 1024)
 
     # Create an array of the colormap colors
     colors = cMap(np.linspace(0, 1, 1024))
@@ -60,8 +69,8 @@ def create_modified_hsv_colormap():
     newcolors = newcolors[::-1]
 
     # Get the colors 'magenta' and 'red'
-    magenta = newcolors[-1]  # last color
-    red = newcolors[0]  # first color
+    magenta = newcolors[-1]  # last color  # noqa: F841
+    red = newcolors[0]  # first color  # noqa: F841
 
     # Create a new colormap from the remaining colors
     cmap = plt.cm.colors.ListedColormap(newcolors)
@@ -69,7 +78,9 @@ def create_modified_hsv_colormap():
     return cmap
 
 
-def plot_histogram(face_scalars, face_areas, study_name, map_name, min_value=None, max_value=None, step_size=5):
+def plot_histogram(
+    face_scalars, face_areas, study_name, map_name, min_value=None, max_value=None, step_size=5
+):
     """
     Plot a histogram based on face_scalars and face_areas.
 
@@ -88,7 +99,7 @@ def plot_histogram(face_scalars, face_areas, study_name, map_name, min_value=Non
     if max_value is None:
         max_value = np.max(face_scalars)
 
-    bins = np.arange(min_value, max_value + step_size +1, step_size)
+    bins = np.arange(min_value, max_value + step_size + 1, step_size)
 
     # Categorize face_area based on face_scalar
     hist, _ = np.histogram(face_scalars, bins=bins, weights=face_areas)
@@ -98,9 +109,9 @@ def plot_histogram(face_scalars, face_areas, study_name, map_name, min_value=Non
 
     # Plot the histogram
     plt.title(study_name + "/" + map_name)
-    plt.bar(bins[:-1], hist, width=step_size, align='edge')
-    plt.xlabel('Similarity [%]')
-    plt.yscale('log')  # Set y-axis scale to logarithmic
-    plt.ylabel('Area [$cm^2$] (log scale)')
+    plt.bar(bins[:-1], hist, width=step_size, align="edge")
+    plt.xlabel("Similarity [%]")
+    plt.yscale("log")  # Set y-axis scale to logarithmic
+    plt.ylabel("Area [$cm^2$] (log scale)")
 
     return fig, ax, hist
