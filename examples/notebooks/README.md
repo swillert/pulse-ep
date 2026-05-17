@@ -38,5 +38,9 @@ jupyter nbconvert --to notebook --execute \
 3. Catalogue: list studies and maps as `pandas` DataFrames.
 4. Mesh: fetch `/get_mesh_data` and build a PyVista `PolyData`.
 5. Visualisation: interactive 3D render + scalar histogram.
-6. (Bonus) inline Gaussian decay fit using `scipy.optimize.curve_fit`,
-   the Python counterpart to the R demo's `nls()` block.
+
+The Gaussian σ-resolution analysis (Heat-Method geodesics + curve fit)
+is intentionally out of scope here — it is a scientific contribution
+of the companion package
+[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay) and
+has its own notebook walkthrough there.
