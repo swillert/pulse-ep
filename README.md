@@ -94,6 +94,28 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
 ```
 
+## Configuration
+
+`pulse-ep` is configured via environment variables (12-factor style) using
+[pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/).
+All variables share the prefix `PULSE_EP_`; see [`.env.example`](.env.example)
+for the full list.
+
+```bash
+cp .env.example .env
+# edit .env — at a minimum, set PULSE_EP_DATABASE_URL and PULSE_EP_JWT_SECRET_KEY
+```
+
+Resolution order (highest priority first):
+
+1. Process environment (`PULSE_EP_*` variables)
+2. `.env` file (path overridable via `PULSE_EP_ENV_FILE`)
+3. Legacy `config.ini` (`PULSE_EP_CONFIG`) — kept for pulse-ultimate compatibility
+4. Field defaults defined on `pulse_ep.core.config.Settings`
+
+The same `.env` file is consumed by `docker compose` (see below), so a
+single source of truth covers both local development and the Docker stack.
+
 ## Quickstart
 
 ### 1. Synthetic walkthrough (no DB needed)
@@ -105,22 +127,45 @@ pulse-ep-demo
 Builds a synthetic atrial mesh with a Gaussian score field, ingests it
 into an in-memory SQLite, and prints the per-interval area breakdown.
 
-### 2. Real CARTO study
+### 2. Real CARTO study (local Python install)
 
 ```bash
 # 1) start Postgres (Docker)
-docker compose up -d db
+docker compose up -d
 
-# 2) import a study from a CARTO export folder
+# 2) configure the connection
+cp .env.example .env
+# edit PULSE_EP_DATABASE_URL and PULSE_EP_JWT_SECRET_KEY
+
+# 3) import a study from a CARTO export folder
 pulse-ep-import-carto /path/to/study-export.zip
 
-# 3) seed default colormaps
+# 4) seed default colormaps and create an admin user
 pulse-ep-populate-colormaps
+pulse-ep-create-user --username admin --role admin
 
-# 4) launch the web app
+# 5) launch the web app
 pulse-ep-server
 # → http://localhost:5000
 ```
+
+### 3. Full Docker stack
+
+```bash
+cp .env.example .env  # set PULSE_EP_JWT_SECRET_KEY at a minimum
+
+# Bring up Postgres and the API server in one go.
+docker compose --profile server up -d --build
+
+# One-off admin user (runs inside the running server container).
+docker compose exec server pulse-ep-create-user --username admin --role admin
+
+# Optional: pgAdmin on http://localhost:8080
+docker compose --profile admin up -d
+```
+
+Stop everything with `docker compose down`; add `-v` to also wipe the
+Postgres volume.
 
 ## Project structure
 
