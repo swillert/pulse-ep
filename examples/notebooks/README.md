@@ -38,6 +38,14 @@ jupyter nbconvert --to notebook --execute \
 3. Catalogue: list studies and maps as `pandas` DataFrames.
 4. Mesh: fetch `/get_mesh_data` and build a PyVista `PolyData`.
 5. Visualisation: interactive 3D render + scalar histogram.
+6. Area-per-interval breakdown via `/calculate_areas_for_intervals`,
+   the same reduction the bundled web viewer and the clinical Excel
+   reports show — computed here as a `pandas` DataFrame.
+
+Together with the R and MATLAB demos this notebook contributes to the
+**cross-language reproducibility statement of the software paper**:
+the same scalar histogram and the same area-per-interval table from
+the same REST payload, in four independent stacks.
 
 The Gaussian σ-resolution analysis (Heat-Method geodesics + curve fit)
 is intentionally out of scope here — it is a scientific contribution
