@@ -46,9 +46,3 @@ Together with the R and MATLAB demos this notebook contributes to the
 **cross-language reproducibility statement of the software paper**:
 the same scalar histogram and the same area-per-interval table from
 the same REST payload, in four independent stacks.
-
-The Gaussian σ-resolution analysis (Heat-Method geodesics + curve fit)
-is intentionally out of scope here — it is a scientific contribution
-of the companion package
-[`pulse-ep-decay`](https://gitlab.willert.net/sw/pulse-ep-decay) and
-has its own notebook walkthrough there.
