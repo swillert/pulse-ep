@@ -5,9 +5,10 @@
 #   2. Picks the first map in the first study (override with PE_MAP_ID).
 #   3. Plots the triangulated chamber mesh in 3D with `rgl`.
 #   4. Plots the per-vertex scalar distribution with `ggplot2`.
-#   5. Fits a Gaussian decay  s(d) = A * exp(-d^2 / (2 sigma^2)) + B
-#      against EUCLIDEAN distance from the maximum-scalar vertex,
-#      using base-R `nls()`.
+#
+# For the σ-resolution analysis (Heat-Method geodesics + Gaussian decay
+# fit), see the pulse-ep-decay examples — that workflow belongs to the
+# scientific method package, not the platform.
 #
 # Run:
 #   Rscript pulse_ep_demo.R
@@ -72,55 +73,3 @@ p <- ggplot(df, aes(x = scalar)) +
 print(p)
 ggsave("pulse_ep_demo_histogram.png", p, width = 6, height = 4, dpi = 150)
 cat("Wrote pulse_ep_demo_histogram.png\n")
-
-# --- 5. Gaussian decay fit ----------------------------------------------
-mask <- !is.na(mesh$scalars)
-v <- mesh$vertices[mask, , drop = FALSE]
-s <- mesh$scalars[mask]
-if (length(s) >= 20) {
-  i_max <- which.max(s)
-  d <- sqrt(rowSums((v - matrix(v[i_max, ], nrow(v), 3, byrow = TRUE))^2))
-  fit_df <- tibble(d = d, s = s)
-
-  start_sigma <- diff(range(d)) / 4
-  start_A <- max(s) - min(s)
-  start_B <- min(s)
-
-  fit <- try(nls(
-    s ~ A * exp(-d^2 / (2 * sigma^2)) + B,
-    data    = fit_df,
-    start   = list(A = start_A, sigma = start_sigma, B = start_B),
-    control = nls.control(maxiter = 200, warnOnly = TRUE)
-  ), silent = TRUE)
-
-  if (inherits(fit, "nls")) {
-    co <- coef(fit)
-    cat(sprintf(
-      "\nGaussian decay fit (Euclidean distance from max-scalar vertex):\n"
-    ))
-    cat(sprintf("  A     = %.3f\n", co["A"]))
-    cat(sprintf("  sigma = %.3f mm\n", co["sigma"]))
-    cat(sprintf("  B     = %.3f\n", co["B"]))
-    cat("Note: For the proper σ-resolution analysis based on Heat-Method\n")
-    cat("geodesic distances, see pulse-ep-decay.\n")
-
-    grid <- tibble(d = seq(0, max(d), length.out = 200))
-    grid$s_hat <- predict(fit, newdata = grid)
-    p2 <- ggplot(fit_df, aes(x = d, y = s)) +
-      geom_point(alpha = 0.25, size = 0.6) +
-      geom_line(data = grid, aes(x = d, y = s_hat),
-                colour = "#e34a33", linewidth = 1.2) +
-      labs(title = sprintf("Gaussian decay fit — map %d", map_id),
-           subtitle = sprintf("σ ≈ %.2f mm  (Euclidean distance)", co["sigma"]),
-           x = "Euclidean distance from max-scalar vertex [mm]",
-           y = "Scalar value") +
-      theme_minimal()
-    print(p2)
-    ggsave("pulse_ep_demo_decay.png", p2, width = 6, height = 4, dpi = 150)
-    cat("Wrote pulse_ep_demo_decay.png\n")
-  } else {
-    cat("\nGaussian fit did not converge — try a different map or distance.\n")
-  }
-} else {
-  cat("\nNot enough non-NA scalars for a Gaussian fit (need ≥ 20).\n")
-}
