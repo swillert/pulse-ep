@@ -44,7 +44,12 @@ ruff:
   script:
     # System libs that pyvista/vtk and matplotlib's headless backend need.
     - apt-get update && apt-get install -y --no-install-recommends libgl1 libglu1-mesa libxrender1 libsm6 libxext6 libfontconfig1 libxkbcommon0
-    - pip install -e ".[server,figures,dev]"
+    # The GitLab runner host CPU does not advertise the x86-64-v2 baseline that
+    # NumPy 2.x and SciPy 1.16+ binary wheels are built against. Pin those
+    # packages here so CI gets compatible wheels; local installs on modern
+    # CPUs still pick the latest via pyproject's wider range.
+    - 'printf "numpy<2\nscipy<1.16\n" > /tmp/ci-constraints.txt'
+    - PIP_CONSTRAINT=/tmp/ci-constraints.txt pip install -e ".[server,figures,dev]"
     - pytest -v --maxfail=5
   coverage: '/^TOTAL.*?(\d+\%)$/'
 
