@@ -55,8 +55,6 @@ dependencies = [
     "pydantic>=2.7,<3",          # typed config (Settings) + future API models
     "pydantic-settings>=2.5,<3", # 12-factor config loader for PULSE_EP_* env vars
 ]
-# Note: potpourri3d (Heat Method via geometry-central) is intentionally NOT here.
-# It belongs to pulse-ep-decay, the scientific extension package.
 
 [project.optional-dependencies]
 server = [
@@ -87,11 +85,8 @@ Homepage = "https://gitlab.willert.net/sw/pulse-ep"
 Repository = "https://gitlab.willert.net/sw/pulse-ep"
 Issues = "https://gitlab.willert.net/sw/pulse-ep/-/issues"
 Documentation = "https://gitlab.willert.net/sw/pulse-ep#readme"
-"Scientific extension" = "https://gitlab.willert.net/sw/pulse-ep-decay"
 
 [project.scripts]
-# Platform commands — data import, server, utilities.
-# Scientific analysis commands (spatial-decay, validate-sigma, etc.) live in pulse-ep-decay.
 pulse-ep-import-carto = "pulse_ep.cli.import_carto:main"
 pulse-ep-extract-meshes = "pulse_ep.cli.extract_meshes_for_validation:main"
 pulse-ep-tag-maps = "pulse_ep.cli.tag_maps:main"
