@@ -101,7 +101,13 @@ pages:
 # exist (empty, no auto-initialised README) before the first run.
 mirror_to_github:
   stage: deploy
-  image: alpine/git:latest
+  # alpine/git ships with `git` as the container ENTRYPOINT, which
+  # breaks the way GitLab CI launches scripts (`<entrypoint> sh -c
+  # "<commands>"` becomes `git sh -c "..."` and git rejects `sh`).
+  # Override the entrypoint to make it behave like a normal image.
+  image:
+    name: alpine/git:latest
+    entrypoint: [""]
   # Run immediately, in parallel with lint / test / pages. The mirror
   # is content-agnostic — whether the tests pass or not has no bearing
   # on whether GitLab and GitHub should hold the same commit.
