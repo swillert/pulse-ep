@@ -12,6 +12,7 @@ stages:
   - lint
   - test
   - pages
+  - deploy
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
@@ -83,3 +84,36 @@ pages:
     expire_in: 30 days
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ---------------------------------------------------------------------
+# GitHub mirror — required for SoftwareX submission (open-access repo)
+# and for the Zenodo-on-GitHub release / DOI workflow.
+# ---------------------------------------------------------------------
+#
+# Force-pushes all branches and tags to the GitHub mirror on every
+# push to `main` and on every tag. Authentication uses two protected,
+# masked CI variables that must be set in GitLab → Settings → CI/CD:
+#
+#   GITHUB_USER   — GitHub username that owns the mirror repo
+#   GITHUB_TOKEN  — Personal access token with `repo` scope
+#
+# The GitHub repository is github.com/${GITHUB_USER}/pulse-ep and must
+# exist (empty, no auto-initialised README) before the first run.
+mirror_to_github:
+  stage: deploy
+  image: alpine/git:latest
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"   # fetch full history so all commits/tags propagate
+  before_script:
+    - git config --global user.email "ci@willert.net"
+    - git config --global user.name "GitLab CI (pulse-ep)"
+  script:
+    - git remote remove github 2>/dev/null || true
+    - git remote add github "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/${GITHUB_USER}/pulse-ep.git"
+    - git fetch origin --tags
+    - git push github "HEAD:refs/heads/main" --force
+    - git push github --tags --force
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
