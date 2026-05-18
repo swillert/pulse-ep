@@ -102,6 +102,10 @@ pages:
 mirror_to_github:
   stage: deploy
   image: alpine/git:latest
+  # Run immediately, in parallel with lint / test / pages. The mirror
+  # is content-agnostic — whether the tests pass or not has no bearing
+  # on whether GitLab and GitHub should hold the same commit.
+  needs: []
   variables:
     GIT_STRATEGY: clone
     GIT_DEPTH: "0"   # fetch full history so all commits/tags propagate
