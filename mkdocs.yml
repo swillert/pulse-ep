@@ -149,4 +149,5 @@ nav:
       - Overview: examples/index.md
   - Architecture: architecture.md
   - Contributing: contributing.md
+  - Release process: release-process.md
   - Changelog: changelog.md
