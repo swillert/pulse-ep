@@ -14,11 +14,13 @@ Verified DIF quirks handled here (see the project notes):
 
 from __future__ import annotations
 
+import io
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from lxml import etree
 
 from pulse_ep.core.epmap import EPMap
@@ -27,6 +29,7 @@ from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan, Wavefor
 from pulse_ep.core.importers.source import ImportSource
 from pulse_ep.core.scalar_field import VOLTAGE_BIPOLAR, VOLTAGE_UNIPOLAR
 from pulse_ep.core.study import Study
+from pulse_ep.core.waveform import Waveform
 
 
 @dataclass
@@ -218,6 +221,79 @@ def merge_dif_group(
             field_name, vol.map_data, kind=kind, status_mask=vol.status_mask, source=source
         )
     return epmap
+
+
+# --- waveforms -------------------------------------------------------------
+
+_TIME_COLS = {"t_dws", "t_secs", "t_usecs", "t_ref"}
+
+
+def _signal_type(name: str) -> str:
+    n = name.lower()
+    if "unipolar" in n:
+        return "egm_unipolar"
+    if "bipolar" in n:
+        return "egm_bipolar"
+    if "ecg" in n:
+        return "ecg"
+    return ""
+
+
+def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
+    """Parse an EnSite ``EP_Catheter_*_Waveforms`` / ``ECG_*`` CSV.
+
+    The file has a preamble (filters, segment, study) then a header row
+    starting ``t_dws,...`` and a sample matrix. Each channel is a triplet
+    ``X`` / ``X_ds`` / ``X_ps``; only the base ``X`` column is the signal.
+    """
+    text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
+    lines = text.splitlines()
+
+    meta: dict = {}
+    header_idx = None
+    for i, line in enumerate(lines):
+        if line.startswith("t_dws,"):
+            header_idx = i
+            break
+        s = line.strip()
+        if s and ":" in s and not s.startswith(("Catheter[", "Electrode[")):
+            key, val = s.split(":", 1)
+            meta[key.strip()] = val.strip()
+    if header_idx is None:
+        raise ValueError("no waveform data header (t_dws,...) found")
+
+    df = pd.read_csv(io.StringIO("\n".join(lines[header_idx:])))
+    df = df.loc[:, [c for c in df.columns if not str(c).startswith("Unnamed")]]
+
+    signal_cols = [
+        c for c in df.columns if c not in _TIME_COLS and not str(c).endswith(("_ds", "_ps"))
+    ]
+    # drop trailing partial rows that carry a timestamp but no signal samples
+    df = df[~df[signal_cols].isna().all(axis=1)]
+    signal = df[signal_cols].to_numpy(dtype=float)
+
+    time = df["t_ref"].to_numpy(dtype=float) if "t_ref" in df.columns else None
+    sample_rate = None
+    if time is not None and time.size > 1:
+        steps = np.diff(time)
+        steps = steps[steps > 0]
+        if steps.size:
+            sample_rate = float(round(1.0 / float(np.median(steps))))
+
+    filters = {k: meta[k] for k in ("Highpass", "Lowpass", "Notch") if k in meta}
+    return Waveform(
+        data=signal,
+        channels=[str(c) for c in signal_cols],
+        sample_rate=sample_rate,
+        signal_type=_signal_type(name or meta.get("Export Data Element", "")),
+        time=time,
+        meta={
+            "segment": meta.get("Export from Segment"),
+            "study_guid": meta.get("Export from Study"),
+            "software_version": meta.get("Exported from Software Version"),
+            "filters": filters,
+        },
+    )
 
 
 # --- vendor importer (prepare / commit over an ImportSource) ---------------
