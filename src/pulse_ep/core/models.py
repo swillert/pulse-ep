@@ -483,3 +483,79 @@ class ReportModel(Base):
         self.additional_data[key] = value
         flag_modified(self, "additional_data")
         session.commit()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  WaveformModel — signal metadata; the samples live in a WaveformStore
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class WaveformModel(Base):
+    """Metadata for one waveform. The numeric samples are NOT stored here —
+    they live in a :class:`~pulse_ep.core.waveform.WaveformStore` (Parquet);
+    ``data_uri`` points at them."""
+
+    __tablename__ = "waveforms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    study_id = Column(
+        Integer, ForeignKey("studies.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    map_id = Column(
+        Integer, ForeignKey("epmaps.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+
+    signal_type = Column(String)  # egm_bipolar | egm_unipolar | ecg
+    channels = Column(PortableJSON)  # list[str]
+    sample_rate = Column(Float)
+    n_samples = Column(Integer)
+    n_channels = Column(Integer)
+    segment = Column(String, nullable=True)
+    filters = Column(PortableJSON, nullable=True)
+
+    # ── Out-of-DB signal storage ──
+    data_uri = Column(String, nullable=False)  # store-relative path
+    data_format = Column(String, default="parquet")
+    size_bytes = Column(Integer, nullable=True)
+    checksum = Column(String, nullable=True)
+    source = Column(String, nullable=True)
+
+
+def store_waveform(waveform, store, key, study_id=None, map_id=None) -> WaveformModel:
+    """Write a :class:`Waveform` to ``store`` and build its DB metadata row."""
+    uri = store.write(waveform, key)
+    meta = waveform.meta or {}
+    return WaveformModel(
+        study_id=study_id,
+        map_id=map_id,
+        signal_type=waveform.signal_type,
+        channels=[str(c) for c in waveform.channels],
+        sample_rate=waveform.sample_rate,
+        n_samples=int(waveform.data.shape[0]),
+        n_channels=int(waveform.data.shape[1]),
+        segment=meta.get("segment"),
+        filters=meta.get("filters"),
+        data_uri=uri,
+        data_format="parquet",
+        source=meta.get("software_version"),
+    )
+
+
+def ingest_waveforms(plan, source, store, study_id=None) -> list[WaveformModel]:
+    """Parse + store the opt-in waveforms of a prepared EnSite plan.
+
+    Only runs for studies whose ``waveforms.include`` is True (default off).
+    """
+    from pathlib import Path
+
+    from pulse_ep.core.importers.ensite import parse_ensite_waveforms
+
+    rows: list[WaveformModel] = []
+    for sp in plan.studies:
+        if not sp.waveforms.include:
+            continue
+        for name in sp.waveforms.files:
+            wave = parse_ensite_waveforms(source.open(name).read(), name=name)
+            key = f"{sp.study_name}/{Path(name).stem}"
+            rows.append(store_waveform(wave, store, key, study_id=study_id))
+    return rows
