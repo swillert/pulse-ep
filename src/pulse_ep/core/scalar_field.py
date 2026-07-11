@@ -21,6 +21,11 @@ ACTIVATION_TIME = "activation_time"
 PACEMAP_SCORE = "pacemap_score"
 VOLTAGE_BIPOLAR = "voltage_bipolar"
 VOLTAGE_UNIPOLAR = "voltage_unipolar"
+# per-point measurement quantities (shared vocabulary with per-vertex fields)
+CONTACT_FORCE = "contact_force"
+CORRELATION = "correlation"
+SNR = "snr"
+IMPEDANCE = "impedance"
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,10 @@ KIND_SPECS: dict[str, KindSpec] = {
     PACEMAP_SCORE: KindSpec(unit="%", relative_comparison=True),
     VOLTAGE_BIPOLAR: KindSpec(unit="mV"),
     VOLTAGE_UNIPOLAR: KindSpec(unit="mV"),
+    CONTACT_FORCE: KindSpec(unit="g"),
+    CORRELATION: KindSpec(unit="", relative_comparison=True),
+    SNR: KindSpec(unit=""),
+    IMPEDANCE: KindSpec(unit="ohm"),
 }
 
 
