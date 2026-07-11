@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, declarative_base, relationship
 from sqlalchemy.orm.attributes import flag_modified
 
 from pulse_ep.core.epmap import EPMap
+from pulse_ep.core.measurement import Measurement, MeasurementPoint
 from pulse_ep.core.scalar_field import ScalarField
 from pulse_ep.core.study import Study
 
@@ -558,4 +559,73 @@ def ingest_waveforms(plan, source, store, study_id=None) -> list[WaveformModel]:
             wave = parse_ensite_waveforms(source.open(name).read(), name=name)
             key = f"{sp.study_name}/{Path(name).stem}"
             rows.append(store_waveform(wave, store, key, study_id=study_id))
+    return rows
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  MeasurementPointModel — open per-point measurements (vendor-neutral)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class MeasurementPointModel(Base):
+    """A per-point acquisition sample with an OPEN set of measurements.
+
+    Successor to the fixed-column CARTO ``ep_map_points`` — measured
+    quantities live in a JSONB ``measurements`` map keyed by ``kind`` name,
+    and electrode geometry in a JSONB ``electrodes`` map keyed by label."""
+
+    __tablename__ = "measurement_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    map_id = Column(
+        Integer, ForeignKey("epmaps.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    point_index = Column(Integer)
+    source_id = Column(String, nullable=True)
+    position = Column(ARRAY(FLOAT))  # [x, y, z]
+    measurements = Column(PortableJSON)  # {name: {value, kind, unit}}
+    electrodes = Column(PortableJSON)  # {label: [x, y, z]}
+
+    __table_args__ = (
+        Index("ix_measurement_points_map_point", "map_id", "point_index"),
+    )
+
+    def to_measurement_point(self) -> MeasurementPoint:
+        measurements = {
+            name: Measurement(d["value"], d["kind"], d.get("unit", ""))
+            for name, d in (self.measurements or {}).items()
+        }
+        electrodes = {
+            label: np.array(pos, dtype=float) for label, pos in (self.electrodes or {}).items()
+        }
+        return MeasurementPoint(
+            position=np.array(self.position, dtype=float),
+            measurements=measurements,
+            electrodes=electrodes,
+            source_id=self.source_id,
+            index=self.point_index,
+        )
+
+
+def measurement_points_to_models(
+    points: list[MeasurementPoint], map_id: int
+) -> list[MeasurementPointModel]:
+    """Serialise domain :class:`MeasurementPoint`s to ORM rows."""
+    rows: list[MeasurementPointModel] = []
+    for p in points:
+        rows.append(
+            MeasurementPointModel(
+                map_id=map_id,
+                point_index=p.index,
+                source_id=p.source_id,
+                position=[float(x) for x in p.position],
+                measurements={
+                    name: {"value": m.value, "kind": m.kind, "unit": m.unit}
+                    for name, m in p.measurements.items()
+                },
+                electrodes={
+                    label: [float(x) for x in pos] for label, pos in p.electrodes.items()
+                },
+            )
+        )
     return rows
