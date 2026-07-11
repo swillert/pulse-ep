@@ -2,8 +2,18 @@ from pulse_ep.core.epmap import EPMap
 
 
 class Study:
-    def __init__(self, name: str, epmaps: EPMap | list[EPMap] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        epmaps: EPMap | list[EPMap] = None,
+        vendor: str | None = None,
+        provenance: dict | None = None,
+    ) -> None:
         self.name: str = name
+        #: acquisition system this study came from ("carto", "ensite", …).
+        self.vendor: str | None = vendor
+        #: importer-supplied provenance (software / export versions, GUID …).
+        self.provenance: dict | None = provenance
 
         if epmaps is not None:
             if isinstance(epmaps, EPMap):

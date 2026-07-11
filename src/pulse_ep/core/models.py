@@ -17,9 +17,14 @@ from sqlalchemy.orm import Session, declarative_base, relationship
 from sqlalchemy.orm.attributes import flag_modified
 
 from pulse_ep.core.epmap import EPMap
+from pulse_ep.core.scalar_field import ScalarField
 from pulse_ep.core.study import Study
 
 Base = declarative_base()
+
+# Portable JSON: JSONB on PostgreSQL (indexable), plain JSON elsewhere
+# (e.g. SQLite in tests) so the same models create on both backends.
+PortableJSON = JSON().with_variant(JSONB, "postgresql")
 
 
 class StudyModel(Base):
@@ -27,9 +32,14 @@ class StudyModel(Base):
 
     id: int = Column(Integer, primary_key=True, index=True)
     name: str = Column(String, nullable=False)
+    # ── Vendor & provenance (vendor-neutral platform) ──
+    vendor: str | None = Column(String, index=True)
+    provenance: dict | None = Column(PortableJSON)
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, vendor: str | None = None, provenance: dict | None = None):
         self.name = name
+        self.vendor = vendor
+        self.provenance = provenance
 
     def create(self, session):
         session.add(self)
@@ -77,7 +87,11 @@ class StudyModel(Base):
 
     @classmethod
     def from_study(cls, study: Study) -> "StudyModel":
-        return cls(name=study.name)
+        return cls(
+            name=study.name,
+            vendor=getattr(study, "vendor", None),
+            provenance=getattr(study, "provenance", None),
+        )
 
     @classmethod
     def get_all_studies_and_epmaps(cls, session: Session) -> list[tuple[int, str, int, str, int]]:
@@ -118,9 +132,13 @@ class EPMapModel(Base):
     vertices: list[float] = Column(ARRAY(FLOAT))
     triangle_areas: list[float] = Column(ARRAY(FLOAT))
     is_vertex_at_edge: list[bool] = Column(ARRAY(Boolean))
-    act_bip: list[float] = Column(ARRAY(FLOAT))
+    act_bip: list[float] = Column(ARRAY(FLOAT))  # legacy CARTO (activation+bipolar)
     normals: list[float] = Column(ARRAY(FLOAT))
     uni_imp_frc: list[float] = Column(ARRAY(FLOAT))
+
+    # ── Vendor-neutral scalar fields: {name: {values, kind, unit, status_mask, source}} ──
+    # Open map (any number of kinds per map); the successor to fixed act_bip.
+    scalar_fields: dict | None = Column(PortableJSON)
 
     # ── Relationships ──
     study = relationship("StudyModel", backref="epmaps")
@@ -167,19 +185,28 @@ class EPMapModel(Base):
 
     @classmethod
     def from_epmap(cls, epmap, study_id: int) -> "EPMapModel":
+        def _list(a):
+            return a.tolist() if a is not None else None
+
+        scalar_fields = (
+            {name: field.to_dict() for name, field in epmap.scalar_fields.items()}
+            if getattr(epmap, "scalar_fields", None)
+            else None
+        )
         return cls(
             map_name=epmap.map_name,
             study_id=study_id,
             study_name=epmap.study_name,
             number_of_points=epmap.number_of_points,
             mesh_file=epmap.mesh_file,
-            triangles=epmap.triangles.tolist(),
-            vertices=epmap.vertices.tolist(),
-            triangle_areas=epmap.triangle_areas.tolist(),
-            is_vertex_at_edge=epmap.is_vertex_at_edge.tolist(),
-            act_bip=epmap.act_bip.tolist(),
-            normals=epmap.normals.tolist(),
-            uni_imp_frc=epmap.uni_imp_frc.tolist() if epmap.uni_imp_frc is not None else None,
+            triangles=_list(epmap.triangles),
+            vertices=_list(epmap.vertices),
+            triangle_areas=_list(epmap.triangle_areas),
+            is_vertex_at_edge=_list(epmap.is_vertex_at_edge),
+            act_bip=_list(epmap.act_bip),
+            normals=_list(epmap.normals),
+            uni_imp_frc=_list(epmap.uni_imp_frc),
+            scalar_fields=scalar_fields,
         )
 
     def to_epmap(self, include_points: bool = False) -> EPMap:
@@ -198,19 +225,28 @@ class EPMapModel(Base):
                 ]
             )
 
+        def _arr(v):
+            return np.array(v) if v is not None else None
+
+        scalar_fields = (
+            {name: ScalarField.from_dict(d) for name, d in self.scalar_fields.items()}
+            if self.scalar_fields
+            else None
+        )
         return EPMap(
             map_name=self.map_name,
             study_name=self.study_name,
             map_number_of_points=self.number_of_points,
             mesh_file=self.mesh_file,
-            triangles=np.array(self.triangles),
-            vertices=np.array(self.vertices),
-            triangle_areas=np.array(self.triangle_areas),
-            is_vertex_at_edge=np.array(self.is_vertex_at_edge),
-            act_bip=np.array(self.act_bip),
-            normals=np.array(self.normals),
-            uni_imp_frc=np.array(self.uni_imp_frc) if self.uni_imp_frc else None,
+            triangles=_arr(self.triangles),
+            vertices=_arr(self.vertices),
+            triangle_areas=_arr(self.triangle_areas),
+            is_vertex_at_edge=_arr(self.is_vertex_at_edge),
+            act_bip=_arr(self.act_bip),
+            normals=_arr(self.normals),
+            uni_imp_frc=_arr(self.uni_imp_frc) if self.uni_imp_frc else None,
             xyz=xyz,
+            scalar_fields=scalar_fields,
         )
 
 
