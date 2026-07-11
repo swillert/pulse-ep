@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from pulse_ep import EPMap
+from pulse_ep.core.importers.carto import register_carto_scalars
 from pulse_ep.core.scalar_field import (
     ACTIVATION_TIME,
     PACEMAP_SCORE,
@@ -33,14 +34,18 @@ def carto_like_map():
     vertices, triangles = make_synthetic_atrium(resolution=16)
     scores, _ = gaussian_score_field(vertices, sigma_mm=6.0, noise_std=0.0)
     voltage = scores / 100.0  # stand-in second column
-    return EPMap(
+    act_bip = np.column_stack([scores, voltage])
+    epmap = EPMap(
         map_name="carto",
         study_name="s",
         vertices=vertices,
         triangles=triangles,
         xyz=vertices.copy(),  # measurements sit on the vertices
-        act_bip=np.column_stack([scores, voltage]),
+        act_bip=act_bip,
     )
+    # what CartoImporter does at import: register neutral scalar fields
+    register_carto_scalars(epmap, act_bip)
+    return epmap
 
 
 @pytest.fixture
@@ -60,13 +65,15 @@ def ensite_like_map():
     return epmap
 
 
-# --- resolver: legacy CARTO bridge ---------------------------------------
+# --- resolver: CARTO scalars come from registered fields -----------------
 
 
-def test_get_scalar_carto_bridge_positive_is_passthrough(carto_like_map) -> None:
-    # Gaussian scores are positive → no sign flip → exact passthrough.
+def test_carto_registered_scalars_match_columns(carto_like_map) -> None:
+    # Positive scores → activation_time (no flip); registered "act"/"vol"
+    # resolve to the decoded primary/voltage columns.
     np.testing.assert_array_equal(carto_like_map.get_scalar("act"), carto_like_map.act_bip[:, 0])
     np.testing.assert_array_equal(carto_like_map.get_scalar("vol"), carto_like_map.act_bip[:, 1])
+    assert carto_like_map.get_field("act").kind == ACTIVATION_TIME
 
 
 def test_get_scalar_prefers_registered_field(ensite_like_map) -> None:
@@ -81,7 +88,7 @@ def test_get_scalar_unknown_raises(ensite_like_map) -> None:
         ensite_like_map.get_scalar("does_not_exist")
 
 
-def test_registered_field_shadows_act_bip(carto_like_map) -> None:
+def test_register_scalar_overwrites(carto_like_map) -> None:
     override = np.full(carto_like_map.vertices.shape[0], 7.0)
     carto_like_map.register_scalar("act", override, kind=PACEMAP_SCORE)
     np.testing.assert_array_equal(carto_like_map.get_scalar("act"), override)
