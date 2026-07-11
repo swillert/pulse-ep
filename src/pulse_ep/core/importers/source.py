@@ -30,6 +30,10 @@ class ImportSource(Protocol):
         """Open one member as a binary stream (no full extraction)."""
         ...
 
+    def size(self, name: str) -> int:
+        """Uncompressed byte size of a member (no extraction)."""
+        ...
+
     def materialize(self, members: list[str] | None = None) -> Path:
         """Ensure the (selected) members exist as a local directory tree."""
         ...
@@ -59,6 +63,9 @@ class DirSource:
     def open(self, name: str) -> BinaryIO:
         return open(self.root / name, "rb")
 
+    def size(self, name: str) -> int:
+        return (self.root / name).stat().st_size
+
     def materialize(self, members: list[str] | None = None) -> Path:
         return self.root
 
@@ -78,6 +85,9 @@ class ZipSource:
 
     def open(self, name: str) -> BinaryIO:
         return self._zf.open(name)
+
+    def size(self, name: str) -> int:
+        return self._zf.getinfo(name).file_size
 
     def materialize(
         self, members: list[str] | None = None, dest: str | Path | None = None
