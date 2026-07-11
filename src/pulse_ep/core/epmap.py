@@ -6,6 +6,7 @@ from scipy.spatial import cKDTree
 
 from pulse_ep.core import mesh_proc as mesh_proc
 from pulse_ep.core import plot_proc as plot_proc
+from pulse_ep.core.scalar_field import ScalarField
 
 
 class EPMap:
@@ -24,6 +25,7 @@ class EPMap:
         uni_imp_frc: np.ndarray | None = None,
         xyz: np.ndarray | None = None,
         pv_mesh: pv.PolyData | None = None,
+        scalar_fields: dict[str, ScalarField] | None = None,
     ):
 
         if map_name is None:
@@ -42,6 +44,11 @@ class EPMap:
         self.uni_imp_frc: np.ndarray | None = uni_imp_frc
         self.xyz: np.ndarray | None = xyz
         self.pv_mesh: pv.PolyData | None = pv_mesh
+        # Vendor-neutral named per-vertex scalar fields, each carrying its
+        # declared ``kind`` (see :class:`ScalarField`). Importers register
+        # conditioned fields here; the legacy CARTO ``act_bip`` slot is
+        # bridged by ``get_scalar`` until that importer is migrated.
+        self.scalar_fields: dict[str, ScalarField] = scalar_fields or {}
 
     def process_carto_mesh_file(self, carto_mesh_file: str) -> None:
         triangles, vertices, triangle_areas, isVertexAtEdge, act_bip, normals, uni_imp_frc = (
@@ -54,6 +61,53 @@ class EPMap:
         self.act_bip: np.ndarray | None = act_bip
         self.normals: np.ndarray | None = normals
         self.uni_imp_frc: np.ndarray | None = uni_imp_frc
+
+    def register_scalar(
+        self,
+        scalar_name: str,
+        values: np.ndarray,
+        kind: str,
+        unit: str = "",
+        status_mask: np.ndarray | None = None,
+        source: str | None = None,
+    ) -> None:
+        """Register a per-vertex scalar with its declared ``kind``.
+
+        ``values`` are stored as-is: any vendor decode (sign convention,
+        sentinel masking) is the importer's job and must be applied before
+        registration, so analysis code stays semantics-agnostic.
+        """
+        self.scalar_fields[scalar_name] = ScalarField(
+            np.asarray(values), kind, unit=unit, status_mask=status_mask, source=source
+        )
+
+    def get_field(self, scalar_name: str) -> ScalarField | None:
+        """Return the :class:`ScalarField` (values + metadata), or ``None``."""
+        return self.scalar_fields.get(scalar_name)
+
+    def get_scalar(self, scalar_name: str) -> np.ndarray:
+        """Resolve a named per-vertex scalar as a 1-D array of values.
+
+        Prefers an explicitly registered, already-conditioned field in
+        ``scalar_fields``. Falls back to the legacy CARTO ``act_bip`` layout
+        (``"act"`` → column 0, ``"vol"`` → column 1); the ``"act"`` bridge
+        reproduces the historical activation sign-normalisation until the
+        CARTO importer registers conditioned fields with an explicit kind.
+
+        :raises ValueError: if the name resolves to no known scalar.
+        """
+        field = self.scalar_fields.get(scalar_name)
+        if field is not None:
+            return field.values
+        if self.act_bip is not None:
+            if scalar_name == "act":
+                values = self.act_bip[:, 0]
+                if values.size and np.nanmax(values) < 0:  # legacy CARTO bridge
+                    values = -values
+                return values
+            if scalar_name == "vol":
+                return self.act_bip[:, 1]
+        raise ValueError(f"Unsupported scalar_name: {scalar_name}")
 
     def generate_anatomical_pv_mesh(self, simplify: bool = True) -> pv.PolyData:
         faces = np.pad(self.triangles, ((0, 0), (1, 0)), "constant", constant_values=3)
@@ -253,23 +307,28 @@ class EPMap:
         # Create KDTree from original points for nearest neighbor search
         kdtree_original = cKDTree(original_points)
 
-        # For act_bip[:, 0] and act_bip[:, 1]
-        scalar_data_0 = self.act_bip[:, 0]  # Scalar 1 (e.g., activation)
-        scalar_data_1 = self.act_bip[:, 1]  # Scalar 2 (e.g., voltage)
-
         # Query the KDTree to find the closest points on the original mesh
         _, nearest_indices = kdtree_original.query(simplified_points)
 
-        # Map the scalar data to the simplified mesh
-        simplified_scalars_0 = scalar_data_0[nearest_indices]
-        simplified_scalars_1 = scalar_data_1[nearest_indices]
+        # Step 4: Re-map every per-vertex scalar via nearest neighbour so the
+        # simplified mesh keeps its data. Handles the legacy CARTO ``act_bip``
+        # layout and any vendor-neutral registered fields alike.
+        if self.act_bip is not None:
+            simplified_scalars_0 = self.act_bip[:, 0][nearest_indices]
+            simplified_scalars_1 = self.act_bip[:, 1][nearest_indices]
+            simplified_mesh.point_data["act_bip_0"] = simplified_scalars_0
+            simplified_mesh.point_data["act_bip_1"] = simplified_scalars_1
+            self.act_bip = np.column_stack([simplified_scalars_0, simplified_scalars_1])
 
-        # Step 4: Set the scalars to the simplified mesh
-        simplified_mesh.point_data["act_bip_0"] = simplified_scalars_0
-        simplified_mesh.point_data["act_bip_1"] = simplified_scalars_1
-
-        # Step 5: Update the act_bip attribute with simplified scalars
-        self.act_bip = np.column_stack([simplified_scalars_0, simplified_scalars_1])
+        if self.scalar_fields:
+            remapped: dict[str, ScalarField] = {}
+            for name, field in self.scalar_fields.items():
+                mask = field.status_mask[nearest_indices] if field.status_mask is not None else None
+                remapped[name] = ScalarField(
+                    field.values[nearest_indices], field.kind, field.unit, mask, field.source
+                )
+                simplified_mesh.point_data[name] = remapped[name].values
+            self.scalar_fields = remapped
 
         # Replace the original mesh with the simplified one
         self.pv_mesh = simplified_mesh
@@ -387,11 +446,9 @@ class EPMap:
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
 
-        # voltage
-        # scalar_data = self.act_bip[:, 1]
-
-        # activation
-        scalar_data = self.act_bip[:, 0]
+        # Resolve the requested scalar (defaults to activation "act" for the
+        # legacy CARTO layout; any registered vendor-neutral field works too).
+        scalar_data = self.get_scalar(scalar_name)
 
         # Calculate the 98th percentile value
         # threshold = np.nanpercentile(scalar_data, 98)
@@ -505,16 +562,9 @@ class EPMap:
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
 
-        # Determine scalar_data based on scalar_name
-        if scalar_name == "act":
-            if np.nanmax(self.act_bip[:, 0]) < 0:
-                scalar_data = -self.act_bip[:, 0]
-            else:
-                scalar_data = self.act_bip[:, 0]
-        elif scalar_name == "vol":
-            scalar_data = self.act_bip[:, 1]
-        else:
-            raise ValueError(f"Unsupported scalar_name: {scalar_name}")
+        # Resolve already-conditioned values via the vendor-neutral resolver;
+        # no scalar-specific handling lives here anymore.
+        scalar_data = self.get_scalar(scalar_name)
 
         # Interpolate data to match mesh points
         pv_mesh, interpolated_scalar_data = self.interpolate_scalar_values(
@@ -608,16 +658,9 @@ class EPMap:
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh(simplify=False)
 
-        # Determine scalar_data based on scalar_name
-        if scalar_name == "act":
-            if np.nanmax(self.act_bip[:, 0]) < 0:
-                scalar_data = -self.act_bip[:, 0]
-            else:
-                scalar_data = self.act_bip[:, 0]
-        elif scalar_name == "vol":
-            scalar_data = self.act_bip[:, 1]
-        else:
-            raise ValueError(f"Unsupported scalar_name: {scalar_name}")
+        # Resolve already-conditioned values (see :meth:`get_scalar`); no
+        # scalar-specific handling lives here anymore.
+        scalar_data = self.get_scalar(scalar_name)
 
         pv_mesh.point_data[scalar_name] = scalar_data
 
