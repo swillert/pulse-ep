@@ -27,7 +27,15 @@ from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.importers.base import register_importer
 from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan, WaveformPlan
 from pulse_ep.core.importers.source import ImportSource
-from pulse_ep.core.scalar_field import VOLTAGE_BIPOLAR, VOLTAGE_UNIPOLAR
+from pulse_ep.core.measurement import MeasurementPoint
+from pulse_ep.core.scalar_field import (
+    ACTIVATION_TIME,
+    CONTACT_FORCE,
+    CORRELATION,
+    SNR,
+    VOLTAGE_BIPOLAR,
+    VOLTAGE_UNIPOLAR,
+)
 from pulse_ep.core.study import Study
 from pulse_ep.core.waveform import Waveform
 
@@ -294,6 +302,49 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
             "filters": filters,
         },
     )
+
+
+# --- measurement points (map_*_points.csv) ---------------------------------
+
+# (csv column, measurement name, kind, unit)
+_POINT_MEASUREMENTS = (
+    ("pp", "voltage_bipolar", VOLTAGE_BIPOLAR, "mV"),
+    ("unipoleMaxPP", "voltage_unipolar", VOLTAGE_UNIPOLAR, "mV"),
+    ("correctedLAT", "activation_time", ACTIVATION_TIME, "ms"),
+    ("correlationCoefficient", "correlation", CORRELATION, ""),
+    ("snr", "snr", SNR, ""),
+)
+
+
+def parse_ensite_points(data: bytes | str, name: str = "") -> list[MeasurementPoint]:
+    """Parse an EnSite ``map_*_points.csv`` into vendor-neutral points.
+
+    Maps the rich per-point table (pp / unipoleMaxPP / correctedLAT /
+    correlationCoefficient / snr / force + locChA/B/C electrodes) onto an open
+    ``measurements`` dict. ``correlationCoefficient`` is imported neutrally as
+    ``correlation`` (its clinical meaning is decided downstream). ``force ==
+    -1`` (no sensor) is dropped.
+    """
+    text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
+    df = pd.read_csv(io.StringIO(text))
+    cols = set(df.columns)
+
+    points: list[MeasurementPoint] = []
+    for i, row in df.iterrows():
+        point = MeasurementPoint(
+            position=np.array([row["x"], row["y"], row["z"]], dtype=float), index=int(i)
+        )
+        for col, field_name, kind, unit in _POINT_MEASUREMENTS:
+            if col in cols and pd.notna(row[col]):
+                point.add(field_name, float(row[col]), kind, unit)
+        if "force" in cols and pd.notna(row["force"]) and float(row["force"]) >= 0:
+            point.add("contact_force", float(row["force"]), CONTACT_FORCE, "g")
+        for label in ("A", "B", "C"):
+            axis_cols = [f"locCh{label}_{ax}" for ax in "xyz"]
+            if cols.issuperset(axis_cols):
+                point.electrodes[label] = np.array([row[c] for c in axis_cols], dtype=float)
+        points.append(point)
+    return points
 
 
 # --- vendor importer (prepare / commit over an ImportSource) ---------------
