@@ -10,6 +10,7 @@ import numpy as np
 from pulse_ep.core import mesh_proc as mesh_proc
 from pulse_ep.core import xml_proc as xml_proc
 from pulse_ep.core.epmap import EPMap
+from pulse_ep.core.importers.carto import populate_carto_mesh
 from pulse_ep.core.study import Study
 
 
@@ -163,9 +164,9 @@ def import_carto(filename: str, filter=None):
             # Put coordinates of the Points into the map object
             epmap.xyz = xml_proc.get_xyz(map_element)
 
-            # Import Mesh file into the map
+            # Import Mesh file into the map (geometry + vendor-neutral scalars)
             carto_mesh_file = os.path.join(path, filenames[map_index])
-            epmap.process_carto_mesh_file(carto_mesh_file)
+            populate_carto_mesh(epmap, carto_mesh_file)
 
             # Import Carto Points
             carto_points_file = os.path.join(path, epmap.map_name + "_Points_Export.xml")

@@ -13,7 +13,7 @@ import numpy as np
 
 from pulse_ep.core.importers.base import register_importer
 from pulse_ep.core.importers.source import ImportSource
-from pulse_ep.core.scalar_field import ACTIVATION_TIME, PACEMAP_SCORE
+from pulse_ep.core.scalar_field import ACTIVATION_TIME, PACEMAP_SCORE, VOLTAGE_BIPOLAR
 from pulse_ep.core.study import Study
 
 #: CARTO marks "no valid datum" vertices with this sentinel; values at or
@@ -42,6 +42,43 @@ def classify_primary_scalar(values: np.ndarray) -> tuple[str, np.ndarray]:
         # entirely-negative → pace-mapping stored with negative sign
         return PACEMAP_SCORE, -v
     return ACTIVATION_TIME, v
+
+
+def register_carto_scalars(epmap, act_bip: np.ndarray | None) -> None:
+    """Register CARTO's per-vertex scalars as vendor-neutral fields.
+
+    Decodes the overloaded primary slot (see :func:`classify_primary_scalar`)
+    into ``"act"`` (kind ``activation_time`` or ``pacemap_score``) and the
+    bipolar voltage into ``"vol"``. Called at import so the core never needs
+    to know these come from CARTO.
+    """
+    if act_bip is None:
+        return
+    kind, primary = classify_primary_scalar(act_bip[:, 0])
+    epmap.register_scalar("act", primary, kind=kind)
+    epmap.register_scalar("vol", act_bip[:, 1], kind=VOLTAGE_BIPOLAR)
+
+
+def populate_carto_mesh(epmap, mesh_file: str) -> None:
+    """Read a CARTO ``.mesh`` file into ``epmap`` (geometry + scalar fields).
+
+    Replaces the former ``EPMap.process_carto_mesh_file`` — mesh parsing is a
+    vendor concern and lives in the importer, not on the domain object. The
+    legacy ``act_bip`` array is still populated for figure/tag consumers.
+    """
+    from pulse_ep.core import mesh_proc
+
+    triangles, vertices, triangle_areas, is_edge, act_bip, normals, uni_imp_frc = (
+        mesh_proc.read_carto_mesh_file(mesh_file)
+    )
+    epmap.triangles = triangles
+    epmap.vertices = vertices
+    epmap.triangle_areas = triangle_areas
+    epmap.is_vertex_at_edge = is_edge
+    epmap.act_bip = act_bip  # legacy storage (figures / tag_maps read this)
+    epmap.normals = normals
+    epmap.uni_imp_frc = uni_imp_frc
+    register_carto_scalars(epmap, act_bip)
 
 
 class CartoImporter:

@@ -4,7 +4,6 @@ import pymeshfix
 import pyvista as pv
 from scipy.spatial import cKDTree
 
-from pulse_ep.core import mesh_proc as mesh_proc
 from pulse_ep.core import plot_proc as plot_proc
 from pulse_ep.core.scalar_field import ScalarField
 
@@ -50,18 +49,6 @@ class EPMap:
         # bridged by ``get_scalar`` until that importer is migrated.
         self.scalar_fields: dict[str, ScalarField] = scalar_fields or {}
 
-    def process_carto_mesh_file(self, carto_mesh_file: str) -> None:
-        triangles, vertices, triangle_areas, isVertexAtEdge, act_bip, normals, uni_imp_frc = (
-            mesh_proc.read_carto_mesh_file(carto_mesh_file)
-        )
-        self.triangles: np.ndarray | None = triangles
-        self.vertices: np.ndarray | None = vertices
-        self.triangle_areas: np.ndarray | None = triangle_areas
-        self.is_vertex_at_edge: np.ndarray | None = isVertexAtEdge
-        self.act_bip: np.ndarray | None = act_bip
-        self.normals: np.ndarray | None = normals
-        self.uni_imp_frc: np.ndarray | None = uni_imp_frc
-
     def register_scalar(
         self,
         scalar_name: str,
@@ -88,25 +75,15 @@ class EPMap:
     def get_scalar(self, scalar_name: str) -> np.ndarray:
         """Resolve a named per-vertex scalar as a 1-D array of values.
 
-        Prefers an explicitly registered, already-conditioned field in
-        ``scalar_fields``. Falls back to the legacy CARTO ``act_bip`` layout
-        (``"act"`` → column 0, ``"vol"`` → column 1); the ``"act"`` bridge
-        reproduces the historical activation sign-normalisation until the
-        CARTO importer registers conditioned fields with an explicit kind.
+        Reads from the vendor-neutral ``scalar_fields`` — importers register
+        conditioned fields with an explicit ``kind``; the core holds no
+        vendor-specific fallback.
 
-        :raises ValueError: if the name resolves to no known scalar.
+        :raises ValueError: if the name resolves to no registered scalar.
         """
         field = self.scalar_fields.get(scalar_name)
         if field is not None:
             return field.values
-        if self.act_bip is not None:
-            if scalar_name == "act":
-                values = self.act_bip[:, 0]
-                if values.size and np.nanmax(values) < 0:  # legacy CARTO bridge
-                    values = -values
-                return values
-            if scalar_name == "vol":
-                return self.act_bip[:, 1]
         raise ValueError(f"Unsupported scalar_name: {scalar_name}")
 
     def generate_anatomical_pv_mesh(self, simplify: bool = True) -> pv.PolyData:
