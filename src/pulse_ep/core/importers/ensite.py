@@ -316,14 +316,103 @@ _POINT_MEASUREMENTS = (
 )
 
 
-def parse_ensite_points(data: bytes | str, name: str = "") -> list[MeasurementPoint]:
-    """Parse an EnSite ``map_*_points.csv`` into vendor-neutral points.
+_MAP_PP_KIND = {
+    "bi": ("voltage_bipolar", VOLTAGE_BIPOLAR),
+    "uni": ("voltage_unipolar", VOLTAGE_UNIPOLAR),
+    "omni": ("voltage_bipolar", VOLTAGE_BIPOLAR),  # omnipolar P-P amplitude
+}
+_MAP_PP_SENTINEL = 9000.0  # adjTime uses 10000 as "no annotation"
 
-    Maps the rich per-point table (pp / unipoleMaxPP / correctedLAT /
-    correlationCoefficient / snr / force + locChA/B/C electrodes) onto an open
-    ``measurements`` dict. ``correlationCoefficient`` is imported neutrally as
-    ``correlation`` (its clinical meaning is decided downstream). ``force ==
-    -1`` (no sensor) is dropped.
+
+def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPoint]:
+    """Parse a native structured ``Map_PP_*.csv`` (DxL point-parameter export).
+
+    Skips the multi-section preamble via its ``Data starts in row,N`` marker,
+    reads the point table, and maps: ``surface x/y/z`` -> position, ``P-P``
+    (when ``P-P valid``) -> voltage (polarity from the ``Map type``),
+    ``adjTime (ms)`` -> activation_time, ``force (g)`` -> contact_force,
+    ``roving x/y/z`` (labelled by ``Electrodes``) -> electrodes. Trailing
+    variable "Rov Tick" columns are ignored, so parsing is done by hand.
+    """
+    text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
+    lines = text.splitlines()
+
+    data_row = None
+    map_type = ""
+    for line in lines[:80]:
+        low = line.lower()
+        if low.startswith("data starts in row"):
+            try:
+                data_row = int(line.split(",")[1])
+            except (IndexError, ValueError):
+                pass
+        elif low.startswith("map type:"):
+            map_type = line.split(",", 1)[1].strip()
+    if data_row is None:
+        raise ValueError("no 'Data starts in row,N' marker found")
+
+    header = [h.strip() for h in lines[data_row - 1].split(",")]
+    col = {name: i for i, name in enumerate(header)}
+    polarity = map_type.lower().replace("pp_", "")
+    field_name, kind = _MAP_PP_KIND.get(polarity, ("voltage_bipolar", VOLTAGE_BIPOLAR))
+
+    def num(fields, name):
+        j = col.get(name)
+        if j is None or j >= len(fields):
+            return None
+        try:
+            return float(fields[j])
+        except ValueError:
+            return None
+
+    points: list[MeasurementPoint] = []
+    for i, line in enumerate(lines[data_row:]):
+        if not line.strip():
+            continue
+        f = line.split(",")
+        sx, sy, sz = num(f, "surface x"), num(f, "surface y"), num(f, "surface z")
+        if sx is None or sy is None or sz is None:
+            continue
+        point = MeasurementPoint(position=np.array([sx, sy, sz], dtype=float), index=i)
+
+        pid = col.get("(Point #)")
+        if pid is not None and pid < len(f):
+            point.source_id = f[pid].strip()
+
+        pp = num(f, "P-P")
+        valid_col = col.get("P-P valid")
+        pp_valid = valid_col is None or (valid_col < len(f) and f[valid_col].strip() in ("1", "1.0"))
+        if pp is not None and pp_valid:
+            point.add(field_name, pp, kind, "mV")
+
+        lat = num(f, "adjTime (ms)")
+        if lat is not None and abs(lat) < _MAP_PP_SENTINEL:
+            point.add("activation_time", lat, ACTIVATION_TIME, "ms")
+
+        force = num(f, "force (g)")
+        if force is not None and force >= 0:
+            point.add("contact_force", force, CONTACT_FORCE, "g")
+
+        rx, ry, rz = num(f, "roving x"), num(f, "roving y"), num(f, "roving z")
+        if rx is not None and ry is not None and rz is not None:
+            elabel = f[col["Electrodes"]].strip() if "Electrodes" in col else ""
+            point.electrodes[elabel or "rov"] = np.array([rx, ry, rz], dtype=float)
+
+        points.append(point)
+    return points
+
+
+def parse_ensite_points(data: bytes | str, name: str = "") -> list[MeasurementPoint]:
+    """Parse a raw-archive-derived ``map_*_points.csv`` into vendor-neutral points.
+
+    This is the rich per-point table assembled from the raw ``dws.db`` archive
+    (see ``export_ensite_map_points.py``) — a Phase-3 source. The native
+    structured-export equivalent is :func:`parse_ensite_map_pp`.
+
+    Maps pp / unipoleMaxPP / correctedLAT / correlationCoefficient / snr / force
+    + locChA/B/C electrodes onto an open ``measurements`` dict.
+    ``correlationCoefficient`` is imported neutrally as ``correlation`` (its
+    clinical meaning is decided downstream). ``force == -1`` (no sensor) is dropped.
     """
     text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
     df = pd.read_csv(io.StringIO(text))
