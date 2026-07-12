@@ -629,3 +629,28 @@ def measurement_points_to_models(
             )
         )
     return rows
+
+
+def persist_study(session, study) -> StudyModel:
+    """Persist a domain Study (+ its maps and measurement points) to the DB.
+
+    Writes the vendor-neutral study, one EPMapModel per map (with scalar_fields),
+    an empty EPMapAttributes tag bag per map, and any attached measurement
+    points. Commits and returns the StudyModel (with its assigned id).
+    """
+    study_model = StudyModel.from_study(study)
+    session.add(study_model)
+    session.flush()  # assign study_model.id
+
+    for epmap in study.epmaps:
+        map_model = EPMapModel.from_epmap(epmap, study_model.id)
+        session.add(map_model)
+        session.flush()  # assign map_model.id
+        session.add(EPMapAttributes(map_id=map_model.id, attributes={}))
+        for row in measurement_points_to_models(
+            getattr(epmap, "measurement_points", None) or [], map_model.id
+        ):
+            session.add(row)
+
+    session.commit()
+    return study_model

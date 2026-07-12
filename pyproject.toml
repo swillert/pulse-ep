@@ -96,6 +96,7 @@ Documentation = "https://sw.gitlab-pages.willert.net/pulse-ep/"
 
 [project.scripts]
 pulse-ep-import-carto = "pulse_ep.cli.import_carto:main"
+pulse-ep-import-ensite = "pulse_ep.cli.import_ensite:main"
 pulse-ep-extract-meshes = "pulse_ep.cli.extract_meshes_for_validation:main"
 pulse-ep-tag-maps = "pulse_ep.cli.tag_maps:main"
 pulse-ep-populate-colormaps = "pulse_ep.cli.populate_colormaps:main"
