@@ -21,7 +21,9 @@ class MapPlan:
     part: str | None = None  # endo / epi
     scalar_fields: dict[str, str] = field(default_factory=dict)  # field name -> kind
     n_vertices: int | None = None
+    points_files: list[str] = field(default_factory=list)  # Map_PP_*.csv for this map
     include: bool = True  # default selection
+    include_points: bool = True  # per-point measurements (default on)
     issues: list[str] = field(default_factory=list)
 
 
