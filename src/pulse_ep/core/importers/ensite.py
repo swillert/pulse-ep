@@ -439,6 +439,7 @@ def parse_ensite_points(data: bytes | str, name: str = "") -> list[MeasurementPo
 # --- vendor importer (prepare / commit over an ImportSource) ---------------
 
 _MAP_GLOB = "*Contact_Mapping_Model*.xml"
+_POINTS_GLOB = "*Map_PP_*.csv"
 _WAVEFORM_GLOBS = ("*Waveforms*.csv", "*ECG*.csv")
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
 
@@ -449,6 +450,28 @@ def _vertex_count(source: ImportSource, name: str) -> int | None:
         head = fh.read(16384)
     m = _VERT_RE.search(head)
     return int(m.group(1)) if m else None
+
+
+def _points_files_for(source: ImportSource, map_files: list[str]) -> list[str]:
+    """Map_PP_*.csv siblings of a map's DIF files (in a ``Contact_Mapping/`` subdir)."""
+    dirs = {str(Path(f).parent) for f in map_files}
+    return sorted(pp for pp in source.list(_POINTS_GLOB) if str(Path(pp).parent.parent) in dirs)
+
+
+def _merge_point_sets(point_sets: list[list[MeasurementPoint]]) -> list[MeasurementPoint]:
+    """Merge bi/uni/omni Map_PP point sets by point id (shared acquisition points)."""
+    merged: dict[str, MeasurementPoint] = {}
+    order: list[str] = []
+    for points in point_sets:
+        for p in points:
+            key = p.source_id if p.source_id is not None else f"_{len(order)}"
+            if key not in merged:
+                merged[key] = p
+                order.append(key)
+            else:
+                merged[key].measurements.update(p.measurements)
+                merged[key].electrodes.update(p.electrodes)
+    return [merged[k] for k in order]
 
 
 def _read_provenance(source: ImportSource) -> dict:
@@ -500,6 +523,7 @@ class EnsiteImporter:
                     part=parse_map_descriptor(files[0]).get("part"),
                     scalar_fields=scalar_fields,
                     n_vertices=next(iter(distinct), None),
+                    points_files=_points_files_for(source, files),
                     issues=issues,
                 )
             )
@@ -530,7 +554,14 @@ class EnsiteImporter:
                     continue
                 items = [(f, parse_dif(source.open(f).read())[0]) for f in mp.files]
                 try:
-                    study.add_epmap(merge_dif_group(items, sp.study_name, src_tag))
+                    epmap = merge_dif_group(items, sp.study_name, src_tag)
+                    if mp.include_points and mp.points_files:
+                        sets = [
+                            parse_ensite_map_pp(source.open(pf).read(), name=pf)
+                            for pf in mp.points_files
+                        ]
+                        epmap.measurement_points = _merge_point_sets(sets)
+                    study.add_epmap(epmap)
                 except GeometryMismatch:
                     for f, vol in items:  # geometry differs → keep separate
                         study.add_epmap(dif_to_epmap(vol, parse_map_descriptor(f), sp.study_name, src_tag))

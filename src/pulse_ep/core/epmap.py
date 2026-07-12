@@ -25,6 +25,7 @@ class EPMap:
         xyz: np.ndarray | None = None,
         pv_mesh: pv.PolyData | None = None,
         scalar_fields: dict[str, ScalarField] | None = None,
+        measurement_points: list | None = None,
     ):
 
         if map_name is None:
@@ -48,6 +49,9 @@ class EPMap:
         # conditioned fields here; the legacy CARTO ``act_bip`` slot is
         # bridged by ``get_scalar`` until that importer is migrated.
         self.scalar_fields: dict[str, ScalarField] = scalar_fields or {}
+        # Discrete acquisition points behind this map (rich per-point
+        # measurements + electrode geometry); see :class:`MeasurementPoint`.
+        self.measurement_points: list = measurement_points or []
 
     def register_scalar(
         self,
