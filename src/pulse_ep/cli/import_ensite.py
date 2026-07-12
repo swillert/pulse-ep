@@ -38,7 +38,12 @@ def _print_plan(plan: ImportPlan) -> None:
 
 def _delete_study(session, study_model) -> None:
     """Remove a study and its maps / attributes / measurement points."""
-    from pulse_ep.core.models import EPMapAttributes, EPMapModel, MeasurementPointModel
+    from pulse_ep.core.models import (
+        EPMapAttributes,
+        EPMapModel,
+        MeasurementPointModel,
+        PlacedPointModel,
+    )
 
     map_ids = [e.id for e in session.query(EPMapModel).filter_by(study_id=study_model.id).all()]
     if map_ids:
@@ -51,6 +56,9 @@ def _delete_study(session, study_model) -> None:
         session.query(EPMapModel).filter(EPMapModel.id.in_(map_ids)).delete(
             synchronize_session=False
         )
+    session.query(PlacedPointModel).filter_by(study_id=study_model.id).delete(
+        synchronize_session=False
+    )
     session.delete(study_model)
     session.commit()
 

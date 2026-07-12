@@ -8,12 +8,15 @@ class Study:
         epmaps: EPMap | list[EPMap] = None,
         vendor: str | None = None,
         provenance: dict | None = None,
+        placed_points: list | None = None,
     ) -> None:
         self.name: str = name
         #: acquisition system this study came from ("carto", "ensite", …).
         self.vendor: str | None = vendor
         #: importer-supplied provenance (software / export versions, GUID …).
         self.provenance: dict | None = provenance
+        #: study-level markers (ablations, landmarks, …); see PlacedPoint.
+        self.placed_points: list = placed_points or []
 
         if epmaps is not None:
             if isinstance(epmaps, EPMap):
