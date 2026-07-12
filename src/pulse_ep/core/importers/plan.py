@@ -46,6 +46,8 @@ class StudyPlan:
     provenance: dict = field(default_factory=dict)
     maps: list[MapPlan] = field(default_factory=list)
     waveforms: WaveformPlan = field(default_factory=WaveformPlan)
+    placed_point_files: list[str] = field(default_factory=list)  # AutoMark/Lesions/Labels
+    include_placed_points: bool = True
 
 
 @dataclass

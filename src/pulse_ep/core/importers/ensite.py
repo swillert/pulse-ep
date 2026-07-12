@@ -535,6 +535,24 @@ def parse_ensite_labels(data: bytes | str, name: str = "") -> list[PlacedPoint]:
     return parse_ensite_markers(data, point_type=LANDMARK)
 
 
+_PLACED_GLOBS = ("*AutoMark_Data.csv", "*Lesions.csv", "*Labels.csv")
+
+
+def _parse_placed_points(source: ImportSource, files: list[str]) -> list[PlacedPoint]:
+    """Dispatch each placed-point file to its parser by filename."""
+    points: list[PlacedPoint] = []
+    for f in files:
+        base = Path(f).name.lower()
+        data = source.open(f).read()
+        if "automark_data" in base:
+            points += parse_ensite_automarks(data, f)
+        elif "lesions" in base:
+            points += parse_ensite_markers(data)
+        elif "labels" in base:
+            points += parse_ensite_labels(data, f)
+    return points
+
+
 # --- vendor importer (prepare / commit over an ImportSource) ---------------
 
 _MAP_GLOB = "*Contact_Mapping_Model*.xml"
@@ -634,12 +652,14 @@ class EnsiteImporter:
             include=False,  # opt-in
         )
         prov = _read_provenance(source)
+        placed_files = sorted({n for g in _PLACED_GLOBS for n in source.list(g)})
         study = StudyPlan(
             study_name=prov.get("study_guid") or "ensite-study",
             vendor="ensite",
             provenance=prov,
             maps=maps,
             waveforms=waveforms,
+            placed_point_files=placed_files,
         )
         return ImportPlan(studies=[study])
 
@@ -664,6 +684,8 @@ class EnsiteImporter:
                 except GeometryMismatch:
                     for f, vol in items:  # geometry differs → keep separate
                         study.add_epmap(dif_to_epmap(vol, parse_map_descriptor(f), sp.study_name, src_tag))
+            if sp.include_placed_points and sp.placed_point_files:
+                study.placed_points = _parse_placed_points(source, sp.placed_point_files)
             # plan.waveforms.include -> Phase 1.5 (WaveformStore); not yet built
             studies.append(study)
         return studies

@@ -18,6 +18,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.measurement import Measurement, MeasurementPoint
+from pulse_ep.core.placed_point import PlacedPoint
 from pulse_ep.core.scalar_field import ScalarField
 from pulse_ep.core.study import Study
 
@@ -642,6 +643,9 @@ def persist_study(session, study) -> StudyModel:
     session.add(study_model)
     session.flush()  # assign study_model.id
 
+    for row in placed_points_to_models(getattr(study, "placed_points", None) or [], study_model.id):
+        session.add(row)
+
     for epmap in study.epmaps:
         map_model = EPMapModel.from_epmap(epmap, study_model.id)
         session.add(map_model)
@@ -654,3 +658,52 @@ def persist_study(session, study) -> StudyModel:
 
     session.commit()
     return study_model
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  PlacedPointModel — study-level operator/system markers (open attributes)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class PlacedPointModel(Base):
+    """A study-level placed marker (ablation site, landmark, tag, …).
+
+    ``type`` comes from a controlled vocabulary; type-specific data lives in
+    the open JSONB ``attributes`` map. Study-level (a physical location in the
+    shared study frame), not tied to one map's mesh."""
+
+    __tablename__ = "placed_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    study_id = Column(
+        Integer, ForeignKey("studies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    type = Column(String, index=True)
+    position = Column(ARRAY(FLOAT))  # [x, y, z]
+    label = Column(String, nullable=True)
+    attributes = Column(PortableJSON)  # open, type-specific
+    source_id = Column(String, nullable=True)
+
+    def to_placed_point(self) -> PlacedPoint:
+        return PlacedPoint(
+            type=self.type,
+            position=np.array(self.position, dtype=float),
+            label=self.label,
+            attributes=self.attributes or {},
+            source_id=self.source_id,
+        )
+
+
+def placed_points_to_models(points: list[PlacedPoint], study_id: int) -> list[PlacedPointModel]:
+    """Serialise domain :class:`PlacedPoint`s to ORM rows."""
+    return [
+        PlacedPointModel(
+            study_id=study_id,
+            type=p.type,
+            position=[float(x) for x in p.position],
+            label=p.label,
+            attributes=p.attributes,
+            source_id=p.source_id,
+        )
+        for p in points
+    ]
