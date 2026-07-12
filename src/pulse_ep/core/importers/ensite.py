@@ -28,6 +28,7 @@ from pulse_ep.core.importers.base import register_importer
 from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan, WaveformPlan
 from pulse_ep.core.importers.source import ImportSource
 from pulse_ep.core.measurement import MeasurementPoint
+from pulse_ep.core.placed_point import ABLATION, LANDMARK, MARKER, PlacedPoint
 from pulse_ep.core.scalar_field import (
     ACTIVATION_TIME,
     CONTACT_FORCE,
@@ -434,6 +435,104 @@ def parse_ensite_points(data: bytes | str, name: str = "") -> list[MeasurementPo
                 point.electrodes[label] = np.array([row[c] for c in axis_cols], dtype=float)
         points.append(point)
     return points
+
+
+# --- placed points (AutoMarks / Lesions / Labels) --------------------------
+
+
+def _element_df(data: bytes | str, header_prefix: str):
+    """Read ONE section of an 'Export Data Element' CSV from its header row.
+
+    These files can hold several sections, each with its own header (e.g.
+    AutoMark_Data has a NavX/power section then an EKG section) — so the block
+    stops at a blank line or the next section's header.
+    """
+    text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
+    lines = text.splitlines()
+    hi = next((i for i, line in enumerate(lines) if line.startswith(header_prefix)), None)
+    if hi is None:
+        return None
+    block = [lines[hi]]
+    for line in lines[hi + 1:]:
+        if not line.strip() or line.startswith(header_prefix):
+            break
+        block.append(line)
+    df = pd.read_csv(io.StringIO("\n".join(block)))
+    return df.dropna(how="all")
+
+
+def parse_ensite_automarks(data: bytes | str, name: str = "") -> list[PlacedPoint]:
+    """Parse ``AutoMark_Data.csv`` into ablation :class:`PlacedPoint`s.
+
+    Position from the NavX ABL-D electrode; ablation power / episode / lesion
+    id go into open attributes.
+    """
+    df = _element_df(data, "RF Episode,")
+    if df is None:
+        return []
+    xc, yc, zc = "NavX ABL-D X (mm)", "NavX ABL-D Y (mm)", "NavX ABL-D Z (mm)"
+    if xc not in df.columns:
+        return []
+    power_col = next((c for c in df.columns if "Power" in str(c)), None)
+
+    points: list[PlacedPoint] = []
+    for _, r in df.iterrows():
+        if pd.isna(r[xc]):
+            continue
+        attrs: dict = {}
+        if power_col and pd.notna(r[power_col]):
+            attrs["power"] = float(r[power_col])
+        for csv_col, key in (("RF Episode", "rf_episode"), ("Lesion ID", "lesion_id")):
+            if csv_col in df.columns and pd.notna(r[csv_col]):
+                attrs[key] = r[csv_col]
+        points.append(
+            PlacedPoint(
+                type=ABLATION,
+                position=np.array([r[xc], r[yc], r[zc]], dtype=float),
+                source_id=str(r["Lesion ID"]) if "Lesion ID" in df.columns else None,
+                attributes=attrs,
+            )
+        )
+    return points
+
+
+def parse_ensite_markers(data: bytes | str, point_type: str = MARKER) -> list[PlacedPoint]:
+    """Parse a ``Lesions.csv`` / ``Labels.csv`` (Text,Type,Surface,x,y,z,...).
+
+    Used for markers (``Lesions`` -> :data:`MARKER`) and landmarks
+    (``Labels`` -> :data:`LANDMARK`); the file's own ``Type`` column, colour,
+    diameter and annotation become open attributes.
+    """
+    df = _element_df(data, "Text,Type,")
+    if df is None:
+        return []
+    points: list[PlacedPoint] = []
+    for _, r in df.iterrows():
+        if pd.isna(r.get("x")):
+            continue
+        attrs: dict = {}
+        for csv_col, key in (("Type", "marker_type"), ("Diameter", "diameter"),
+                             ("Annotation", "annotation")):
+            if csv_col in df.columns and pd.notna(r[csv_col]):
+                attrs[key] = r[csv_col]
+        if {"R", "G", "B"}.issubset(df.columns):
+            attrs["color"] = [int(r["R"]), int(r["G"]), int(r["B"])]
+        text = str(r["Text"]) if "Text" in df.columns and pd.notna(r["Text"]) else None
+        points.append(
+            PlacedPoint(
+                type=point_type,
+                position=np.array([r["x"], r["y"], r["z"]], dtype=float),
+                label=text,
+                attributes=attrs,
+                source_id=text,
+            )
+        )
+    return points
+
+
+def parse_ensite_labels(data: bytes | str, name: str = "") -> list[PlacedPoint]:
+    """Parse ``Labels.csv`` into landmark :class:`PlacedPoint`s."""
+    return parse_ensite_markers(data, point_type=LANDMARK)
 
 
 # --- vendor importer (prepare / commit over an ImportSource) ---------------
