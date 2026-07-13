@@ -38,6 +38,11 @@ def get_importers() -> list[VendorImporter]:
     return list(_REGISTRY)
 
 
+def get_importer(name: str) -> VendorImporter | None:
+    """Return the registered importer with this ``name`` (e.g. "ensite")."""
+    return next((imp for imp in _REGISTRY if imp.name == name), None)
+
+
 def detect_vendor(source: ImportSource) -> VendorImporter | None:
     """First registered importer whose ``sniff`` matches, else ``None``."""
     for importer in _REGISTRY:
