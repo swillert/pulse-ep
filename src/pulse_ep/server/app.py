@@ -47,6 +47,11 @@ jwt = JWTManager(app)
 bcrypt = Bcrypt(app)
 CORS(app, origins=_settings.cors_origins)
 
+# Import-queue REST API (list / inspect / edit-plan / prepare / commit jobs).
+from pulse_ep.server.import_api import import_api  # noqa: E402
+
+app.register_blueprint(import_api)
+
 
 @app.route("/")
 def index():

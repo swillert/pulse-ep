@@ -112,6 +112,10 @@ class Settings(BaseSettings):
         default="reports",
         description="Filesystem directory used by /save_report and /reports/<id>/generate.",
     )
+    drop_dir: str = Field(
+        default="drop",
+        description="Drop directory the import watcher scans for new export bundles.",
+    )
 
     # ------------------------------------------------------------------
     # Validators
