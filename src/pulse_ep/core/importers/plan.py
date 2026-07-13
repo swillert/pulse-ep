@@ -9,6 +9,7 @@ CARTO and EnSiteX.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 
 
@@ -56,3 +57,31 @@ class StudyPlan:
 class ImportPlan:
     studies: list[StudyPlan] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
+
+
+def plan_to_dict(plan: ImportPlan) -> dict:
+    """JSON-serialisable form of a plan (for storing on an import job)."""
+    return dataclasses.asdict(plan)
+
+
+def plan_from_dict(d: dict) -> ImportPlan:
+    """Rebuild an :class:`ImportPlan` from :func:`plan_to_dict` output.
+
+    Reconstructs the reviewer's edited selections (include flags, etc.).
+    """
+    studies = []
+    for s in d.get("studies", []):
+        studies.append(
+            StudyPlan(
+                study_name=s["study_name"],
+                vendor=s["vendor"],
+                provenance=s.get("provenance") or {},
+                maps=[MapPlan(**m) for m in s.get("maps", [])],
+                waveforms=WaveformPlan(**(s.get("waveforms") or {})),
+                placed_point_files=s.get("placed_point_files", []),
+                include_placed_points=s.get("include_placed_points", True),
+                anatomy_files=s.get("anatomy_files", []),
+                include_anatomy=s.get("include_anatomy", True),
+            )
+        )
+    return ImportPlan(studies=studies, issues=d.get("issues", []))

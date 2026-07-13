@@ -6,11 +6,13 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    DateTime,
     Float,
     ForeignKey,
     Index,
     Integer,
     String,
+    func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, FLOAT, JSONB
 from sqlalchemy.orm import Session, declarative_base, relationship
@@ -707,3 +709,33 @@ def placed_points_to_models(points: list[PlacedPoint], study_id: int) -> list[Pl
         )
         for p in points
     ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ImportJobModel — the import queue state machine
+# ═══════════════════════════════════════════════════════════════════════════
+
+# job statuses
+JOB_DETECTED = "detected"
+JOB_NEEDS_REVIEW = "needs_review"
+JOB_IMPORTING = "importing"
+JOB_DONE = "done"
+JOB_ERROR = "error"
+
+
+class ImportJobModel(Base):
+    """One queued import: a detected export bundle moving through
+    detected -> needs_review -> importing -> done / error. ``plan`` holds the
+    prepared (and reviewer-edited) ImportPlan as JSON."""
+
+    __tablename__ = "import_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_path = Column(String, nullable=False)  # folder or zip
+    vendor = Column(String, nullable=True)
+    status = Column(String, nullable=False, index=True, default=JOB_DETECTED)
+    plan = Column(PortableJSON)  # ImportPlan as dict (with reviewer edits)
+    study_id = Column(Integer, nullable=True)
+    error = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
