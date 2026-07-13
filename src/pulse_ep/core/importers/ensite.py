@@ -603,6 +603,7 @@ def _parse_placed_points(source: ImportSource, files: list[str]) -> list[PlacedP
 
 _MAP_GLOB = "*Contact_Mapping_Model*.xml"
 _POINTS_GLOB = "*Map_PP_*.csv"
+_ANATOMY_GLOB = "*Model_Groups*.xml"
 _WAVEFORM_GLOBS = ("*Waveforms*.csv", "*ECG*.csv")
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
 
@@ -706,6 +707,7 @@ class EnsiteImporter:
             maps=maps,
             waveforms=waveforms,
             placed_point_files=placed_files,
+            anatomy_files=sorted(source.list(_ANATOMY_GLOB)),
         )
         return ImportPlan(studies=[study])
 
@@ -732,6 +734,19 @@ class EnsiteImporter:
                         study.add_epmap(dif_to_epmap(vol, parse_map_descriptor(f), sp.study_name, src_tag))
             if sp.include_placed_points and sp.placed_point_files:
                 study.placed_points = _parse_placed_points(source, sp.placed_point_files)
+            if sp.include_anatomy and sp.anatomy_files:
+                for af in sp.anatomy_files:
+                    for vol in parse_dif(source.open(af).read()):
+                        study.add_epmap(
+                            EPMap(
+                                map_name=f"Anatomy: {vol.name}",
+                                study_name=sp.study_name,
+                                vertices=vol.vertices,
+                                triangles=vol.triangles,
+                                normals=vol.normals,
+                                attributes={"kind": "anatomy", "chamber": vol.name},
+                            )
+                        )
             # plan.waveforms.include -> Phase 1.5 (WaveformStore); not yet built
             studies.append(study)
         return studies

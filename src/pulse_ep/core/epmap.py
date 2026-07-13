@@ -26,6 +26,7 @@ class EPMap:
         pv_mesh: pv.PolyData | None = None,
         scalar_fields: dict[str, ScalarField] | None = None,
         measurement_points: list | None = None,
+        attributes: dict | None = None,
     ):
 
         if map_name is None:
@@ -52,6 +53,9 @@ class EPMap:
         # Discrete acquisition points behind this map (rich per-point
         # measurements + electrode geometry); see :class:`MeasurementPoint`.
         self.measurement_points: list = measurement_points or []
+        # Map-level tags (e.g. {"kind": "anatomy", "chamber": "Left"}),
+        # persisted into EPMapAttributes.
+        self.attributes: dict = attributes or {}
 
     def register_scalar(
         self,
