@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>pulse-ep · Import</title>
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <style>
+    body { margin: 0; background: var(--page-bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
+    .topbar { height: var(--nav-h); background: var(--nav-bg); color: var(--nav-active);
+              display: flex; align-items: center; gap: 16px; padding: 0 20px; }
+    .topbar h1 { font-size: 15px; margin: 0; font-weight: 600; }
+    .topbar .spacer { flex: 1; }
+    button { font: inherit; border: 1px solid var(--border); background: var(--card); color: var(--text);
+             border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { background: var(--accent-hover); }
+    button:disabled { opacity: .5; cursor: default; }
+    .layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+    .joblist { overflow: auto; max-height: calc(100vh - 120px); }
+    .job { padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .job:hover { background: var(--surface); }
+    .job.sel { background: var(--accent-dim); }
+    .job .path { font-weight: 550; font-size: 13px; word-break: break-all; }
+    .job .meta { font-size: 11.5px; color: var(--muted, #6b7394); margin-top: 3px; }
+    .badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+    .badge.detected { background: var(--warn-dim); color: var(--warn); }
+    .badge.needs_review { background: var(--accent-dim); color: var(--accent); }
+    .badge.importing { background: var(--warn-dim); color: var(--warn); }
+    .badge.done { background: var(--success-dim); color: var(--success); }
+    .badge.error { background: var(--danger-dim); color: var(--danger); }
+    .detail { padding: 20px; }
+    .detail h2 { margin: 0 0 4px; font-size: 17px; }
+    .detail .sub { color: #6b7394; font-size: 12.5px; margin-bottom: 18px; }
+    .section { margin: 16px 0; }
+    .section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #6b7394; margin: 0 0 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    th { font-size: 11px; text-transform: uppercase; color: #6b7394; }
+    label.chk { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; padding: 6px 0; }
+    .actions { margin-top: 22px; display: flex; gap: 10px; }
+    .empty { color: #6b7394; padding: 40px; text-align: center; }
+    .err { background: var(--danger-dim); color: var(--danger); padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>pulse-ep · Import queue</h1>
+    <div class="spacer"></div>
+    <button id="scanBtn">Scan drop directory</button>
+    <button id="refreshBtn">Refresh</button>
+  </div>
+  <div class="layout">
+    <aside class="card joblist" id="jobList"></aside>
+    <section class="card"><div id="detail" class="detail"><div class="empty">Select a job.</div></div></section>
+  </div>
+  <script src="/static/js/importReviewController.js"></script>
+</body>
+</html>

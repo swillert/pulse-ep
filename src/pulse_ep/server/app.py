@@ -73,6 +73,11 @@ def dashboard():
     return render_template("dashboard.html")
 
 
+@app.route("/import")
+def import_review():
+    return render_template("import.html")
+
+
 @app.route("/register_user", methods=["POST"])
 def register_user():
     data = request.get_json()
