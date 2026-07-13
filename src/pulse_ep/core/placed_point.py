@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 # controlled vocabulary of placed-point types
-ABLATION = "ablation"  # RF / PFA / cryo therapy site
+ABLATION = "ablation"  # generic / RF therapy site
+ABLATION_PFA = "ablation_pfa"  # pulsed-field ablation site
 LANDMARK = "landmark"  # anatomical landmark
 REFERENCE = "reference"  # reference / pacing site
 MARKER = "marker"  # generic placed marker (e.g. 3DE)
