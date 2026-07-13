@@ -32,6 +32,7 @@ def compare():
 
     metric = data.get("metric", "euclidean")
     max_distance = data.get("max_distance")
+    geodesic_solver = data.get("geodesic_solver", "dijkstra")
     include_delta = bool(data.get("include_delta", True))
 
     with get_db_session() as session:
@@ -41,7 +42,12 @@ def compare():
             return jsonify({"msg": "map not found"}), 404
         try:
             result = compare_maps(
-                map_a.to_epmap(), map_b.to_epmap(), scalar_name, metric, max_distance
+                map_a.to_epmap(),
+                map_b.to_epmap(),
+                scalar_name,
+                metric,
+                max_distance,
+                geodesic_solver=geodesic_solver,
             )
         except (ValueError, KeyError) as exc:
             return jsonify({"msg": str(exc)}), 400

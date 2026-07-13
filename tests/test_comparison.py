@@ -62,3 +62,17 @@ def test_stats_and_bad_metric():
     assert s["n"] == a.vertices.shape[0] and abs(s["mean"]) < 1e-9
     with pytest.raises(ValueError, match="unknown metric"):
         compare_maps(a, a, "voltage_bipolar", metric="manhattan")
+
+
+@pytest.mark.parametrize("solver", ["dijkstra", "heat"])
+def test_geodesic_solvers_recover_offset(solver):
+    a = _map(12, lambda v: v[:, 2])
+    b = _map(12, lambda v: v[:, 2] - 5.0)
+    r = compare_maps(a, b, "voltage_bipolar", metric="geodesic", geodesic_solver=solver)
+    np.testing.assert_allclose(r.delta, 5.0, atol=1e-2)
+
+
+def test_bad_geodesic_solver():
+    a = _map(12, lambda v: v[:, 2])
+    with pytest.raises(ValueError, match="unknown geodesic_solver"):
+        compare_maps(a, a, "voltage_bipolar", metric="geodesic", geodesic_solver="foo")
