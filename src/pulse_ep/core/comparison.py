@@ -67,7 +67,7 @@ def _euclidean(a_verts, b_verts, b_vals):
     return b_vals[idx], dist
 
 
-def _geodesic(a_verts, a_tris, b_verts, b_vals):
+def _geodesic(a_verts, a_tris, b_verts, b_vals, solver):
     # place each B value on its nearest A vertex (keep the closest B per A vertex)
     d_ab, a_idx = cKDTree(a_verts).query(b_verts, k=1)
     source_val: dict[int, float] = {}
@@ -77,15 +77,26 @@ def _geodesic(a_verts, a_tris, b_verts, b_vals):
         if ai not in source_best or d_ab[jb] < source_best[ai]:
             source_best[ai] = float(d_ab[jb])
             source_val[ai] = float(b_vals[jb])
-
     sources = np.fromiter(source_val.keys(), dtype=int)
-    dist, _pred, nearest = dijkstra(
-        _mesh_graph(a_verts, a_tris),
-        directed=False,
-        indices=sources,
-        min_only=True,
-        return_predecessors=True,
-    )
+
+    if solver == "dijkstra":
+        # graph distance along mesh edges — fast, gives the nearest source directly
+        dist, _pred, nearest = dijkstra(
+            _mesh_graph(a_verts, a_tris),
+            directed=False,
+            indices=sources,
+            min_only=True,
+            return_predecessors=True,
+        )
+    elif solver == "heat":
+        # Heat Method — smoother/more accurate distance across faces, not just edges
+        from pulse_ep.core.geodesic import heat_geodesic, nearest_source
+
+        dist = heat_geodesic(a_verts, a_tris, sources)
+        nearest = nearest_source(a_verts, a_tris, sources, dist)
+    else:
+        raise ValueError(f"unknown geodesic_solver {solver!r} (use 'dijkstra' or 'heat')")
+
     b_at = np.array([source_val.get(int(s), np.nan) for s in nearest])
     return b_at, dist
 
@@ -96,8 +107,14 @@ def compare_maps(
     scalar_name: str,
     metric: str = "euclidean",
     max_distance: float | None = None,
+    geodesic_solver: str = "dijkstra",
 ) -> ComparisonResult:
-    """Delta of ``scalar_name`` from ``map_b`` onto ``map_a`` (a - b)."""
+    """Delta of ``scalar_name`` from ``map_b`` onto ``map_a`` (a - b).
+
+    ``metric``: ``"euclidean"`` or ``"geodesic"``. For geodesic, ``geodesic_solver``
+    selects ``"dijkstra"`` (edge-graph shortest path) or ``"heat"`` (Heat Method,
+    smoother/more accurate across faces).
+    """
     a_vals = np.asarray(map_a.get_scalar(scalar_name), dtype=float)
     b_vals = np.asarray(map_b.get_scalar(scalar_name), dtype=float)
     a_verts = np.asarray(map_a.vertices, dtype=float)
@@ -106,7 +123,7 @@ def compare_maps(
     if metric == "euclidean":
         b_at, dist = _euclidean(a_verts, b_verts, b_vals)
     elif metric == "geodesic":
-        b_at, dist = _geodesic(a_verts, np.asarray(map_a.triangles), b_verts, b_vals)
+        b_at, dist = _geodesic(a_verts, np.asarray(map_a.triangles), b_verts, b_vals, geodesic_solver)
     else:
         raise ValueError(f"unknown metric {metric!r} (use 'euclidean' or 'geodesic')")
 
