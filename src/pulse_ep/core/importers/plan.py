@@ -48,6 +48,8 @@ class StudyPlan:
     waveforms: WaveformPlan = field(default_factory=WaveformPlan)
     placed_point_files: list[str] = field(default_factory=list)  # AutoMark/Lesions/Labels
     include_placed_points: bool = True
+    anatomy_files: list[str] = field(default_factory=list)  # Model_Groups.xml
+    include_anatomy: bool = True
 
 
 @dataclass

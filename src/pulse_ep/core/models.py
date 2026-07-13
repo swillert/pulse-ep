@@ -650,7 +650,7 @@ def persist_study(session, study) -> StudyModel:
         map_model = EPMapModel.from_epmap(epmap, study_model.id)
         session.add(map_model)
         session.flush()  # assign map_model.id
-        session.add(EPMapAttributes(map_id=map_model.id, attributes={}))
+        session.add(EPMapAttributes(map_id=map_model.id, attributes=getattr(epmap, "attributes", None) or {}))
         for row in measurement_points_to_models(
             getattr(epmap, "measurement_points", None) or [], map_model.id
         ):
