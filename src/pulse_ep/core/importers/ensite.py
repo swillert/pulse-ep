@@ -28,7 +28,7 @@ from pulse_ep.core.importers.base import register_importer
 from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan, WaveformPlan
 from pulse_ep.core.importers.source import ImportSource
 from pulse_ep.core.measurement import MeasurementPoint
-from pulse_ep.core.placed_point import ABLATION, LANDMARK, MARKER, PlacedPoint
+from pulse_ep.core.placed_point import ABLATION, ABLATION_PFA, LANDMARK, MARKER, PlacedPoint
 from pulse_ep.core.scalar_field import (
     ACTIVATION_TIME,
     CONTACT_FORCE,
@@ -457,7 +457,9 @@ def _element_df(data: bytes | str, header_prefix: str):
         if not line.strip() or line.startswith(header_prefix):
             break
         block.append(line)
-    df = pd.read_csv(io.StringIO("\n".join(block)))
+    # index_col=False: data rows often have a trailing empty field (one more
+    # column than the header) — without this pandas shifts everything by one.
+    df = pd.read_csv(io.StringIO("\n".join(block)), index_col=False)
     return df.dropna(how="all")
 
 
@@ -535,7 +537,49 @@ def parse_ensite_labels(data: bytes | str, name: str = "") -> list[PlacedPoint]:
     return parse_ensite_markers(data, point_type=LANDMARK)
 
 
-_PLACED_GLOBS = ("*AutoMark_Data.csv", "*Lesions.csv", "*Labels.csv")
+def parse_ensite_duo_automarks(data: bytes | str, name: str = "") -> list[PlacedPoint]:
+    """Parse ``Duo_AutoMarksSummaryList_VoXel.csv`` into PFA ablation points.
+
+    Position from AutoMark Location X/Y/Z; burst counts, force, therapy setting
+    and duration become open attributes.
+    """
+    # the specific data header (a "t_dws,<description>" legend line precedes it)
+    df = _element_df(data, "t_dws,t_secs,")
+    if df is None:
+        return []
+    xc, yc, zc = "AutoMark Location X", "AutoMark Location Y", "AutoMark Location Z"
+    if xc not in df.columns:
+        return []
+    attr_cols = (
+        ("Actual Burst Count", "actual_burst_count"),
+        ("Expected Burst Count", "expected_burst_count"),
+        ("Average Force", "avg_force"),
+        ("Max Force", "max_force"),
+        ("Therapy Setting", "therapy_setting"),
+        ("Duration", "duration"),
+    )
+    points: list[PlacedPoint] = []
+    for _, r in df.iterrows():
+        if pd.isna(r[xc]):
+            continue
+        attrs = {key: r[c] for c, key in attr_cols if c in df.columns and pd.notna(r[c])}
+        points.append(
+            PlacedPoint(
+                type=ABLATION_PFA,
+                position=np.array([r[xc], r[yc], r[zc]], dtype=float),
+                source_id=str(r["ID"]) if "ID" in df.columns else None,
+                attributes=attrs,
+            )
+        )
+    return points
+
+
+_PLACED_GLOBS = (
+    "*AutoMark_Data.csv",
+    "*Duo_AutoMarksSummaryList*.csv",
+    "*Lesions.csv",
+    "*Labels.csv",
+)
 
 
 def _parse_placed_points(source: ImportSource, files: list[str]) -> list[PlacedPoint]:
@@ -544,7 +588,9 @@ def _parse_placed_points(source: ImportSource, files: list[str]) -> list[PlacedP
     for f in files:
         base = Path(f).name.lower()
         data = source.open(f).read()
-        if "automark_data" in base:
+        if "duo_automark" in base:
+            points += parse_ensite_duo_automarks(data, f)
+        elif "automark_data" in base:
             points += parse_ensite_automarks(data, f)
         elif "lesions" in base:
             points += parse_ensite_markers(data)
