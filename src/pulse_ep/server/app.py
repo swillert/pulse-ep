@@ -52,6 +52,11 @@ from pulse_ep.server.import_api import import_api  # noqa: E402
 
 app.register_blueprint(import_api)
 
+# Map comparison REST API (delta field between two maps).
+from pulse_ep.server.compare_api import compare_api  # noqa: E402
+
+app.register_blueprint(compare_api)
+
 
 @app.route("/")
 def index():
