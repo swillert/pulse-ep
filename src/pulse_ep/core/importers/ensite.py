@@ -689,7 +689,12 @@ _POINTS_GLOB = "*Map_*.csv"
 # and the numbered ``difNNN.xml`` bundles that carry CT-segmentation volumes
 # (endocardium, wall-thickness shells, channels, fat infiltration).
 _ANATOMY_GLOBS = ("*Model_Groups*.xml", "*dif[0-9][0-9][0-9].xml")
-_WAVEFORM_GLOBS = ("*Waveforms*.csv", "*ECG*.csv")
+# Two naming schemes turn up in the wild for the same thing: one export
+# writes ``ECG_Waveforms_Raw.csv`` / ``EP_Catheter_Bipolar_Waveforms_*.csv``,
+# another writes ``Wave_rov.csv`` / ``Wave_uni_distal.csv``. Matching only the
+# first reported "0 waveform files" for an export that was nothing but
+# waveforms.
+_WAVEFORM_GLOBS = ("*Waveforms*.csv", "*ECG*.csv", "*Wave_*.csv")
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
 
 
@@ -808,6 +813,7 @@ class EnsiteImporter:
         )
         prov = _read_provenance(source)
         placed_files = _list_any(source, _PLACED_GLOBS)
+        anatomy_files = _list_any(source, _ANATOMY_GLOBS)
         study = StudyPlan(
             study_name=prov.get("study_guid") or "ensite-study",
             vendor="ensite",
@@ -815,9 +821,24 @@ class EnsiteImporter:
             maps=maps,
             waveforms=waveforms,
             placed_point_files=placed_files,
-            anatomy_files=_list_any(source, _ANATOMY_GLOBS),
+            anatomy_files=anatomy_files,
         )
-        return ImportPlan(studies=[study])
+        issues: list[str] = []
+        if not maps and not anatomy_files:
+            # A partial export — point tables and waveforms without a single
+            # mesh — used to import as an empty study and report success. Say
+            # what is missing instead, so nobody concludes the data is in.
+            have = []
+            if wf_files:
+                have.append(f"{len(wf_files)} waveform files")
+            if placed_files:
+                have.append(f"{len(placed_files)} placed-point files")
+            found = ", ".join(have) or "no recognised data"
+            issues.append(
+                "no geometry in this export (no DIF model, no anatomy) — "
+                f"nothing can be imported as a map; found {found}"
+            )
+        return ImportPlan(studies=[study], issues=issues)
 
     def commit(self, plan: ImportPlan, source: ImportSource) -> list[Study]:
         studies: list[Study] = []

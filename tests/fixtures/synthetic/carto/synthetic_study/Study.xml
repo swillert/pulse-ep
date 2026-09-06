@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <Study name="synthetic-study">
   <Maps>
-    <Map Name="1-Synthetic" FileNames="1-Synthetic.mesh">
+    <Map Name="1-1-1-Synthetic Left Atrium" FileNames="1-1-1-Synthetic Left Atrium.mesh">
       <CartoPoints Count="64">
         <Point Id="1000" Position3D="-1.46007 7.34027 -33.39487"/>
         <Point Id="1001" Position3D="-0.00000 -5.03246 34.28355"/>

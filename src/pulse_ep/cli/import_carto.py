@@ -14,6 +14,7 @@ Typical usage
 Incremental import from a directory of studies::
 
     pulse-ep-import-carto --input /data/cartoexports
+    pulse-ep-import-carto --input /data/export.zip
 
 Dry-run (discover files, do not write to DB)::
 
@@ -49,6 +50,7 @@ from pulse_ep.core.importers.carto import (
     carto_points_to_measurements,
     register_carto_scalars,
 )
+from pulse_ep.core.importers.source import source_for
 from pulse_ep.core.point_importer import import_map_points
 
 logging.basicConfig(
@@ -332,8 +334,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--input",
         "-i",
         required=True,
-        metavar="DIR",
-        help="Root directory containing CARTO study XML files.",
+        metavar="PATH",
+        help="CARTO export: a directory tree, or a ZIP/7-Zip archive of one.",
     )
     p.add_argument(
         "--pattern",
@@ -379,8 +381,14 @@ def main(argv: list[str] | None = None) -> int:
         log.setLevel(logging.WARNING)
 
     try:
+        # An archive is a perfectly ordinary way to hand over an export — the
+        # EnSiteX command has always taken one, and CARTO exports arrive as
+        # archives just as often. ImportSource decides what the file actually
+        # is by its content signature, which matters here: real exports turn
+        # up as 7-Zip archives carrying a .zip extension.
+        root = source_for(args.input).materialize()
         files = discover_carto_exports(
-            args.input,
+            root,
             pattern=args.pattern,
             recursive=not args.no_recursive,
         )

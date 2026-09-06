@@ -21,12 +21,25 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 from pathlib import Path
 
 import numpy as np
 from lxml import etree
 
 from pulse_ep.core.importers.source import source_for
+
+
+def _fresh(path: Path) -> Path:
+    """An empty vendor directory, leaving everything beside it alone.
+
+    Only the vendor subtree is cleared. Wiping the parent instead once took
+    the fixture README with it — before it had ever been committed.
+    """
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir(parents=True)
+    return path
 
 
 def synthetic_mesh(resolution: int = 32):
@@ -119,8 +132,7 @@ def build_ensite(real_zip: str, out_dir: Path) -> None:
     if sig is not None:
         sig.text = ""
 
-    out = out_dir / "ensite" / "synthetic_study"
-    out.mkdir(parents=True, exist_ok=True)
+    out = _fresh(out_dir / "ensite" / "synthetic_study")
     (out / "Contact_Mapping_Model.xml").write_bytes(
         etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=False)
     )
@@ -189,7 +201,10 @@ def build_carto(real_dir: str, out_dir: Path) -> None:
     order, and a hand-written approximation shifted the reader by one row.
     """
     real = Path(real_dir)
-    MAP = "1-Synthetic"  # noqa: N806
+    # Real CARTO map names carry spaces and dash-separated indices
+    # ("1-1-1-ReLA PaceMap anterior"). A fixture named "1-Synthetic" would
+    # never exercise a path with a space in it, which is every real export.
+    MAP = "1-1-1-Synthetic Left Atrium"  # noqa: N806
     real_lines = next(real.glob("*.mesh")).read_text(errors="ignore").splitlines()
     verts, tris, volts, lat = synthetic_mesh()
     normals = verts / np.linalg.norm(verts, axis=1, keepdims=True)
@@ -239,8 +254,7 @@ def build_carto(real_dir: str, out_dir: Path) -> None:
         vals = [(-10000.0 if c is None else float(c[i])) for c in cols]
         body.append(f"{i:8d} = " + " ".join(f"{v:13.4f}" for v in vals))
 
-    out = out_dir / "carto" / "synthetic_study"
-    out.mkdir(parents=True, exist_ok=True)
+    out = _fresh(out_dir / "carto" / "synthetic_study")
     (out / f"{MAP}.mesh").write_text("\n".join(head + body) + "\n")
 
     # ── Punkte: Points_Export.xml + je ein Point_Export.xml + Elektrodendatei ──
