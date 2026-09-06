@@ -6,7 +6,19 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **The cross-language examples worked for CARTO only.** ParaView, R, MATLAB
+  and the Jupyter notebook all defaulted to `scalar_name = "act"` — a
+  CARTO-only name that every EnSiteX map rejects, so the ParaView exporter
+  failed with `Unsupported scalar_name: act` on exactly the vendor 0.2.0 was
+  released for. They now omit the name and take the map's own primary
+  quantity.
+
+### Added
+
+- `/get_mesh_data` echoes the `scalar_name` it used, so a client that omits
+  the parameter can tell what it received.
 
 ## [0.2.1] — 2026-09-06
 

@@ -23,9 +23,16 @@ external packages cannot be relied on.
 
 import json
 import os
-import ssl
 import urllib.error
 import urllib.request
+
+# ParaView ships a Python built without _ssl (6.1.1 among them), so importing
+# ssl unconditionally makes this script unusable inside ParaView. It is only
+# needed to talk to an HTTPS server; over plain HTTP urllib needs no context.
+try:
+    import ssl
+except ImportError:  # pragma: no cover - depends on the ParaView build
+    ssl = None
 
 import vtk
 
@@ -33,7 +40,10 @@ import vtk
 # User-editable parameters
 # ---------------------------------------------------------------------
 MAP_ID = 1  # ID of the EPMap to load (see GET /list_epmaps_in_study/<id>)
-SCALAR_NAME = "act"  # "act", "voltage", "similarity_score", …
+# None asks the server for the map's own primary quantity, which differs
+# between vendors — a CARTO map has activation_time, an EnSiteX one
+# voltage_bipolar. List a map's fields with GET /epmaps/<id>/scalars.
+SCALAR_NAME = None  # or e.g. "voltage_bipolar", "activation_time"
 DISTANCE = 5.0  # interpolation radius around catheter points [mm]
 
 # ---------------------------------------------------------------------
@@ -53,8 +63,7 @@ def _http_post(path, payload):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    ctx = ssl.create_default_context()
-    with urllib.request.urlopen(req, context=ctx) as resp:
+    with urllib.request.urlopen(req, context=_ssl_context()) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -64,9 +73,25 @@ def _http_get(path, token):
         headers={"Authorization": "Bearer " + token},
         method="GET",
     )
-    ctx = ssl.create_default_context()
-    with urllib.request.urlopen(req, context=ctx) as resp:
+    with urllib.request.urlopen(req, context=_ssl_context()) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def _ssl_context():
+    """A TLS context for https:// URLs, or None when none is needed.
+
+    Returns None over plain HTTP, and raises a clear message rather than an
+    ImportError when a ParaView build without ssl is asked for HTTPS.
+    """
+    if not _BASE_URL.lower().startswith("https://"):
+        return None
+    if ssl is None:
+        raise RuntimeError(
+            "This ParaView build has no ssl module, so it cannot reach an "
+            "https:// pulse-ep server. Use an http:// URL, or run the script "
+            "with a Python that has ssl."
+        )
+    return ssl.create_default_context()
 
 
 def _login():
@@ -80,7 +105,7 @@ def _login():
     return resp["access_token"]
 
 
-def _build_polydata(mesh):
+def _build_polydata(mesh, scalar_name):
     """Translate the /get_mesh_data response into a vtkPolyData."""
     vertices = mesh["mesh_data"]["vertices"]
     faces = mesh["mesh_data"]["faces"]
@@ -109,9 +134,9 @@ def _build_polydata(mesh):
             arr.InsertNextValue(float("nan") if v is None else float(v))
         return arr
 
-    polydata.GetPointData().AddArray(_to_vtk_array(scalars, SCALAR_NAME))
-    polydata.GetPointData().AddArray(_to_vtk_array(normalized, SCALAR_NAME + "_normalized"))
-    polydata.GetPointData().SetActiveScalars(SCALAR_NAME)
+    polydata.GetPointData().AddArray(_to_vtk_array(scalars, scalar_name))
+    polydata.GetPointData().AddArray(_to_vtk_array(normalized, scalar_name + "_normalized"))
+    polydata.GetPointData().SetActiveScalars(scalar_name)
     return polydata
 
 
@@ -121,12 +146,14 @@ def main():
     except urllib.error.HTTPError as exc:
         raise RuntimeError(f"pulse-ep login failed: HTTP {exc.code}") from exc
 
-    path = (
-        "/get_mesh_data"
-        "?map_id=" + str(MAP_ID) + "&scalar_name=" + SCALAR_NAME + "&distance=" + str(DISTANCE)
-    )
+    # Omit scalar_name entirely when unset, so the server resolves the map's
+    # own primary quantity; the response tells us which one it used.
+    path = "/get_mesh_data?map_id=" + str(MAP_ID) + "&distance=" + str(DISTANCE)
+    if SCALAR_NAME:
+        path += "&scalar_name=" + SCALAR_NAME
     mesh = _http_get(path, token)
-    polydata = _build_polydata(mesh)
+    scalar_name = SCALAR_NAME or mesh.get("scalar_name") or "scalar"
+    polydata = _build_polydata(mesh, scalar_name)
 
     # In the ParaView Programmable Source context, "self" is a
     # vtkProgrammableSource instance whose output we have to populate.

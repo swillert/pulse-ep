@@ -40,7 +40,7 @@ if (nzchar(map_id_env)) {
 
 # --- 2. Fetch mesh -------------------------------------------------------
 mesh <- pe_get_mesh(token, map_id = map_id,
-                    scalar_name = "act", distance = 5.0)
+                    scalar_name = NULL, distance = 5.0)
 cat(sprintf("Mesh: %d vertices, %d triangles, scalar non-NA = %d/%d.\n",
             nrow(mesh$vertices), nrow(mesh$faces),
             sum(!is.na(mesh$scalars)), length(mesh$scalars)))

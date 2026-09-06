@@ -51,3 +51,19 @@ The `distance` parameter to `/get_mesh_data` controls how far around
 measurement points the per-vertex interpolation happens; ParaView
 receives `NaN` outside that radius (which ParaView colors as the
 background). Default is `5.0` mm.
+
+## Which quantity is plotted
+
+Leave `SCALAR_NAME` (or `--scalar-name`) unset and the map's own **primary
+quantity** is used — a CARTO map is usually about `activation_time`, an
+EnSiteX one about `voltage_bipolar`. The exporter prints the name it chose,
+and `/get_mesh_data` echoes it as `scalar_name`.
+
+To see what a map offers:
+
+```bash
+curl -s "$PULSE_EP_BASE_URL/epmaps/<id>/scalars" -H "Authorization: Bearer $TOKEN"
+```
+
+The old default was `act`, a CARTO-only name that no EnSiteX map answers to.
+It still resolves for CARTO studies, but no longer works as a default.

@@ -653,9 +653,11 @@ class EPMap:
                 f"Length mismatch: vertices ({len(vertices)}) vs scalars ({len(interpolated_scalar_data)})."
             )
 
-        # Build point data (measurement points projected onto mesh)
-        # If xyz is not available, return empty point data
-        if self.xyz is not None and len(self.xyz) > 0:
+        # Build point data (measurement points projected onto mesh). Read the
+        # positions through measurement_positions(), not the legacy xyz array:
+        # an EnSiteX map keeps them as MeasurementPoints and would otherwise
+        # report no acquisition points at all despite having thousands.
+        if self.measurement_positions() is not None:
             p_points = self.create_polydata_for_projected_points(
                 interpolated_scalar_data, scalar_name=scalar_name
             )
@@ -683,6 +685,10 @@ class EPMap:
             }
 
         return {
+            # Name the quantity that was actually used: callers may omit
+            # scalar_name to get the map's primary, and then have no other way
+            # to learn what they received.
+            "scalar_name": scalar_name,
             "mesh_data": {
                 "vertices": vertices,
                 "faces": faces,

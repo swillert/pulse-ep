@@ -327,7 +327,13 @@ def get_mesh_data():
         print(f"Error converting data to JSON-compatible format: {str(e)}")
         return jsonify({"error": "Error converting data to JSON-compatible format."}), 400
 
-    response_data = {"mesh_data": mesh_data, "point_data": point_data}
+    # Echo the quantity that was used, so a client that omitted scalar_name
+    # knows what it received.
+    response_data = {
+        "scalar_name": data.get("scalar_name"),
+        "mesh_data": mesh_data,
+        "point_data": point_data,
+    }
 
     # Convert to JSON string and handle NaN
     try:
