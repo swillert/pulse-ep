@@ -174,6 +174,29 @@ profile, volume and networking story.
 
 ## Testing your install
 
+### Without a database or a server
+
+The repository ships two synthetic vendor exports — one CARTO 3, one
+EnSite X — so the import path can be checked without patient data:
+
+```bash
+examples/verify.sh
+```
+
+It decodes both and prints mesh, scalar fields, measurement points and
+surface area for each. Both exports carry the *same* surface, so the two
+readers can be compared against one another.
+
+!!! note "What this establishes"
+
+    The file formats are read completely. It does **not** establish that a
+    field means what we call it — that the column named `voltage_bipolar`
+    really holds the bipolar voltage can only be shown against real vendor
+    exports, which are patient data and are not part of this repository.
+    See `tests/fixtures/synthetic/README.md`.
+
+### With the server running
+
 Once the server is up, this curl one-liner exercises the full
 authentication and data flow:
 

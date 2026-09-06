@@ -29,14 +29,37 @@ from lxml import etree
 from pulse_ep.core.importers.source import source_for
 
 
-def synthetic_mesh(resolution: int = 12):
-    """A small closed surface plus a smooth scalar field, in mm-like units."""
-    from pulse_ep.examples.demo_synthetic import gaussian_score_field, make_synthetic_atrium
+def synthetic_mesh(resolution: int = 32):
+    """A closed surface with a scar-like voltage field and a spreading LAT.
+
+    Not a Gaussian blob: a low-voltage region with a border zone on otherwise
+    healthy tissue, and an activation time that spreads from one earliest site.
+    The numbers are invented, but they occupy the ranges a real map does
+    (0.1-2.5 mV, tens of ms), so a figure drawn from this fixture shows what
+    the software does with a map rather than with a test pattern.
+    """
+    from pulse_ep.examples.demo_synthetic import make_synthetic_atrium
 
     vertices, triangles = make_synthetic_atrium(resolution=resolution)
-    scores, _ = gaussian_score_field(vertices, sigma_mm=6.0, noise_std=0.0)
-    voltage = 0.05 + scores / 100.0 * 3.0  # mV-like, strictly positive
-    return np.asarray(vertices, float), np.asarray(triangles, int), np.asarray(voltage, float)
+    vertices = np.asarray(vertices, float)
+    rng = np.random.default_rng(20260906)
+
+    # scar centred on one flank, with a graded border zone
+    scar = vertices[int(np.argmax(vertices[:, 0]))]
+    d_scar = np.linalg.norm(vertices - scar, axis=1)
+    healthy, dense_scar = 2.4, 0.12
+    voltage = dense_scar + (healthy - dense_scar) / (1.0 + np.exp(-(d_scar - 16.0) / 4.0))
+    voltage += rng.normal(0.0, 0.05, size=voltage.shape)
+    voltage = np.clip(voltage, 0.05, None)
+
+    # activation spreading from the opposite pole at ~0.7 mm/ms, slowed in scar
+    early = vertices[int(np.argmin(vertices[:, 0]))]
+    d_early = np.linalg.norm(vertices - early, axis=1)
+    slowing = 1.0 + 1.4 * np.exp(-((d_scar / 14.0) ** 2))
+    lat = d_early / 0.7 * slowing
+    lat = lat - lat.min() + rng.normal(0.0, 0.8, size=lat.shape)
+
+    return vertices, np.asarray(triangles, int), voltage, lat
 
 
 def _numbers(el, values, per_line: int | None = None) -> None:
@@ -55,7 +78,7 @@ def build_ensite(real_zip: str, out_dir: Path) -> None:
     dif_name = sorted(src.list("*Contact_Mapping_Model*.xml"))[0]
     root = etree.fromstring(src.open(dif_name).read())
 
-    verts, tris, volts = synthetic_mesh()
+    verts, tris, volts, _lat = synthetic_mesh()
     n_v, n_t = len(verts), len(tris)
 
     for comment in root.xpath("//comment()"):
@@ -168,8 +191,7 @@ def build_carto(real_dir: str, out_dir: Path) -> None:
     real = Path(real_dir)
     MAP = "1-Synthetic"  # noqa: N806
     real_lines = next(real.glob("*.mesh")).read_text(errors="ignore").splitlines()
-    verts, tris, volts = synthetic_mesh()
-    lat = (volts - volts.mean()) * 40.0  # ms-like, signed
+    verts, tris, volts, lat = synthetic_mesh()
     normals = verts / np.linalg.norm(verts, axis=1, keepdims=True)
 
     def section(name):
