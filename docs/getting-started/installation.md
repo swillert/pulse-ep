@@ -8,7 +8,7 @@ matches your role.
 
 | Component        | Minimum | Notes                                                   |
 | ---------------- | ------- | ------------------------------------------------------- |
-| Python           | 3.10    | Tested on CPython 3.10 / 3.11 / 3.12.                   |
+| Python           | 3.10    | Tested on CPython 3.10, 3.11, 3.12, 3.13 and 3.14.      |
 | PostgreSQL       | 14      | Optional — required only to import or serve real study data. Tested on 16. |
 | Docker           | 24+     | Optional — recommended for getting a database running quickly. |
 

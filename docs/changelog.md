@@ -6,7 +6,19 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A fresh install failed on Python 3.13 and 3.14.** Five dependencies were
+  capped below their current major (`pyarrow<21`, `pillow<12`, `lxml<6`,
+  `trimesh<5`, `pandas<3`), and newer Pythons only get wheels for recent
+  releases — so pip fell back to building pyarrow from source and failed,
+  while `requires-python` still advertised `>=3.10` with no upper bound. The
+  caps now admit the current major of each dependency.
+
+### Changed
+
+- The CI matrix covers Python 3.10 through 3.14 (was 3.10–3.12), so the
+  supported range is actually tested.
 
 ## [0.2.0] — 2026-09-06
 

@@ -131,7 +131,7 @@ stays in the vendor importer, not the lexicon.
 | Typing | `mypy` | dev-extra, gradual |
 | Tests | `pytest` (+ `pytest-cov`) | ✓ |
 | Pre-commit | `pre-commit` | ✓ |
-| CI | GitLab CI matrix 3.10 / 3.11 / 3.12 | ✓ |
+| CI | GitLab CI matrix 3.10 … 3.14 | ✓ |
 | Citation | `CITATION.cff` | ✓ |
 | License | MIT (`LICENSE`) | ✓ |
 | Docs | `mkdocs-material` + `mkdocstrings` | ✓ (GitLab Pages) |

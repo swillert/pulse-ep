@@ -2,7 +2,7 @@
 #
 # Stages:
 #   lint  -> ruff format + check
-#   test  -> Python matrix 3.10 / 3.11 / 3.12, pytest
+#   test  -> Python matrix 3.10 … 3.14, pytest
 #   pages -> mkdocs-material site, deployed to GitLab Pages
 #
 # The test job installs pulse-ep with the [server,figures,sevenzip,dev] extras
@@ -65,6 +65,14 @@ test:py3.11:
 
 test:py3.12:
   image: python:3.12
+  <<: *test_template
+
+test:py3.13:
+  image: python:3.13
+  <<: *test_template
+
+test:py3.14:
+  image: python:3.14
   <<: *test_template
 
 # ---------------------------------------------------------------------
