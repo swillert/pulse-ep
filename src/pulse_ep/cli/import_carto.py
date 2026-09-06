@@ -43,8 +43,12 @@ import sys
 import time
 
 from pulse_ep.core import mesh_proc, xml_proc
+from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.importer import discover_carto_exports, study_name_for
-from pulse_ep.core.importers.carto import carto_points_to_measurements
+from pulse_ep.core.importers.carto import (
+    carto_points_to_measurements,
+    register_carto_scalars,
+)
 from pulse_ep.core.point_importer import import_map_points
 
 logging.basicConfig(
@@ -200,6 +204,13 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
                 map_element = xml_proc.get_map_element(xml_tree, map_index)
                 xyz_from_xml = xml_proc.get_xyz(map_element)
 
+                # Decode CARTO's overloaded primary slot into vendor-neutral
+                # fields named by the quantity they hold. Without this the map
+                # reaches the database with act_bip only, so every client that
+                # asks what quantities a map carries sees none.
+                _neutral = EPMap(map_name=map_name, study_name=study_name)
+                register_carto_scalars(_neutral, act_bip)
+
                 epmap_model = EPMapModel(
                     map_name=map_name,
                     study_id=study_model.id,
@@ -213,6 +224,7 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
                     act_bip=act_bip.tolist(),
                     normals=normals.tolist(),
                     uni_imp_frc=(uni_imp_frc.tolist() if uni_imp_frc is not None else None),
+                    scalar_fields={name: f.to_dict() for name, f in _neutral.scalar_fields.items()},
                 )
                 session.add(epmap_model)
                 session.flush()

@@ -145,21 +145,37 @@ class EPMap:
             self.repair_and_simplify_mesh()
         return self.pv_mesh
 
+    def measurement_positions(self) -> np.ndarray | None:
+        """Where this map was actually measured, or ``None`` if nowhere.
+
+        Prefers the legacy CARTO ``xyz`` array, then falls back to the
+        vendor-neutral :class:`MeasurementPoint` positions. EnSiteX maps only
+        ever have the latter, so anything reading ``xyz`` directly rejected
+        every one of them.
+        """
+        if self.xyz is not None and len(self.xyz):
+            return np.asarray(self.xyz, dtype=float)
+        if self.measurement_points:
+            return np.array([p.position for p in self.measurement_points], dtype=float)
+        return None
+
     def project_measurements_to_mesh(self) -> tuple[np.ndarray, np.ndarray]:
         """
-        Project the measurements defined in self.xyz to the nearest vertices on the pv_mesh.
+        Project this map's measurement positions to the nearest mesh vertices.
 
         :return: Array with x, y, z coordinates of the nearest vertices.
         """
-        # Ensure self.xyz is not None
-        if self.xyz is None:
-            raise ValueError("self.xyz must be defined.")
+        positions = self.measurement_positions()
+        if positions is None:
+            raise ValueError(
+                "This map has no measurement positions (neither xyz nor measurement_points)."
+            )
 
         # Creating KDTree for the mesh points
         kdtree_mesh = cKDTree(self.pv_mesh.points)
 
         # Query the KDTree for closest mesh points
-        _, closest_points = kdtree_mesh.query(self.xyz)
+        _, closest_points = kdtree_mesh.query(positions)
 
         # Fetch and return x, y, z coordinates of the nearest vertices
         projected_vertices_coords = self.pv_mesh.points[closest_points]
@@ -259,6 +275,21 @@ class EPMap:
         # Generate pv_mesh if not already generated
         if self.pv_mesh is None:
             self.generate_anatomical_pv_mesh()
+
+        # The distance threshold is a confidence mask: only show scalar values
+        # near where the map was actually measured. A map with no measurement
+        # positions at all — an EnSiteX mesh carrying only per-vertex fields —
+        # has nothing to mask against, so its values pass through unmasked
+        # rather than the whole map failing to render.
+        if self.measurement_positions() is None:
+            # Generating the mesh simplifies it and resamples the registered
+            # fields onto the new vertices, so a scalar array fetched before
+            # that no longer matches. Re-resolve it rather than trusting the
+            # caller's ordering.
+            if len(scalar) != self.pv_mesh.n_points and scalar_name in self.scalar_fields:
+                scalar = self.scalar_fields[scalar_name].values
+            self.set_scalars(scalar_name, scalar)
+            return self.pv_mesh, scalar
 
         # Project measurements onto mesh
         closest_points, projected_vertices_coords = self.project_measurements_to_mesh()

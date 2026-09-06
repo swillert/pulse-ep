@@ -244,3 +244,42 @@ def test_carto_and_ensite_answer_to_the_same_name() -> None:
     for m in (carto, ensite):
         assert m.get_scalar("voltage_bipolar") is not None
         assert m.field_of_kind(VOLTAGE_BIPOLAR).kind == VOLTAGE_BIPOLAR
+
+
+# --- rendering a map that has no legacy xyz array --------------------------
+
+
+def test_measurement_positions_fall_back_to_measurement_points() -> None:
+    """EnSiteX maps never populate the legacy CARTO ``xyz`` array, so anything
+    reading it directly rejected every one of them."""
+    from pulse_ep.core.measurement import MeasurementPoint
+
+    m = EPMap(map_name="m", study_name="s")
+    assert m.measurement_positions() is None
+
+    m.measurement_points = [
+        MeasurementPoint(position=np.array([1.0, 2.0, 3.0])),
+        MeasurementPoint(position=np.array([4.0, 5.0, 6.0])),
+    ]
+    np.testing.assert_allclose(m.measurement_positions(), [[1, 2, 3], [4, 5, 6]])
+
+    m.xyz = np.array([[9.0, 9.0, 9.0]])
+    np.testing.assert_allclose(m.measurement_positions(), [[9, 9, 9]])  # legacy wins
+
+
+def test_a_map_without_measurements_still_renders() -> None:
+    """A DIF mesh carrying only per-vertex fields has nothing to mask against;
+    its values must pass through rather than the whole map failing to render."""
+    vertices, triangles = make_synthetic_atrium(resolution=16)
+    scores, _ = gaussian_score_field(vertices, sigma_mm=6.0, noise_std=0.0)
+    epmap = EPMap(map_name="geometry-only", study_name="s", vertices=vertices, triangles=triangles)
+    epmap.register_scalar("voltage_bipolar", 0.05 + scores / 100.0, kind=VOLTAGE_BIPOLAR)
+
+    assert epmap.measurement_positions() is None  # no xyz, no measurement points
+    mesh, values = epmap.interpolate_scalar_values(
+        epmap.get_scalar("voltage_bipolar"),
+        scalar_name="voltage_bipolar",
+        distance_threshold=5.0,
+    )
+    assert mesh.n_points == len(values)
+    assert np.isfinite(values).all()
