@@ -89,7 +89,11 @@ pe_areas_per_interval <- function(token, map_id, intervals,
     req_method("POST") |>
     req_headers(Authorization = paste("Bearer", token),
                 "Content-Type" = "application/json") |>
-    req_body_raw(toJSON(payload, auto_unbox = TRUE)) |>
+    # digits = NA keeps full double precision. jsonlite rounds to 4 decimals
+    # by default, which silently altered every interval boundary sent here —
+    # enough to move a computed area by ~0.01 cm^2 against the same request
+    # from MATLAB.
+    req_body_raw(toJSON(payload, auto_unbox = TRUE, digits = NA)) |>
     req_perform()
   data <- resp_body_json(resp, simplifyVector = TRUE)
   as.numeric(unlist(data$areas))

@@ -154,6 +154,23 @@ def list_epmaps_in_study(study_id):
     return jsonify(epmaps_serializable)
 
 
+def _scalar_range(values) -> dict:
+    """``{"min": …, "max": …, "n_valid": …}`` for a stored scalar field.
+
+    Exports mark absent measurements as NaN, so the range must ignore them;
+    a field that is entirely NaN reports nulls rather than failing.
+    """
+    import numpy as np
+
+    if values is None:
+        return {"min": None, "max": None, "n_valid": 0}
+    arr = np.asarray(values, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return {"min": None, "max": None, "n_valid": 0}
+    return {"min": float(finite.min()), "max": float(finite.max()), "n_valid": int(finite.size)}
+
+
 @app.route("/epmaps/<int:map_id>/scalars", methods=["GET"])
 @jwt_required()
 def list_map_scalars(map_id):
@@ -181,6 +198,13 @@ def list_map_scalars(map_id):
             "kind": f.get("kind"),
             "unit": f.get("unit") or default_unit(f.get("kind", "")),
             "source": f.get("source"),
+            # The range over the stored field, so a client can choose
+            # sensible intervals or colour limits. Without it the example
+            # clients had to assume one, and the pace-mapping default
+            # (50-100 %) reported zero area for every voltage map in mV.
+            # Note this is the stored mesh; /get_mesh_data serves a repaired,
+            # smaller one, so its range can be marginally narrower.
+            **_scalar_range(f.get("values")),
         }
         for name, f in fields.items()
     ]
