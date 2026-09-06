@@ -6,25 +6,12 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-
-- **7-Zip import support.** CARTO exports are frequently 7-Zip archives named
-  `.zip`; the container is now detected by content signature, so such an
-  export imports without renaming. Needs the optional `pulse-ep[sevenzip]`
-  extra.
-- **VisiTag ablation sites** are read into study-level placed points, with RF
-  parameters (duration, force, FTI, impedance drop, RF/ablation index).
-  **The parser is unverified** — no real VisiTag export was available to test
-  against — so it matches columns by name rather than position and yields no
-  points at all when the columns are unrecognisable. The import plan flags any
-  VisiTag file with that warning.
-
-### Fixed
-
-- CARTO `prepare` reported every per-point XML in an export as a failed study
-  catalogue, drowning the plan in ~2000 spurious issues on a real export.
+Nothing yet.
 
 ## [0.2.0] — 2026-09-06
+
+First multivendor release: CARTO 3 and EnSiteX are peers, storing values
+under one vendor-neutral vocabulary so a single query spans both.
 
 ### Added
 
@@ -51,6 +38,23 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   clients no longer have to assume field names.
 - Alembic migrations, and the `PULSE_EP_DROP_DIR` /
   `PULSE_EP_WAVEFORM_STORE_DIR` settings.
+- **7-Zip import support.** CARTO exports are frequently 7-Zip archives
+  named `.zip`; the container is detected by content signature, so such an
+  export imports without renaming. Needs the optional `pulse-ep[sevenzip]`
+  extra.
+- **VisiTag ablation sites** are read into study-level placed points, with
+  RF parameters (duration, force, FTI, impedance drop, RF/ablation index).
+  **The parser is unverified** — no real VisiTag export was available to
+  test against — so it matches columns by name rather than position and
+  yields no points at all when the columns are unrecognisable. The import
+  plan flags any VisiTag file with that warning.
+- `docs/` — a full mkdocs-material documentation site, deployed via
+  GitLab Pages.
+- `ARCHITECTURE.md` — internal engineering documentation (module
+  layout, design decisions, quality gate).
+- Cross-language [examples](examples/index.md) for ParaView, R, MATLAB
+  and Jupyter — each computing the per-vertex scalar histogram and the
+  per-interval surface-area breakdown from the same REST payload.
 
 ### Changed
 
@@ -64,19 +68,29 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fields instead of a fixed ACT / VOL pair.
 - CARTO gained `prepare`/`commit`, vendor-neutral measurement points, and
   no longer fails when no map filter is supplied.
-
-- `docs/` — a full mkdocs-material documentation site, deployed via
-  GitLab Pages.
-- `ARCHITECTURE.md` — internal engineering documentation (module
-  layout, design decisions, quality gate).
-- Cross-language [examples](examples/index.md) for ParaView, R, MATLAB
-  and Jupyter — each computing the per-vertex scalar histogram and the
-  per-interval surface-area breakdown from the same REST payload.
-
-### Changed
-
 - `examples/` is now positioned as the cross-language reproducibility
   statement of the accompanying software paper.
+
+### Fixed
+
+- `CartoImporter.parse` raised unconditionally when no map filter was
+  given, so every registry- and queue-driven CARTO import failed.
+- The import queue crashed on CARTO bundles, because it called
+  `prepare`/`commit` — which only EnSiteX implements — without a fallback.
+- EnSiteX bi/uni map pairs were split by a case difference in the filename
+  and by an export typo (`-bpolar`), planning four map runs as six.
+- `difNNN.xml`, the largest file in an EnSiteX export, was ignored: it
+  holds the CT segmentation (endocardium, wall-thickness shells, channels,
+  fat infiltration).
+- Seven of eight EnSiteX DxL channels were dropped; all are read now.
+- EnSiteX `adjTime` was recorded as `activation_time` although it is the
+  annotation window offset, often constant across an entire export.
+  Activation time now comes from the `LAT` channel.
+- CARTO `prepare` reported every per-point XML in an export as a failed
+  study catalogue, producing ~2000 spurious issues on a real export.
+- The `ruff` version was specified three different ways, so CI
+  format-checked with a different formatter than contributors ran.
+- The data-model reference documented a schema that no longer existed.
 
 ### Removed
 
