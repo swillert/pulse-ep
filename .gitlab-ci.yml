@@ -76,6 +76,25 @@ test:py3.14:
   <<: *test_template
 
 # ---------------------------------------------------------------------
+# The verification script users are told to run
+# ---------------------------------------------------------------------
+#
+# `tests/test_synthetic_fixtures.py` already checks the fixtures in every
+# Python version of the matrix. This job checks the *script* from the README
+# instead — installed package, no repo checkout assumptions, no dev extras —
+# so a broken `examples/verify.sh` fails here rather than for a first-time
+# user following the quickstart. Deliberately a bare install with no extras:
+# reading an export must not require the server or figure dependencies.
+verify:fixtures:
+  stage: test
+  image: python:3.12
+  <<: *python_setup
+  script:
+    - apt-get update && apt-get install -y --no-install-recommends libgl1 libglu1-mesa libxrender1 libsm6 libxext6 libfontconfig1 libxkbcommon0
+    - pip install -e "."
+    - PYTHON=.venv/bin/python examples/verify.sh
+
+# ---------------------------------------------------------------------
 # Documentation site: mkdocs-material → GitLab Pages
 # ---------------------------------------------------------------------
 #

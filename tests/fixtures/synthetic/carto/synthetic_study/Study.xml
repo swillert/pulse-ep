@@ -1,0 +1,73 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Study name="synthetic-study">
+  <Maps>
+    <Map Name="1-Synthetic" FileNames="1-Synthetic.mesh">
+      <CartoPoints Count="64">
+        <Point Id="1000" Position3D="3.52166 6.09969 -33.58225"/>
+        <Point Id="1001" Position3D="-6.09969 -3.52166 -33.58225"/>
+        <Point Id="1002" Position3D="-12.37277 21.43026 4.98102"/>
+        <Point Id="1003" Position3D="-12.37277 21.43026 -4.98102"/>
+        <Point Id="1004" Position3D="-6.09969 -3.52166 33.58225"/>
+        <Point Id="1005" Position3D="18.89374 0.00000 22.92013"/>
+        <Point Id="1006" Position3D="-6.75801 -11.70522 -29.44387"/>
+        <Point Id="1007" Position3D="0.00000 22.74080 14.53953"/>
+        <Point Id="1008" Position3D="-0.00000 -18.89374 -22.92013"/>
+        <Point Id="1009" Position3D="7.04331 0.00000 -33.58225"/>
+        <Point Id="1010" Position3D="11.70522 6.75801 29.44387"/>
+        <Point Id="1011" Position3D="-3.52166 6.09969 33.58225"/>
+        <Point Id="1012" Position3D="-11.70522 -6.75801 -29.44387"/>
+        <Point Id="1013" Position3D="16.36246 9.44687 -22.92013"/>
+        <Point Id="1014" Position3D="-0.00000 -13.51602 -29.44387"/>
+        <Point Id="1015" Position3D="-22.74080 0.00000 14.53953"/>
+        <Point Id="1016" Position3D="-16.36246 -9.44687 22.92013"/>
+        <Point Id="1017" Position3D="-12.37277 -21.43026 -4.98102"/>
+        <Point Id="1018" Position3D="22.74080 0.00000 14.53953"/>
+        <Point Id="1019" Position3D="0.00000 0.00000 35.00000"/>
+        <Point Id="1020" Position3D="-16.36246 9.44687 -22.92013"/>
+        <Point Id="1021" Position3D="-18.89374 0.00000 22.92013"/>
+        <Point Id="1022" Position3D="21.43026 -12.37277 -4.98102"/>
+        <Point Id="1023" Position3D="-11.70522 -6.75801 29.44387"/>
+        <Point Id="1024" Position3D="0.00000 7.04331 -33.58225"/>
+        <Point Id="1025" Position3D="3.52166 6.09969 33.58225"/>
+        <Point Id="1026" Position3D="0.00000 24.74554 4.98102"/>
+        <Point Id="1027" Position3D="19.69411 -11.37040 -14.53953"/>
+        <Point Id="1028" Position3D="-3.52166 6.09969 -33.58225"/>
+        <Point Id="1029" Position3D="11.70522 -6.75801 -29.44387"/>
+        <Point Id="1030" Position3D="9.44687 -16.36246 -22.92013"/>
+        <Point Id="1031" Position3D="-0.00000 -22.74080 -14.53953"/>
+        <Point Id="1032" Position3D="21.43026 -12.37277 4.98102"/>
+        <Point Id="1033" Position3D="-18.89374 0.00000 -22.92013"/>
+        <Point Id="1034" Position3D="11.70522 6.75801 -29.44387"/>
+        <Point Id="1035" Position3D="-13.51602 0.00000 -29.44387"/>
+        <Point Id="1036" Position3D="-9.44687 16.36246 22.92013"/>
+        <Point Id="1037" Position3D="13.51602 0.00000 29.44387"/>
+        <Point Id="1038" Position3D="19.69411 11.37040 -14.53953"/>
+        <Point Id="1039" Position3D="-19.69411 -11.37040 -14.53953"/>
+        <Point Id="1040" Position3D="6.75801 11.70522 -29.44387"/>
+        <Point Id="1041" Position3D="-6.75801 11.70522 29.44387"/>
+        <Point Id="1042" Position3D="-21.43026 -12.37277 -4.98102"/>
+        <Point Id="1043" Position3D="-7.04331 0.00000 33.58225"/>
+        <Point Id="1044" Position3D="-6.75801 -11.70522 29.44387"/>
+        <Point Id="1045" Position3D="-21.43026 12.37277 4.98102"/>
+        <Point Id="1046" Position3D="-19.69411 -11.37040 14.53953"/>
+        <Point Id="1047" Position3D="-21.43026 -12.37277 4.98102"/>
+        <Point Id="1048" Position3D="-9.44687 16.36246 -22.92013"/>
+        <Point Id="1049" Position3D="6.09969 -3.52166 33.58225"/>
+        <Point Id="1050" Position3D="12.37277 21.43026 4.98102"/>
+        <Point Id="1051" Position3D="24.74554 0.00000 -4.98102"/>
+        <Point Id="1052" Position3D="3.52166 -6.09969 -33.58225"/>
+        <Point Id="1053" Position3D="6.75801 -11.70522 29.44387"/>
+        <Point Id="1054" Position3D="12.37277 21.43026 -4.98102"/>
+        <Point Id="1055" Position3D="0.00000 13.51602 29.44387"/>
+        <Point Id="1056" Position3D="-19.69411 11.37040 14.53953"/>
+        <Point Id="1057" Position3D="0.00000 18.89374 -22.92013"/>
+        <Point Id="1058" Position3D="-6.09969 3.52166 -33.58225"/>
+        <Point Id="1059" Position3D="-11.70522 6.75801 -29.44387"/>
+        <Point Id="1060" Position3D="0.00000 24.74554 -4.98102"/>
+        <Point Id="1061" Position3D="19.69411 -11.37040 14.53953"/>
+        <Point Id="1062" Position3D="-16.36246 9.44687 22.92013"/>
+        <Point Id="1063" Position3D="11.37040 19.69411 14.53953"/>
+      </CartoPoints>
+    </Map>
+  </Maps>
+</Study>

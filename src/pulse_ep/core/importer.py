@@ -10,7 +10,7 @@ import numpy as np
 from pulse_ep.core import mesh_proc as mesh_proc
 from pulse_ep.core import xml_proc as xml_proc
 from pulse_ep.core.epmap import EPMap
-from pulse_ep.core.importers.carto import populate_carto_mesh
+from pulse_ep.core.importers.carto import _is_study_catalogue, populate_carto_mesh
 from pulse_ep.core.study import Study
 
 
@@ -98,6 +98,24 @@ def import_studies(file_path, map_filter=None):
         return studies
     else:
         raise ValueError("Invalid file_path. Expected a string or a list of strings.")
+
+
+def fill_positions(point_dicts: list[dict], xyz) -> None:
+    """Give each point the coordinates the study catalogue holds for it.
+
+    ``import_map_points`` reads the per-point exports, which carry no
+    coordinates; ``xyz`` is the catalogue's ``Position3D`` list, in the same
+    order. Points already carrying a position, and points beyond the end of
+    ``xyz``, are left alone.
+    """
+    if xyz is None:
+        return
+    for i, pd in enumerate(point_dicts):
+        if pd.get("position_x") is not None or i >= len(xyz):
+            continue
+        pd["position_x"] = float(xyz[i, 0])
+        pd["position_y"] = float(xyz[i, 1])
+        pd["position_z"] = float(xyz[i, 2])
 
 
 def import_carto(filename: str, filter=None):
@@ -188,6 +206,13 @@ def import_carto(filename: str, filter=None):
                 from pulse_ep.core.point_importer import import_map_points
 
                 point_dicts, _ = import_map_points(path, epmap.map_name)
+                # A point's coordinates live in the study catalogue
+                # (``CartoPoints/Point/@Position3D``), not in its own export,
+                # so backfill them from ``epmap.xyz`` — without this every
+                # point lacks a position and the conversion drops it, which is
+                # how this path silently yielded no measurement points at all
+                # while the CLI, which already backfilled, yielded thousands.
+                fill_positions(point_dicts, epmap.xyz)
                 epmap.measurement_points = carto_points_to_measurements(point_dicts)
             except Exception as point_conv_error:
                 print(f"Warning: no vendor-neutral points for {epmap.map_name}: {point_conv_error}")
@@ -248,7 +273,12 @@ def discover_carto_exports(
             continue
         if p.name.startswith("._"):
             continue
-        sp = str(p)
+        # A CARTO export holds one study catalogue and hundreds of per-point
+        # XML exports. Without this, every point export was handed to
+        # ``import_carto``, which printed a parse error and returned None —
+        # a thousand-line wall of noise around the real result.
+        if not _is_study_catalogue(sp := str(p)):
+            continue
         if sp in seen:
             continue
         seen.add(sp)
