@@ -195,7 +195,7 @@ export default class DataManagementController {
         <td class="id-col">${m.id}</td>
         <td>${m.study_name}</td>
         <td>${m.map_name}</td>
-        <td>${m.number_of_points ?? '—'}</td>`);
+        <td>${m.number_of_points ?? m.measurement_points ?? '—'}</td>`);
 
       attrs.forEach(attr => {
         const td   = document.createElement('td');
