@@ -181,3 +181,61 @@ pulse-ep-extract-meshes --output /tmp/extracted/
   writes to.
 - [CLI reference: `pulse-ep-import-carto`](../reference/cli.md#pulse-ep-import-carto)
   — full flag listing.
+
+## Archive format
+
+CARTO exports are frequently **7-Zip archives named `.zip`**. pulse-ep detects
+the container by its content signature rather than its suffix, so such an
+export imports without renaming — but reading it needs the optional `py7zr`
+package:
+
+```bash
+pip install "pulse-ep[sevenzip]"
+```
+
+Without it, a 7-Zip export raises a message naming the missing package rather
+than failing obscurely.
+
+## Ablation sites (VisiTag)
+
+!!! warning "Unverified — confirm before relying on it"
+
+    The VisiTag parser has **never been tested against a real VisiTag
+    export**; no sample was available when it was written. It is built from
+    the documented layout and is deliberately defensive, but the ablation
+    sites it produces must be checked against the mapping system before they
+    are used for anything.
+
+VisiTag is a **separately selected** part of a CARTO export. A bundle exported
+without it contains no ablation sites at all — not an empty set, but nothing
+to read. If your export has none, re-export from CARTO with VisiTag enabled.
+
+When present, sites are read from the VisiTag `Sites` table into
+study-level placed points of type `ablation`, carrying whatever RF parameters
+the table holds:
+
+| Column | Attribute |
+| ------ | --------- |
+| `X`, `Y`, `Z` | position |
+| `DurationTime` | `duration_s` |
+| `AverageForce` | `average_force_g` |
+| `FTI` | `force_time_integral` |
+| `MaxTemperature` / `MaxPower` | `max_temperature_c` / `max_power_w` |
+| `BaseImpedance` / `ImpedanceDrop` | `base_impedance_ohm` / `impedance_drop_ohm` |
+| `RFIndex` / `AblationIndex` / `LesionIndex` | `rf_index` / `ablation_index` / `lesion_index` |
+
+Columns are matched **by name**, case- and separator-insensitively — never by
+position, since VisiTag's column set varies between CARTO versions. A column
+that is not listed is still kept, under its own name. A table with no
+recognisable `X`/`Y`/`Z` yields **no points at all** rather than guesses, and
+the import plan flags the file so a reviewer sees the warning.
+
+## Tags in the study XML
+
+The study catalogue contains a `TagsTable` — the *definitions* of the tag
+types available in that study (`ABL`/Ablation, `HIS`/His, `PS`/Pacing Site,
+…), with ids and colours. These are a palette, not placements: actual tag
+placements appear inside a point's `<Tags>` element, which is empty in an
+untagged study. `Anatomical_Tag` entries are region outlines
+(`Perimiter`/`LINE_LOOP`), a different concept from placed points. Neither is
+imported yet.

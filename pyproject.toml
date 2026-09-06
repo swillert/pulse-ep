@@ -69,6 +69,9 @@ server = [
     "bcrypt>=4.2,<5",
     "gunicorn>=23.0,<24",
 ]
+sevenzip = [
+    "py7zr>=0.21,<2",   # CARTO exports are often 7-Zip archives named .zip
+]
 figures = [
     "reportlab>=4.2,<5",
     "openpyxl>=3.1,<4",
@@ -87,7 +90,7 @@ docs = [
     "pymdown-extensions>=10.9,<11",
 ]
 all = [
-    "pulse-ep[server,figures,dev,docs]",
+    "pulse-ep[server,figures,sevenzip,dev,docs]",
 ]
 
 [project.urls]

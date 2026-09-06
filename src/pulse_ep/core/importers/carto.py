@@ -18,6 +18,7 @@ from pulse_ep.core.importers.base import register_importer
 from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan
 from pulse_ep.core.importers.source import ImportSource
 from pulse_ep.core.measurement import MeasurementPoint
+from pulse_ep.core.placed_point import ABLATION, PlacedPoint
 from pulse_ep.core.scalar_field import (
     ACTIVATION_TIME,
     PACEMAP_SCORE,
@@ -134,6 +135,144 @@ def carto_points_to_measurements(point_dicts: list[dict]) -> list[MeasurementPoi
     return points
 
 
+def _is_study_catalogue(path: str) -> bool:
+    """True if this XML is a study catalogue (``<Study>``), not a point export."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(2048)
+    except OSError:
+        return False
+    return b"<Study" in head
+
+
+# --- VisiTag ablation sites (UNVERIFIED — see the warning below) ------------
+
+#: Column name -> the ``PlacedPoint.attributes`` key it becomes. Matching is by
+#: *name*, case- and separator-insensitive, never by position: VisiTag's column
+#: set differs between CARTO versions, so a positional reader would silently
+#: mis-assign values. A column not listed here is still kept, under its own
+#: name, so nothing is lost.
+_VISITAG_ATTRS: dict[str, str] = {
+    "duration": "duration_s",
+    "durationtime": "duration_s",
+    "averageforce": "average_force_g",
+    "avgforce": "average_force_g",
+    "fti": "force_time_integral",
+    "maxtemperature": "max_temperature_c",
+    "maxpower": "max_power_w",
+    "baseimpedance": "base_impedance_ohm",
+    "impedancedrop": "impedance_drop_ohm",
+    "rfindex": "rf_index",
+    "ablationindex": "ablation_index",
+    "lesionindex": "lesion_index",
+    "session": "session",
+    "sessionindex": "session",
+    "channelid": "channel_id",
+    "tagindex": "tag_index",
+    "siteindex": "tag_index",
+    "timestamp": "timestamp",
+}
+
+_VISITAG_POSITION = {"x": 0, "y": 1, "z": 2}
+
+
+def _norm_column(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def _numeric(text: str):
+    """``"7"`` -> 7, ``"22.5"`` -> 22.5, anything else unchanged.
+
+    Indices and session numbers stay integers so an identifier built from
+    one reads as ``"7"`` rather than ``"7.0"``.
+    """
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        return text
+
+
+def parse_carto_visitag_sites(data: bytes | str, name: str = "") -> list[PlacedPoint]:
+    """Parse a VisiTag ``Sites.txt`` into ablation :class:`PlacedPoint` objects.
+
+    .. warning::
+
+       **UNVERIFIED — no VisiTag export has been available to test against.**
+
+       This parser is written from the documented VisiTag layout: a
+       tab-separated table with a header row, one row per ablation site,
+       carrying ``X``/``Y``/``Z`` plus RF parameters. It is deliberately
+       **column-name driven**: an unexpected column set yields fewer
+       attributes, never values assigned to the wrong quantity, and a file
+       without recognisable X/Y/Z columns yields no points at all rather than
+       nonsense. Unrecognised columns are preserved under their own names.
+
+       Confirm against a real VisiTag export before trusting the ablation
+       sites it produces, and delete this warning once that is done.
+    """
+    text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return []
+
+    def cells(line: str) -> list[str]:
+        # VisiTag is tab-separated, but whitespace-padded columns are common.
+        return [c.strip() for c in (line.split("\t") if "\t" in line else line.split())]
+
+    header = cells(lines[0])
+    norm = [_norm_column(h) for h in header]
+    pos_idx = {axis: norm.index(axis) for axis in _VISITAG_POSITION if axis in norm}
+    if len(pos_idx) < 3:
+        return []  # no coordinates -> not a sites table; do not guess
+
+    points: list[PlacedPoint] = []
+    for i, line in enumerate(lines[1:]):
+        f = cells(line)
+        if len(f) < len(pos_idx):
+            continue
+        try:
+            position = np.array(
+                [float(f[pos_idx["x"]]), float(f[pos_idx["y"]]), float(f[pos_idx["z"]])],
+                dtype=float,
+            )
+        except (ValueError, IndexError):
+            continue
+
+        attributes: dict = {}
+        for j, raw in enumerate(header):
+            key = _norm_column(raw)
+            if key in _VISITAG_POSITION or j >= len(f) or not f[j]:
+                continue
+            attributes[_VISITAG_ATTRS.get(key, raw)] = _numeric(f[j])
+
+        points.append(
+            PlacedPoint(
+                type=ABLATION,
+                position=position,
+                label=None,
+                attributes=attributes,
+                source_id=str(attributes.get("tag_index") or i),
+            )
+        )
+    return points
+
+
+#: Where VisiTag sites live in an export. CARTO writes them into a
+#: ``VisiTagExport`` folder; the glob stays loose because the folder is an
+#: optional, separately-selected part of an export.
+_VISITAG_GLOBS = ("*VisiTag*/*Sites*.txt", "*VisiTagExport*/*.txt", "*Sites.txt")
+
+
+def _visitag_files(source: ImportSource) -> list[str]:
+    """VisiTag site tables present in the export, if any."""
+    seen = {n for g in _VISITAG_GLOBS for n in source.list(g)}
+    return sorted(n for n in seen if "site" in Path(n).name.lower())
+
+
 def populate_carto_mesh(epmap, mesh_file: str) -> None:
     """Read a CARTO ``.mesh`` file into ``epmap`` (geometry + scalar fields).
 
@@ -179,6 +318,11 @@ class CartoImporter:
         studies: list[StudyPlan] = []
         issues: list[str] = []
         for xml in discover_carto_exports(root):
+            # An export holds one study catalogue among thousands of per-point
+            # XMLs. Skip the others by content rather than reporting each as a
+            # failure — a real export would drown the plan in ~2000 issues.
+            if not _is_study_catalogue(xml):
+                continue
             try:
                 tree = process_xml(xml)
                 _n, names, n_points, mesh_files = get_maps(tree)
@@ -198,11 +342,25 @@ class CartoImporter:
                 )
                 for name, count, mesh in zip(names, n_points, mesh_files)  # noqa: B905
             ]
-            studies.append(StudyPlan(study_name=study_name, vendor=self.name, maps=maps))
+            visitag = _visitag_files(source)
+            if visitag:
+                issues.append(
+                    "VisiTag ablation sites found — the parser for them is UNVERIFIED "
+                    "(never tested against a real VisiTag export); check the imported "
+                    "sites before relying on them"
+                )
+            studies.append(
+                StudyPlan(
+                    study_name=study_name,
+                    vendor=self.name,
+                    maps=maps,
+                    placed_point_files=visitag,
+                )
+            )
         return ImportPlan(studies=studies, issues=issues)
 
     def commit(self, plan: ImportPlan, source: ImportSource) -> list[Study]:
-        """Import the maps the reviewer kept."""
+        """Import the maps the reviewer kept, plus any VisiTag ablation sites."""
         selected = {
             m.map_name for sp in plan.studies for m in sp.maps if m.include and sp.maps is not None
         }
@@ -211,7 +369,17 @@ class CartoImporter:
         map_filter = (
             "^(?:" + "|".join(re.escape(n) for n in sorted(selected)) + ")$" if selected else None
         )
-        return self._parse(source, map_filter)
+        studies = self._parse(source, map_filter)
+
+        wanted = {
+            sp.study_name: sp.placed_point_files
+            for sp in plan.studies
+            if sp.include_placed_points and sp.placed_point_files
+        }
+        for study in studies:
+            for f in wanted.get(study.name, []):
+                study.placed_points += parse_carto_visitag_sites(source.open(f).read(), name=f)
+        return studies
 
     def parse(self, source: ImportSource) -> list[Study]:
         return self._parse(source, None)

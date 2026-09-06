@@ -6,7 +6,23 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **7-Zip import support.** CARTO exports are frequently 7-Zip archives named
+  `.zip`; the container is now detected by content signature, so such an
+  export imports without renaming. Needs the optional `pulse-ep[sevenzip]`
+  extra.
+- **VisiTag ablation sites** are read into study-level placed points, with RF
+  parameters (duration, force, FTI, impedance drop, RF/ablation index).
+  **The parser is unverified** — no real VisiTag export was available to test
+  against — so it matches columns by name rather than position and yields no
+  points at all when the columns are unrecognisable. The import plan flags any
+  VisiTag file with that warning.
+
+### Fixed
+
+- CARTO `prepare` reported every per-point XML in an export as a failed study
+  catalogue, drowning the plan in ~2000 spurious issues on a real export.
 
 ## [0.2.0] — 2026-09-06
 
