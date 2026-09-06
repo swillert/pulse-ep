@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20263542.svg)](https://doi.org/10.5281/zenodo.20263542)
 
 An open-source platform for programmatic access to **electroanatomical
 mapping data** from multiple vendors.
@@ -215,9 +216,16 @@ web viewer is a fifth.
 
 ## Citation
 
-If you use `pulse-ep` in academic work, please cite the
-[CITATION.cff](CITATION.cff) entry. The accompanying software paper is in
-preparation for SoftwareX.
+If you use `pulse-ep` in academic work, please cite the archived release:
+
+> Willert, S., Lian, E., & Frank, D. *pulse-ep: An open-source platform for
+> programmatic access to multivendor electroanatomical mapping data.*
+> Zenodo. <https://doi.org/10.5281/zenodo.20263542>
+
+That is the **concept DOI** — it always resolves to the latest release. To
+pin an exact version, use that release's own DOI instead. Machine-readable
+metadata is in [CITATION.cff](CITATION.cff); the accompanying software paper
+is in preparation for SoftwareX.
 
 ## License
 
