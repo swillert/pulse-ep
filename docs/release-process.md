@@ -36,7 +36,7 @@ created.
   or LICENSE; otherwise the first force-push from GitLab will
   conflict.
 - Set the description to something like:
-  *"Open-source platform for programmatic access to CARTO
+  *"Open-source platform for programmatic access to CARTO 3 and EnSiteX
   electroanatomical mapping data — public mirror of
   gitlab.willert.net/sw/pulse-ep."*
 

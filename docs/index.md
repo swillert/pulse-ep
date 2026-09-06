@@ -122,17 +122,21 @@ For real study data and the web viewer, see the [Quickstart](getting-started/qui
 
 ## Citation
 
-If you use `pulse-ep` in academic work, please cite the
-[`CITATION.cff`](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/CITATION.cff)
-entry. The accompanying software paper is in preparation for *SoftwareX*.
+If you use `pulse-ep` in academic work, please cite the archived release.
+The DOI below is the *concept* DOI — it always resolves to the latest
+version; use a release's own DOI to pin an exact one. Machine-readable
+metadata is in
+[`CITATION.cff`](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/CITATION.cff),
+and the accompanying software paper is in preparation for *SoftwareX*.
 
 ```bibtex
 @software{willert_pulse_ep,
   author  = {Willert, Sven and Lian, Evgeny and Frank, Derk},
-  title   = {{pulse-ep: An open-source platform for programmatic access to CARTO electroanatomical mapping data}},
+  title   = {{pulse-ep: An open-source platform for programmatic access to multivendor electroanatomical mapping data}},
   year    = {2026},
-  version = {0.1.0},
-  url     = {https://gitlab.willert.net/sw/pulse-ep},
+  version = {0.2.0},
+  doi     = {10.5281/zenodo.20263542},
+  url     = {https://doi.org/10.5281/zenodo.20263542},
 }
 ```
 
