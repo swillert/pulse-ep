@@ -45,8 +45,15 @@ if isnan(distMM); distMM = 5.0; end
 meta = pe_map_scalars(baseURL, token, mapId);
 if isempty(scalarName); quantity = meta.primary; else; quantity = scalarName; end
 quantityUnit = '';
+quantityMin = NaN; quantityMax = NaN;
 for k = 1:numel(meta.scalars)
-    if strcmp(meta.scalars(k).name, quantity); quantityUnit = meta.scalars(k).unit; end
+    sc = meta.scalars(k);
+    if isstruct(sc); else; sc = meta.scalars{k}; end   % cell array when fields differ
+    if strcmp(sc.name, quantity)
+        quantityUnit = sc.unit;
+        if isfield(sc, 'min') && ~isempty(sc.min); quantityMin = double(sc.min); end
+        if isfield(sc, 'max') && ~isempty(sc.max); quantityMax = double(sc.max); end
+    end
 end
 fprintf('map_id=%d  scalar=%s  distance=%.1f mm\n', mapId, quantity, distMM);
 
@@ -54,12 +61,19 @@ fprintf('map_id=%d  scalar=%s  distance=%.1f mm\n', mapId, quantity, distMM);
 % Default clinical bins for pace-mapping similarity (0-100 %). They do not
 % fit every quantity: a bipolar voltage map is in mV and an activation map
 % in ms, so these bins would report zero area everywhere. Override with
-% e.g. PE_INTERVAL_BREAKS="0,0.5,1.5,3,15" for voltage.
+% e.g. PE_INTERVAL_BREAKS="0,0.5,1.5,3,15" for voltage. Without an explicit
+% choice the bins are derived from the quantity's own reported range.
 breaksEnv = getenv('PE_INTERVAL_BREAKS');
-if isempty(breaksEnv)
-    breaks = [50 60 70 80 90 100];
-else
+if ~isempty(breaksEnv)
     breaks = str2double(strsplit(breaksEnv, ','));
+elseif isfinite(quantityMin) && isfinite(quantityMax) && quantityMax > quantityMin
+    % Take the bins from the quantity itself — the server reports each
+    % scalar's range. Defaulting to the 50-100 pace-mapping bins meant a
+    % bipolar voltage map printed 0.000 cm^2 and looked like a result.
+    breaks = linspace(quantityMin, quantityMax, 9);
+    fprintf('bins from the data: %g to %g\n', quantityMin, quantityMax);
+else
+    breaks = [50 60 70 80 90 100];   % pace-mapping fallback
 end
 intervals = [breaks(1:end-1)' breaks(2:end)'];   % N-by-2
 labels = arrayfun(@(lo, hi) sprintf('%g–%g', lo, hi), ...

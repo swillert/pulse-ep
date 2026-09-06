@@ -46,10 +46,24 @@ cat(sprintf("map_id=%d  scalar=%s  distance=%.1f mm\n",
 # activation map in ms, so these bins would report zero area everywhere.
 # Override with e.g. PE_INTERVAL_BREAKS="0,0.5,1,1.5,5" for voltage.
 breaks_env <- Sys.getenv("PE_INTERVAL_BREAKS", unset = "")
-interval_breaks <- if (nzchar(breaks_env)) {
-  as.numeric(strsplit(breaks_env, ",")[[1]])
+if (nzchar(breaks_env)) {
+  interval_breaks <- as.numeric(strsplit(breaks_env, ",")[[1]])
 } else {
-  c(50, 60, 70, 80, 90, 100)
+  # Without an explicit choice, take the bins from the quantity itself: the
+  # server reports each scalar's range, so eight equal bins always cover the
+  # data. Defaulting to the 50-100 pace-mapping bins meant a bipolar voltage
+  # map — the most common kind — printed 0.000 cm^2 and looked like a result.
+  meta <- pe_map_scalars(token, map_id)
+  quantity0 <- if (nzchar(scalar_name %||% "")) scalar_name else meta$primary
+  row0 <- meta$scalars[meta$scalars$name == quantity0, ]
+  lo <- suppressWarnings(as.numeric(row0$min[1]))
+  hi <- suppressWarnings(as.numeric(row0$max[1]))
+  if (length(lo) && length(hi) && is.finite(lo) && is.finite(hi) && hi > lo) {
+    interval_breaks <- seq(lo, hi, length.out = 9)
+    cat(sprintf("bins from the data: %g to %g\n", lo, hi))
+  } else {
+    interval_breaks <- c(50, 60, 70, 80, 90, 100)  # pace-mapping fallback
+  }
 }
 intervals <- mapply(c, head(interval_breaks, -1), tail(interval_breaks, -1),
                    SIMPLIFY = FALSE)

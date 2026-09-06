@@ -67,6 +67,32 @@ curl -s "$PULSE_EP_BASE_URL/list_studies" -H "Authorization: Bearer $TOKEN"
 If that prints a JSON array of studies you are ready to run any of the
 language-specific examples.
 
+## Environment variables
+
+Two prefixes, on purpose:
+
+| Prefix | What it configures | Read by |
+| --- | --- | --- |
+| `PULSE_EP_*` | the connection — same names the server itself uses | every client |
+| `PE_*` | per-run options of these examples only | R, MATLAB |
+
+```bash
+# connection
+export PULSE_EP_BASE_URL="http://127.0.0.1:5000"
+export PULSE_EP_USERNAME="admin"
+export PULSE_EP_PASSWORD="…"
+
+# options (optional)
+export PE_MAP_ID=12              # which map; default: first map of first study
+export PE_SCALAR_NAME=           # empty: the map's own primary quantity
+export PE_DISTANCE_MM=5.0        # projection distance
+export PE_INTERVAL_BREAKS=       # empty: bins derived from the quantity's range
+```
+
+`PE_INTERVAL_BREAKS` used to default to the pace-mapping bins 50–100 %, which
+meant a bipolar voltage map in mV reported zero area in every bin. The bins now
+come from the range the server reports for that quantity.
+
 ## REST endpoints used by these examples
 
 These are the five endpoints every example touches. See `src/pulse_ep/server/app.py`
