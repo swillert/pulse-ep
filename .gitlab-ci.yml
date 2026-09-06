@@ -38,7 +38,10 @@ ruff:
   image: python:3.12-slim
   <<: *python_setup
   script:
-    - pip install "ruff>=0.6,<1"
+    # Pinned to match pyproject [dev] and .pre-commit-config.yaml — an
+    # unpinned range let CI format-check with a different ruff than
+    # contributors ran, so the gate failed on untouched files.
+    - pip install "ruff==0.16.6"
     - ruff check .
     - ruff format --check .
 

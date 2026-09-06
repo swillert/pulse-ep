@@ -5,7 +5,7 @@
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.6   # keep in step with pyproject [dev] and .gitlab-ci.yml
     hooks:
       - id: ruff
         args: [--fix]
