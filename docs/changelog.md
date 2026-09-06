@@ -8,6 +8,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Three console scripts were broken once installed.**
+  `pulse-ep-populate-colormaps` pointed at a `main` that did not exist;
+  `pulse-ep-extract-meshes` ran its whole body at import time, so it
+  demanded a database connection merely to be imported, and had no `main`
+  either; `pulse-ep-tag-maps` parsed `sys.argv` at import, which made
+  argparse read *the importing program's* arguments and call `sys.exit(2)`.
+  A test now checks every declared entry point.
 - **A fresh install failed on Python 3.13 and 3.14.** Five dependencies were
   capped below their current major (`pyarrow<21`, `pillow<12`, `lxml<6`,
   `trimesh<5`, `pandas<3`), and newer Pythons only get wheels for recent
