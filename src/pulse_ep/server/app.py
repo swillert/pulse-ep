@@ -124,7 +124,9 @@ def login_user():
 def list_studies():
     with get_db_session() as session:
         studies = StudyModel.get_study_list(session)
-        studies_serializable = [{"id": study[0], "study_name": study[1]} for study in studies]
+        studies_serializable = [
+            {"id": study[0], "study_name": study[1], "vendor": study[2]} for study in studies
+        ]
     return jsonify(studies_serializable)
 
 
@@ -141,7 +143,11 @@ def list_epmaps_in_study(study_id):
                 "id": epmap[0],
                 "study_id": study_id,
                 "map_name": epmap[1],
+                # the vendor's own count, null where it reports none …
                 "number_of_points": epmap[2],
+                # … and what is actually stored, which is what a client needs
+                # to decide whether a map has anything to plot.
+                "measurement_points": epmap[3],
             }
             for epmap in epmaps
         ]

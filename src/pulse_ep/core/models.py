@@ -69,17 +69,41 @@ class StudyModel(Base):
         return session.query(cls).filter_by(id=id).first()
 
     @classmethod
-    def get_study_list(cls, session: Session) -> list[tuple[int, str]]:
-        studies = session.query(cls).with_entities(cls.id, cls.name).all()
-        return [(study.id, study.name) for study in studies]
+    def get_study_list(cls, session: Session) -> list[tuple[int, str, str | None]]:
+        """(id, name, vendor) per study.
+
+        The vendor belongs in the listing: on a multivendor platform a client
+        that cannot tell a CARTO study from an EnSiteX one has to fetch every
+        study to find out.
+        """
+        studies = session.query(cls).with_entities(cls.id, cls.name, cls.vendor).all()
+        return [(study.id, study.name, study.vendor) for study in studies]
 
     @classmethod
     def get_epmap_list_by_id(cls, session: Session, study_id: int):
         study = cls.retrieve(session, study_id)
         if study is None:
             return None
+        # ``number_of_points`` is the vendor's own count and is null for
+        # importers that do not report one, so count the measurement points
+        # actually stored: without it a client cannot tell which maps carry
+        # points, and every EnSiteX map looked empty.
+        n_points = (
+            session.query(
+                MeasurementPointModel.map_id,
+                func.count(MeasurementPointModel.id).label("n"),
+            )
+            .group_by(MeasurementPointModel.map_id)
+            .subquery()
+        )
         epmaps = (
-            session.query(EPMapModel.id, EPMapModel.map_name, EPMapModel.number_of_points)
+            session.query(
+                EPMapModel.id,
+                EPMapModel.map_name,
+                EPMapModel.number_of_points,
+                func.coalesce(n_points.c.n, 0),
+            )
+            .outerjoin(n_points, n_points.c.map_id == EPMapModel.id)
             .filter(EPMapModel.study_id == study_id)
             .all()
         )
