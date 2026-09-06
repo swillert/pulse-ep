@@ -26,6 +26,8 @@ from pulse_ep.core.comparison import compare_maps  # noqa: E402
 from pulse_ep.core.importers.base import commit_plan, detect_vendor, prepare_plan  # noqa: E402
 from pulse_ep.core.importers.source import source_for  # noqa: E402
 
+pv.OFF_SCREEN = True  # never try to open a window, even if a display exists
+
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures" / "synthetic"
 

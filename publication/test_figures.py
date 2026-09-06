@@ -27,6 +27,12 @@ FIGURES = (
 )
 
 
+def _no_offscreen_gl(stderr: str) -> bool:
+    """True if the failure is a missing software GL stack, not a code fault."""
+    markers = ("OSMesa", "libOSMesa", "Failed to load EGL", "bad X server connection")
+    return any(m in stderr for m in markers)
+
+
 @pytest.fixture(scope="module")
 def generated(tmp_path_factory):
     """Run the real script into a temporary directory, exactly as documented."""
@@ -41,6 +47,11 @@ def generated(tmp_path_factory):
         text=True,
         cwd=REPO,
     )
+    if proc.returncode != 0 and _no_offscreen_gl(proc.stderr):
+        # VTK dies with a signal rather than an error when there is no GL
+        # stack at all. That is the machine's, not the script's, so say so
+        # plainly instead of reporting a broken figure pipeline.
+        pytest.skip(f"no off-screen GL on this machine (rc={proc.returncode})")
     assert proc.returncode == 0, proc.stderr[-4000:]
     return out, proc.stdout
 
