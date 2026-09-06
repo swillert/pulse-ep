@@ -121,7 +121,22 @@ pulse-ep-demo
 Builds a synthetic atrial mesh with a Gaussian score field, ingests it
 into an in-memory SQLite, and prints the per-interval area breakdown.
 
-### 2. A real study (local Python install)
+### 2. Vendor exports without patient data
+
+```bash
+examples/verify.sh
+```
+
+Reads the two synthetic exports in `tests/fixtures/synthetic/` — one CARTO 3,
+one EnSiteX — and prints mesh, fields, measurement points and surface area for
+each. Their structure is derived from real exports, their content is generated;
+both carry the same surface, so the two decode paths can be compared against
+one another. See
+[`tests/fixtures/synthetic/README.md`](tests/fixtures/synthetic/README.md) for
+what this establishes (the file formats) and what it cannot (that a field means
+what we call it).
+
+### 3. A real study (local Python install)
 
 ```bash
 # 1) start Postgres (Docker)
@@ -152,7 +167,7 @@ pulse-ep-server
 many points, and any issues detected — without writing anything. Run it
 first on an unfamiliar export.
 
-### 3. Full Docker stack
+### 4. Full Docker stack
 
 ```bash
 cp .env.example .env  # set PULSE_EP_JWT_SECRET_KEY at a minimum

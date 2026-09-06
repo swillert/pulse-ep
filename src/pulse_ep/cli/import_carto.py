@@ -44,7 +44,7 @@ import time
 
 from pulse_ep.core import mesh_proc, xml_proc
 from pulse_ep.core.epmap import EPMap
-from pulse_ep.core.importer import discover_carto_exports, study_name_for
+from pulse_ep.core.importer import discover_carto_exports, fill_positions, study_name_for
 from pulse_ep.core.importers.carto import (
     carto_points_to_measurements,
     register_carto_scalars,
@@ -231,15 +231,7 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
 
                 point_dicts, _ref_count = import_map_points(study_dir, map_name)
 
-                for i, pd in enumerate(point_dicts):
-                    if (
-                        pd["position_x"] is None
-                        and xyz_from_xml is not None
-                        and i < len(xyz_from_xml)
-                    ):
-                        pd["position_x"] = float(xyz_from_xml[i, 0])
-                        pd["position_y"] = float(xyz_from_xml[i, 1])
-                        pd["position_z"] = float(xyz_from_xml[i, 2])
+                fill_positions(point_dicts, xyz_from_xml)
 
                 for pd in point_dicts:
                     pt = EPMapPoint(map_id=epmap_model.id, **pd)
