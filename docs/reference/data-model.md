@@ -329,7 +329,9 @@ Two paths exist, and they are not interchangeable:
 - `init_db()` runs `Base.metadata.create_all()` at server startup. It
   creates *missing* tables and is what makes a fresh database usable; it
   never alters an existing one.
-- `alembic upgrade head` applies the migrations in `alembic/versions/`.
+- `pulse-ep-migrate` applies the migrations, which ship inside the package
+  (`pulse_ep/migrations/versions/`) so an installed deployment can upgrade
+  too; `alembic upgrade head` does the same from a source checkout.
   This is what brings an existing database in step with a new release, and
   is the step to run after upgrading.
 
