@@ -112,13 +112,37 @@ tags. So after the mirror push:
 
 ### 4. Update `CITATION.cff` and any paper drafts
 
+Zenodo mints **two** DOIs: a *concept* DOI covering all versions, and a
+*version* DOI for each release. The concept DOI is already recorded and
+never changes:
+
+| DOI | Resolves to |
+|---|---|
+| `10.5281/zenodo.20263542` | The concept — always the latest release. |
+| `10.5281/zenodo.20263543` | v0.1.0-softwarex specifically. |
+
+So for a new release you only append its version DOI:
+
 ```yaml
 # CITATION.cff
 identifiers:
-  - description: "Zenodo DOI for this release"
+  - description: "Concept DOI — resolves to the latest pulse-ep release"
+    type: doi
+    value: "10.5281/zenodo.20263542"
+  - description: "DOI for release v0.1.0-softwarex"
+    type: doi
+    value: "10.5281/zenodo.20263543"
+  - description: "DOI for release vX.Y.Z"          # ← add this
     type: doi
     value: "10.5281/zenodo.NNNNNNN"
 ```
+
+Prefer the concept DOI when citing pulse-ep in general, and a version DOI
+only when an exact release must be pinned.
+
+Zenodo takes its title and author list from the release, so a deposit keeps
+whatever metadata the *previous* release carried until a new one is cut —
+check that the new deposit reflects the current `CITATION.cff`.
 
 For the SoftwareX manuscript, replace the placeholder
 `XXXXXXX` in `paper.tex` (Code & Data Availability section,
