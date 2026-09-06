@@ -43,7 +43,8 @@ import sys
 import time
 
 from pulse_ep.core import mesh_proc, xml_proc
-from pulse_ep.core.importer import discover_carto_exports, extract_subfolder
+from pulse_ep.core.importer import discover_carto_exports, study_name_for
+from pulse_ep.core.importers.carto import carto_points_to_measurements
 from pulse_ep.core.point_importer import import_map_points
 
 logging.basicConfig(
@@ -82,6 +83,15 @@ def _print_progress(force_nl: bool = False) -> None:
 
 
 # ── Per-study import ─────────────────────────────────────────────────────
+def _is_study_catalogue(path: str) -> bool:
+    """True if this XML is a study catalogue (``<Study>``), not a point export."""
+    try:
+        with open(path, "rb") as fh:
+            return b"<Study" in fh.read(2048)
+    except OSError:
+        return False
+
+
 def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None:
     """
     Import one CARTO study (maps + points) into the DB.
@@ -101,12 +111,19 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
         EPMapAttributes,
         EPMapModel,
         EPMapPoint,
+        MeasurementPointModel,
         StudyModel,
     )
 
     progress = _progress["enabled"]
 
     if os.path.basename(file_path).startswith("._"):
+        return
+
+    # An export holds one study catalogue among thousands of per-point XMLs.
+    # Without this, every one of them was reported as a failed study — ~1946
+    # warnings on a real export, burying the actual result.
+    if not _is_study_catalogue(file_path):
         return
 
     try:
@@ -117,7 +134,7 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
         return
 
     study_dir = os.path.dirname(file_path)
-    study_name = f"{extract_subfolder(file_path, 4)}-{study_name_raw}"
+    study_name = study_name_for(file_path, study_name_raw)
 
     nMaps, names, numPtsPerMap, filenames = xml_proc.get_maps(xml_tree)
     if nMaps == 0:
@@ -150,7 +167,7 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
     with get_db_session() as session:
         study_model = StudyModel.find_by_name(study_name, session)
         if study_model is None:
-            study_model = StudyModel(name=study_name)
+            study_model = StudyModel(name=study_name, vendor="carto")
             study_model.create(session)
             session.flush()
 
@@ -215,6 +232,24 @@ def _import_single_study(file_path: str, map_filter: str, dry_run: bool) -> None
                 for pd in point_dicts:
                     pt = EPMapPoint(map_id=epmap_model.id, **pd)
                     session.add(pt)
+
+                # The same points in the vendor-neutral shape, so a CARTO map
+                # is comparable with an EnSiteX one. The legacy rows above stay
+                # as they are — this is an addition, not a replacement.
+                for mp in carto_points_to_measurements(point_dicts):
+                    session.add(
+                        MeasurementPointModel(
+                            map_id=epmap_model.id,
+                            point_index=mp.index,
+                            source_id=mp.source_id,
+                            position=mp.position.tolist(),
+                            measurements={
+                                name: {"value": m.value, "kind": m.kind, "unit": m.unit}
+                                for name, m in mp.measurements.items()
+                            },
+                            electrodes={k: v.tolist() for k, v in mp.electrodes.items()},
+                        )
+                    )
 
                 session.add(EPMapAttributes(map_id=epmap_model.id, attributes={}))
 

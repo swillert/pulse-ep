@@ -311,7 +311,7 @@ class CartoImporter:
         Cheap by design: map names and point counts come from the study
         catalogue, so no mesh is touched until :meth:`commit`.
         """
-        from pulse_ep.core.importer import discover_carto_exports, extract_subfolder
+        from pulse_ep.core.importer import discover_carto_exports, study_name_for
         from pulse_ep.core.xml_proc import get_maps, get_study_name, process_xml
 
         root = source.materialize(source.list("*.xml"))
@@ -326,7 +326,7 @@ class CartoImporter:
             try:
                 tree = process_xml(xml)
                 _n, names, n_points, mesh_files = get_maps(tree)
-                study_name = f"{extract_subfolder(xml, 4)}-{get_study_name(tree)}"
+                study_name = study_name_for(xml, get_study_name(tree))
             except Exception as exc:  # not a study catalogue, or unreadable
                 issues.append(f"{Path(xml).name}: {exc}")
                 continue

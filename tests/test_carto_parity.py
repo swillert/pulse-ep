@@ -154,3 +154,23 @@ def test_parse_no_longer_dies_on_a_missing_filter(tmp_path):
     every registry-driven CARTO import — and the whole queue path — fail."""
     studies = CartoImporter().parse(DirSource(_study_dir(tmp_path)))
     assert isinstance(studies, list)
+
+
+# --- study naming ----------------------------------------------------------
+
+
+def test_study_name_omits_a_missing_path_component():
+    """A shallow path used to yield names starting with the literal "None-"."""
+    from pulse_ep.core.importer import study_name_for
+
+    assert study_name_for("/tmp/export/Study.xml", "S") == "S"
+    assert study_name_for("/a/b/c/StudyDir/Study.xml", "S") == "StudyDir-S"
+
+
+def test_prepare_and_the_cli_derive_the_same_study_name(tmp_path):
+    """The queue's duplicate check compares these, so they must not diverge."""
+    from pulse_ep.core.importer import study_name_for
+
+    d = _study_dir(tmp_path)
+    plan = CartoImporter().prepare(DirSource(d))
+    assert plan.studies[0].study_name == study_name_for(str(d / "Study.xml"), "TestStudy")
