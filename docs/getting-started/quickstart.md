@@ -90,12 +90,13 @@ what they would do before writing anything:
 === "CARTO 3"
 
     ```bash
-    pulse-ep-import-carto /path/to/carto-export.zip
+    pulse-ep-import-carto -i /path/to/carto-export-dir
     ```
 
-    Unpacks the export, parses the study XML manifests and `.mesh` files,
-    and populates the database. A 60-map study with full point clouds takes
-    about 60–90 seconds on a modern laptop.
+    Takes a **directory** — unpack an archived export first. It discovers the
+    study XML manifests, parses them with the `.mesh` files, and populates the
+    database. A 60-map study with full point clouds takes about 60–90 seconds
+    on a modern laptop.
 
     See the [CARTO import guide](../guides/carto-import.md).
 
