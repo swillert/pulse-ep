@@ -63,6 +63,10 @@ config.local.ini
 # so anything committed here is published irreversibly.
 data/
 drop/
+# Plots the example clients write when run against real data — patient-derived
+# output, and regenerated on every run.
+examples/**/*.png
+examples/**/*.pdf
 # local working notes, not part of the published repo
 CLAUDE.md
 *.zip

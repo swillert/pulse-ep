@@ -10,7 +10,7 @@ export class MeshHelper {
         this.currentMapName = 'unknown';
         this.currentStudyName = 'unknown';
         this.currentColormap = 'jet';
-        this.isRelative = false;
+        this.isRelative = true;  // see ColormapWidget
         this.clipping = true;
         this.currentDatatype = null; // set from the map's own scalars
         this.center = new THREE.Vector3();

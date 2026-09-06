@@ -76,7 +76,7 @@ pe_list_maps <- function(token, study_id, base_url = NULL) {
 #'   list(c(50, 60), c(60, 70), c(70, 80), c(80, 90), c(90, 100)).
 #' Returns a numeric vector of areas in cm^2, NA for empty bins.
 pe_areas_per_interval <- function(token, map_id, intervals,
-                                  scalar_name = "act", distance = 5.0,
+                                  scalar_name = NULL, distance = 5.0,
                                   base_url = NULL) {
   payload <- list(
     map_id      = map_id,
@@ -98,7 +98,19 @@ pe_areas_per_interval <- function(token, map_id, intervals,
 #' Fetch the mesh (vertices, triangles, scalars) for one map.
 #' Returns a list with `vertices`, `faces`, `scalars`, `normalized`,
 #' `points` and `point_scalars`.
-pe_get_mesh <- function(token, map_id, scalar_name = "act",
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+#' Quantities a map carries: name, kind and unit, plus the primary one.
+#' Clients should read the choice from here rather than assuming a field name.
+pe_map_scalars <- function(token, map_id) {
+  req <- request(paste0(pe_base_url(), "/epmaps/", map_id, "/scalars")) |>
+    req_headers(Authorization = paste("Bearer", token))
+  resp <- req_perform(req)
+  out <- resp_body_json(resp, simplifyVector = TRUE)
+  out
+}
+
+pe_get_mesh <- function(token, map_id, scalar_name = NULL,
                         distance = 5.0, base_url = NULL) {
   data <- .pe_get(
     token, "/get_mesh_data",
@@ -114,7 +126,11 @@ pe_get_mesh <- function(token, map_id, scalar_name = "act",
     faces          = matrix(unlist(md$faces),    ncol = 3, byrow = TRUE) + 1L,  # R is 1-indexed
     scalars        = as.numeric(md$scalar_data),
     normalized     = as.numeric(md$normalized_scalar_data),
-    points         = if (!is.null(pd$coordinates))
+    # An empty JSON array arrives as an empty *list*, not NULL, so a
+    # !is.null() guard lets it through and matrix() then fails on the NULL
+    # that unlist() returns. A map may legitimately have no acquisition
+    # points: an EnSiteX mesh carrying only per-vertex fields has none.
+    points         = if (length(pd$coordinates) > 0)
                        matrix(unlist(pd$coordinates), ncol = 3, byrow = TRUE)
                      else matrix(numeric(), ncol = 3),
     point_scalars  = as.numeric(pd$scalar_data)

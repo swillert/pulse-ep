@@ -46,7 +46,7 @@ else
 end
 
 % --- 3. Fetch mesh ------------------------------------------------------
-mesh = pe_get_mesh(baseURL, token, mapId, 'act', 5.0);
+mesh = pe_get_mesh(baseURL, token, mapId, '', 5.0);   % '' -> the map's primary quantity
 fprintf('Mesh: %d vertices, %d triangles, scalar non-NaN = %d/%d.\n', ...
         size(mesh.vertices, 1), size(mesh.faces, 1), ...
         sum(~isnan(mesh.scalars)), numel(mesh.scalars));

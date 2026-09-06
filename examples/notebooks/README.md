@@ -8,10 +8,11 @@ per-vertex scalar distribution with matplotlib.
 ## Requirements
 
 ```bash
-pip install jupyterlab requests pyvista matplotlib pandas
+pip install jupyterlab requests "pyvista[jupyter]" matplotlib pandas
 ```
 
-PyVista's notebook backend uses Trame; in JupyterLab everything renders
+PyVista's notebook backend uses Trame — hence the `[jupyter]` extra above,
+without which the first plotting cell raises an ImportError. In JupyterLab everything renders
 inline. On a headless server use the static `panel`/`server` backends or
 fall back to matplotlib.
 

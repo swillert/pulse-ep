@@ -1,0 +1,13 @@
+function token = pe_login(baseURL, username, password)
+%PE_LOGIN  Exchange username/password for a JWT bearer token.
+    body = jsonencode(struct('username', username, 'password', password));
+    opts = weboptions( ...
+        'MediaType',     'application/json', ...
+        'ContentType',   'json', ...
+        'RequestMethod', 'POST', ...
+        'Timeout',       30);
+    resp  = webwrite(strcat(baseURL, "/login_user"), body, opts);
+    token = resp.access_token;
+end
+
+% -----------------------------------------------------------------------

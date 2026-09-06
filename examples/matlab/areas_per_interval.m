@@ -11,7 +11,7 @@
 %
 %   Optional env overrides:
 %     PE_MAP_ID       integer, map to analyse (default: first map of first study)
-%     PE_SCALAR_NAME  default "act"
+%     PE_SCALAR_NAME  unset -> the map's own primary quantity
 %     PE_DISTANCE_MM  default 5.0
 
 baseURL  = getenv('PULSE_EP_BASE_URL');
@@ -37,15 +37,30 @@ else
     mapId = maps(1).id;
 end
 scalarName = getenv('PE_SCALAR_NAME');
-if isempty(scalarName); scalarName = 'act'; end
+% left empty on purpose: the server resolves the map's primary quantity
 distMM = str2double(getenv('PE_DISTANCE_MM'));
 if isnan(distMM); distMM = 5.0; end
-fprintf('map_id=%d  scalar=%s  distance=%.1f mm\n', mapId, scalarName, distMM);
+% The server names the quantities a map carries; use that rather than
+% printing an empty string when none was requested.
+meta = pe_map_scalars(baseURL, token, mapId);
+if isempty(scalarName); quantity = meta.primary; else; quantity = scalarName; end
+quantityUnit = '';
+for k = 1:numel(meta.scalars)
+    if strcmp(meta.scalars(k).name, quantity); quantityUnit = meta.scalars(k).unit; end
+end
+fprintf('map_id=%d  scalar=%s  distance=%.1f mm\n', mapId, quantity, distMM);
 
-% --- 2. Define score bins ----------------------------------------------
-% Default clinical bins for pace-mapping similarity; override below for
-% your own colormap intervals.
-breaks = [50 60 70 80 90 100];
+% --- 2. Define bins -----------------------------------------------------
+% Default clinical bins for pace-mapping similarity (0-100 %). They do not
+% fit every quantity: a bipolar voltage map is in mV and an activation map
+% in ms, so these bins would report zero area everywhere. Override with
+% e.g. PE_INTERVAL_BREAKS="0,0.5,1.5,3,15" for voltage.
+breaksEnv = getenv('PE_INTERVAL_BREAKS');
+if isempty(breaksEnv)
+    breaks = [50 60 70 80 90 100];
+else
+    breaks = str2double(strsplit(breaksEnv, ','));
+end
 intervals = [breaks(1:end-1)' breaks(2:end)'];   % N-by-2
 labels = arrayfun(@(lo, hi) sprintf('%g–%g', lo, hi), ...
                   intervals(:,1), intervals(:,2), 'UniformOutput', false);
@@ -58,16 +73,25 @@ T = table((1:numel(areas))', string(labels), areas, ...
 disp(' ');
 disp('Area per score interval (cm^2):');
 disp(T);
-fprintf('\nTotal covered area = %.3f cm^2\n', sum(areas, 'omitnan'));
+totalArea = sum(areas, 'omitnan');
+fprintf('\nTotal covered area = %.3f cm^2\n', totalArea);
+if totalArea == 0
+    warning(['Every interval is empty. The bins (' num2str(breaks) ...
+             ') likely do not match this quantity''s range - set PE_INTERVAL_BREAKS.']);
+end
 
 % --- 4. Bar plot --------------------------------------------------------
 figure('Name', sprintf('pulse-ep map %d — areas per interval', mapId), 'Color', 'w');
 bar(areas, 'FaceColor', '#3a76ff');
 set(gca, 'XTickLabel', labels);
-xlabel('Score interval [%]');
+if isempty(quantityUnit)
+    xlabel(sprintf('%s interval', quantity));
+else
+    xlabel(sprintf('%s interval [%s]', quantity, quantityUnit));
+end
 ylabel('Area [cm^2]');
-title(sprintf('Map %d — area per %s score interval (d = %.1f mm)', ...
-              mapId, scalarName, distMM));
+title(sprintf('Map %d — area per %s interval (d = %.1f mm)', ...
+              mapId, quantity, distMM));
 grid on;
 exportgraphics(gcf, 'areas_per_interval.png', 'Resolution', 150);
 fprintf('Wrote areas_per_interval.png\n');

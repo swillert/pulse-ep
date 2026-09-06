@@ -152,6 +152,15 @@ class EPMapModel(Base):
         order_by="EPMapPoint.point_index",
         cascade="all, delete-orphan",
     )
+    #: The vendor-neutral successor to ``points``. Without this relationship
+    #: the table was written but never read back, so an EnSiteX map arrived in
+    #: memory with no acquisition points despite having thousands in the
+    #: database.
+    measurement_points = relationship(
+        "MeasurementPointModel",
+        order_by="MeasurementPointModel.point_index",
+        cascade="all, delete-orphan",
+    )
 
     def __init__(self, map_name: str, study_id: int, **kwargs) -> None:
         self.map_name = map_name
@@ -217,9 +226,15 @@ class EPMapModel(Base):
         """Convert DB model to EPMap domain object.
 
         Args:
-            include_points: If True, build xyz array from related EPMapPoints.
-                            Requires that self.points is loaded.
+            include_points: If True, load the map's acquisition points —
+                            vendor-neutral ``measurement_points`` and, for
+                            CARTO studies imported before those existed, the
+                            legacy ``points`` as an ``xyz`` array.
         """
+        measurement_points = []
+        if include_points and self.measurement_points:
+            measurement_points = [mp.to_measurement_point() for mp in self.measurement_points]
+
         xyz = None
         if include_points and self.points:
             xyz = np.array(
@@ -251,6 +266,7 @@ class EPMapModel(Base):
             uni_imp_frc=_arr(self.uni_imp_frc) if self.uni_imp_frc else None,
             xyz=xyz,
             scalar_fields=scalar_fields,
+            measurement_points=measurement_points,
         )
 
 

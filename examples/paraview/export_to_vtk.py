@@ -43,8 +43,13 @@ def _argparser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--scalar-name",
-        default="act",
-        help="Scalar to attach to the mesh (default: %(default)s).",
+        default=None,
+        help=(
+            "Quantity to attach to the mesh, e.g. voltage_bipolar or "
+            "activation_time. Defaults to the map's own primary quantity, "
+            "which differs between vendors — list a map's fields with "
+            "GET /epmaps/<id>/scalars."
+        ),
     )
     parser.add_argument(
         "--distance",
@@ -77,7 +82,12 @@ def _load_epmap(map_id: int):
         return model.to_epmap(include_points=True), model.study_name, model.map_name
 
 
-def _mesh_payload(epmap, scalar_name: str, distance: float):
+def _mesh_payload(epmap, scalar_name: str | None, distance: float):
+    # None means "whatever this map is about"; resolve it so the exported
+    # arrays carry the real quantity name rather than a placeholder.
+    scalar_name = scalar_name or epmap.primary_scalar()
+    if scalar_name is None:
+        raise SystemExit("This map carries no scalar fields.")
     payload = epmap.extract_mesh_data(scalar_name=scalar_name, distance=distance)
     vertices = np.asarray(payload["mesh_data"]["vertices"], dtype=np.float64)
     faces = np.asarray(payload["mesh_data"]["faces"], dtype=np.int64)
@@ -92,7 +102,7 @@ def _mesh_payload(epmap, scalar_name: str, distance: float):
         ],
         dtype=np.float64,
     )
-    return vertices, faces, scalars, normalized, payload["point_data"]
+    return vertices, faces, scalars, normalized, payload["point_data"], scalar_name
 
 
 def _to_unstructured(vertices, faces, scalar_name, scalars, normalized) -> pv.UnstructuredGrid:
@@ -113,11 +123,12 @@ def main(argv: list[str] | None = None) -> int:
     epmap, study_name, map_name = _load_epmap(args.map_id)
     print(f"Loaded EPMap {args.map_id}: {study_name!r} / {map_name!r}")
 
-    vertices, faces, scalars, normalized, point_payload = _mesh_payload(
+    vertices, faces, scalars, normalized, point_payload, scalar_name = _mesh_payload(
         epmap, args.scalar_name, args.distance
     )
+    print(f"Scalar: {scalar_name}")
 
-    grid = _to_unstructured(vertices, faces, args.scalar_name, scalars, normalized)
+    grid = _to_unstructured(vertices, faces, scalar_name, scalars, normalized)
     grid.field_data["study_name"] = np.array([study_name])
     grid.field_data["map_name"] = np.array([map_name])
 
@@ -132,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             cloud = pv.PolyData(coords)
             point_scalars = point_payload["scalar_data"] or []
             if point_scalars:
-                cloud.point_data[args.scalar_name] = np.asarray(
+                cloud.point_data[scalar_name] = np.asarray(
                     [math.nan if v is None else float(v) for v in point_scalars],
                     dtype=np.float64,
                 )

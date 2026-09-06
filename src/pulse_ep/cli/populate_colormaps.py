@@ -29,7 +29,9 @@ predefined_colormaps = [
             "High",
             "End",
         ],
-        "is_relative": False,
+        # Intervals run 0..1 — a normalised scale, meaningless against raw
+        # millivolts or milliseconds unless the data is mapped onto it.
+        "is_relative": True,
         "clipping": False,  # Ensure clipping is False
     },
     {
@@ -48,7 +50,9 @@ predefined_colormaps = [
         "intervals": [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0],
         "use_gradient": True,
         "annotations": None,  # No annotations
-        "is_relative": False,
+        # Intervals run 0..1 — a normalised scale, meaningless against raw
+        # millivolts or milliseconds unless the data is mapped onto it.
+        "is_relative": True,
         "clipping": False,  # Ensure clipping is False
     },
     {
@@ -67,7 +71,9 @@ predefined_colormaps = [
         "intervals": [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0],
         "use_gradient": True,
         "annotations": None,  # No annotations
-        "is_relative": False,
+        # Intervals run 0..1 — a normalised scale, meaningless against raw
+        # millivolts or milliseconds unless the data is mapped onto it.
+        "is_relative": True,
         "clipping": False,  # Ensure clipping is False
     },
     {
@@ -86,7 +92,9 @@ predefined_colormaps = [
         "intervals": [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0],
         "use_gradient": True,
         "annotations": None,  # No annotations
-        "is_relative": False,
+        # Intervals run 0..1 — a normalised scale, meaningless against raw
+        # millivolts or milliseconds unless the data is mapped onto it.
+        "is_relative": True,
         "clipping": False,  # Ensure clipping is False
     },
     {
@@ -105,7 +113,9 @@ predefined_colormaps = [
         "intervals": [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0],
         "use_gradient": True,
         "annotations": None,
-        "is_relative": False,
+        # Intervals run 0..1 — a normalised scale, meaningless against raw
+        # millivolts or milliseconds unless the data is mapped onto it.
+        "is_relative": True,
         "clipping": False,
     },
     {
@@ -196,7 +206,15 @@ def populate_colormaps():
             # Check if the colormap already exists
             existing_colormap = ColormapModel.find_by_name(name, session)
             if existing_colormap:
-                print(f"Colormap '{name}' already exists. Skipping.")
+                # Skipping wholesale meant a corrected definition never reached
+                # a database that had been seeded once. Bring the display flags
+                # in step; colours and intervals stay as the operator left them.
+                if existing_colormap.is_relative != is_relative:
+                    existing_colormap.is_relative = is_relative
+                    session.commit()
+                    print(f"Colormap '{name}': is_relative -> {is_relative}.")
+                else:
+                    print(f"Colormap '{name}' already exists. Skipping.")
                 continue
 
             new_colormap = ColormapModel(

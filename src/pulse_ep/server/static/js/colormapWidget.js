@@ -7,7 +7,11 @@ class ColormapWidget {
         this.currentDatatype = null; // resolved from the map's own scalars
         this.editingColormapId = null; // Track which colormap is being edited
         this.useGradient = true; // Initialize with default gradient option
-        this.isRelative = false; // Initialize with default relative option
+        // Relative by default: the shipped gradient colormaps are defined on a
+        // 0..1 scale, so raw millivolts or milliseconds fall outside it and the
+        // map renders blank. A colormap that carries an absolute scale
+        // (pace-mapping, 0..100 %) overrides this when it is selected.
+        this.isRelative = true;
         this.clipping = true; // Initialize with default clipping option
         this.formClipping = true; // Initialize form clipping option
         this.currentDistance = 5;
@@ -284,6 +288,15 @@ class ColormapWidget {
                     option.dataset.id = colormap.id; // Store the id in the dataset
                     colormapSelect.appendChild(option);
                 });
+                // Preselect the widget's default colormap rather than whatever
+                // the API happens to return first: the list is led by the
+                // pace-mapping scales, which are defined on an absolute 0..100
+                // grid and leave a voltage or activation map blank.
+                if (Array.from(colormapSelect.options).some(o => o.value === this.currentColormap)) {
+                    colormapSelect.value = this.currentColormap;
+                } else {
+                    this.currentColormap = colormapSelect.value;
+                }
                 this.updateCheckBoxDefaults(colormapSelect.value); // Set defaults for the initially selected colormap
                 this.drawColormap(document.getElementById('colormap-canvas'), colormapSelect.value);
                 this.emitColormapChanged(); // Emit initial event
