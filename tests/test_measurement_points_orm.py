@@ -19,7 +19,11 @@ def test_serialise_to_model():
     assert model.map_id == 5
     assert model.position == [1.0, 2.0, 3.0]
     # measurements as an open JSON map keyed by kind name
-    assert model.measurements["voltage_bipolar"] == {"value": 0.71, "kind": "voltage_bipolar", "unit": "mV"}
+    assert model.measurements["voltage_bipolar"] == {
+        "value": 0.71,
+        "kind": "voltage_bipolar",
+        "unit": "mV",
+    }
     assert model.measurements["correlation"]["value"] == 0.16
     assert model.measurements["contact_force"]["value"] == 12.5
     assert model.electrodes["A"] == [1.1, 2.1, 3.1]

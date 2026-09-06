@@ -6,7 +6,48 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] — 2026-09-06
+
 ### Added
+
+- **EnSiteX (Abbott / St. Jude) import.** `SJM_DIF_5.0` mesh decode,
+  per-vertex scalar fields, measurement points from every DxL channel,
+  placed points (AutoMark / PFA / lesions / labels), chamber and CT
+  anatomy (`Model_Groups.xml`, `difNNN.xml`), opt-in Parquet waveform
+  storage, and the `pulse-ep-import-ensite` console script.
+- **A reviewable import pipeline.** `ImportSource` (directory or ZIP),
+  a vendor-importer registry with auto-detection, and a
+  `prepare → review → commit` plan that proposes what would be imported —
+  with issues flagged — before anything is written.
+- **An import queue.** `ImportJobModel` state machine, a drop-directory
+  watcher that waits for a bundle to fall quiescent, the
+  `/api/import-jobs` REST layer and a browser review UI.
+- **Map comparison.** `POST /api/compare` computes a delta field between
+  two maps, with euclidean or geodesic correspondence; the latter uses a
+  Heat Method solver (Crane et al. 2013).
+- **A two-layer vocabulary.** An inventory of physical quantities
+  (`KIND_SPECS`) plus a per-vendor lexicon of the tokens each system
+  exports them under. Unrecognised quantities are imported under their
+  raw vendor token rather than dropped.
+- `GET /epmaps/<id>/scalars` — the quantities a map actually carries, so
+  clients no longer have to assume field names.
+- Alembic migrations, and the `PULSE_EP_DROP_DIR` /
+  `PULSE_EP_WAVEFORM_STORE_DIR` settings.
+
+### Changed
+
+- **Scalar fields are named by the quantity they hold.** CARTO's `act`
+  and `vol` became `activation_time` / `pacemap_score` and
+  `voltage_bipolar`, matching EnSiteX, so one query spans both vendors.
+  The old names still resolve for studies imported earlier.
+- Analysis defaults resolve to a map's own primary quantity instead of
+  the literal `"act"`, which only ever existed on CARTO maps.
+- The viewer's data-type selector is populated from the map's real
+  fields instead of a fixed ACT / VOL pair.
+- CARTO gained `prepare`/`commit`, vendor-neutral measurement points, and
+  no longer fails when no map filter is supplied.
 
 - `docs/` — a full mkdocs-material documentation site, deployed via
   GitLab Pages.

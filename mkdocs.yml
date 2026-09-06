@@ -1,5 +1,5 @@
 site_name: pulse-ep
-site_description: Open-source platform for programmatic access to CARTO 3 electroanatomical mapping data.
+site_description: Open-source platform for programmatic access to CARTO 3 and EnSiteX electroanatomical mapping data.
 site_author: Sven Willert
 site_url: https://sw.gitlab-pages.willert.net/pulse-ep/
 repo_name: gitlab.willert.net/sw/pulse-ep
@@ -135,6 +135,7 @@ nav:
       - Configuration: getting-started/configuration.md
   - Guides:
       - Importing CARTO studies: guides/carto-import.md
+      - Importing EnSite X studies: guides/ensite-import.md
       - The web viewer: guides/web-viewer.md
       - Docker deployment: guides/docker-deployment.md
       - Managing users: guides/managing-users.md

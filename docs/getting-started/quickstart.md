@@ -13,8 +13,8 @@ What this does:
 1. Generates a 642-vertex synthetic atrial mesh (icosphere, 25 mm radius).
 2. Injects a Gaussian score field with σ = 6 mm, no noise.
 3. Spins up an in-memory SQLite database with the full pulse-ep ORM schema.
-4. Ingests the synthetic study through the same `pulse_ep.core.importer`
-   used for real CARTO data.
+4. Ingests the synthetic study through the same ORM and persistence path
+   used for real study data.
 5. Loads it back as an `EPMap`, computes total surface area and per-interval
    area breakdowns, and prints the result.
 
@@ -39,10 +39,11 @@ cleanly, your install is healthy.
       90–100 %: 3.32 cm²
     ```
 
-## 2. Real CARTO study, local Python install
+## 2. A real study, local Python install
 
 This is the workflow for researchers running pulse-ep on their own laptop
-against an existing PostgreSQL database.
+against an existing PostgreSQL database. It is the same for both supported
+vendors — only the import command differs.
 
 ### 2.1. Start Postgres
 
@@ -68,20 +69,62 @@ PULSE_EP_JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe
 
 See [Configuration](configuration.md) for the full list of variables.
 
-### 2.3. Import a CARTO study
+### 2.3. Create the schema
 
 ```bash
-pulse-ep-import-carto /path/to/study-export.zip
+alembic upgrade head
 ```
 
-This unpacks the CARTO export, parses the XML manifests and mesh files,
-and populates the database. Importing a 60-map study with full point clouds
-takes about 60–90 seconds on a modern laptop.
+Alembic reads the same `PULSE_EP_DATABASE_URL`, so no separate database
+configuration is needed. On an empty database this creates every table;
+on an existing one it applies only the outstanding migrations. (The server
+also calls `init_db()` at startup, which creates any missing tables — but
+`alembic upgrade head` is what keeps an existing database in step with a
+new release.)
 
-See the [CARTO import guide](../guides/carto-import.md) for export-format
-details, attribute tagging and batch imports.
+### 2.4. Import a study
 
-### 2.4. Seed defaults and create a user
+Both importers accept an export **folder or ZIP**, and both can show you
+what they would do before writing anything:
+
+=== "CARTO 3"
+
+    ```bash
+    pulse-ep-import-carto /path/to/carto-export.zip
+    ```
+
+    Unpacks the export, parses the study XML manifests and `.mesh` files,
+    and populates the database. A 60-map study with full point clouds takes
+    about 60–90 seconds on a modern laptop.
+
+    See the [CARTO import guide](../guides/carto-import.md).
+
+=== "EnSiteX"
+
+    ```bash
+    # print the plan — maps, scalar fields, point counts, issues — and stop
+    pulse-ep-import-ensite -i /path/to/ensite-export.zip --dry-run
+
+    # then import for real
+    pulse-ep-import-ensite -i /path/to/ensite-export.zip
+
+    # optionally include the signal data (opt-in; it can dwarf the export)
+    pulse-ep-import-ensite -i /path/to/export.zip \
+        --waveforms --store-dir /var/pulse/waveforms
+    ```
+
+    Imports are idempotent by the export's study GUID — re-running skips a
+    study that is already present unless you pass `--clear`.
+
+    See the [EnSiteX import guide](../guides/ensite-import.md).
+
+!!! tip "Run `--dry-run` first on an unfamiliar export"
+
+    The plan tells you which maps were detected, which quantities each
+    carries, how many measurement points came with them, and anything the
+    importer found questionable — before a single row is written.
+
+### 2.5. Seed defaults and create a user
 
 ```bash
 pulse-ep-populate-colormaps
@@ -92,7 +135,7 @@ The colormap seeder loads the bundled clinical colormaps; without them
 the viewer falls back to a plain blue-to-red linear ramp. The user
 creator prompts for a password if `--password` is not given.
 
-### 2.5. Launch the web app
+### 2.6. Launch the web app
 
 ```bash
 pulse-ep-server

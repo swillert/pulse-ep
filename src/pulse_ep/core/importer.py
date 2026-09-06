@@ -103,12 +103,12 @@ def import_studies(file_path, map_filter=None):
 def import_carto(filename: str, filter=None):
     """
     Import Carto data and convert it into a format suitable for further analysis.
-    """
-    if filter == None:  # noqa: E711
-        interactive = True
-    else:
-        interactive = False
 
+    ``filter`` is an optional case-insensitive regex over map names;
+    ``None`` imports every map with enough points. It used to select a
+    long-gone interactive prompt, which meant every caller that did not pass a
+    filter — ``CartoImporter.parse`` among them — hit an unconditional raise.
+    """
     # Skip macOS metadata files (AppleDouble ._* files)
     if os.path.basename(filename).startswith("._"):
         print(f"Skipping macOS metadata file: {filename}")
@@ -143,9 +143,6 @@ def import_carto(filename: str, filter=None):
         ]
     else:
         map_indices = [index for index, numPts in enumerate(numPtsPerMap) if numPts >= 5]
-
-    if interactive:
-        raise ValueError("Interactive mode is not supported in server mode.")
 
     nMaps = len(map_indices)
     if nMaps < 1:
@@ -182,6 +179,18 @@ def import_carto(filename: str, filter=None):
                 epmap.impedance_time,
                 epmap.impedance_value,
             ) = import_carto_points(path, carto_point_export_filenames)
+
+            # The same points in the vendor-neutral shape, so CARTO maps carry
+            # measurement points exactly as EnSiteX ones do. Best-effort: the
+            # legacy arrays above stay populated either way.
+            try:
+                from pulse_ep.core.importers.carto import carto_points_to_measurements
+                from pulse_ep.core.point_importer import import_map_points
+
+                point_dicts, _ = import_map_points(path, epmap.map_name)
+                epmap.measurement_points = carto_points_to_measurements(point_dicts)
+            except Exception as point_conv_error:
+                print(f"Warning: no vendor-neutral points for {epmap.map_name}: {point_conv_error}")
 
             # Add map to the Study
             study.add_epmap(epmap)

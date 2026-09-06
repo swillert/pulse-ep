@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulse-ep"
-version = "0.1.0"
-description = "Open-source platform for programmatic access to CARTO electroanatomical mapping data — REST API, 3D viewer, and Python toolkit for cardiac electrophysiology research."
+version = "0.2.0"
+description = "Open-source platform for programmatic access to CARTO 3 and EnSiteX electroanatomical mapping data — REST API, 3D viewer, and Python toolkit for cardiac electrophysiology research."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -14,6 +14,8 @@ keywords = [
     "cardiology",
     "pace-mapping",
     "CARTO",
+    "EnSite",
+    "multivendor",
     "electroanatomical-mapping",
     "mesh-analysis",
     "open-source",

@@ -9,7 +9,7 @@ matches your role.
 | Component        | Minimum | Notes                                                   |
 | ---------------- | ------- | ------------------------------------------------------- |
 | Python           | 3.10    | Tested on CPython 3.10 / 3.11 / 3.12.                   |
-| PostgreSQL       | 14      | Optional — required only to import or serve real CARTO data. |
+| PostgreSQL       | 14      | Optional — required only to import or serve real study data. Tested on 16. |
 | Docker           | 24+     | Optional — recommended for getting a database running quickly. |
 
 If you only want to try out `pulse-ep`, you do **not** need PostgreSQL — the
@@ -92,8 +92,9 @@ unit-test suite:
 pytest -q
 ```
 
-You should see something like `23 passed, 1 skipped` (the skipped test
-requires PostgreSQL-specific types not supported by SQLite).
+The suite needs no database. You should see one skipped test — it exercises
+schema creation on SQLite, which cannot render the PostgreSQL `JSONB` and
+`ARRAY` types the ORM uses. That skip is expected, not a failure.
 
 ## Optional dependencies cheat sheet
 
@@ -108,7 +109,7 @@ requires PostgreSQL-specific types not supported by SQLite).
 ## Next steps
 
 - [Quickstart](quickstart.md) — run the synthetic demo and then a real
-  CARTO study through the full pipeline.
+  CARTO or EnSiteX study through the full pipeline.
 - [Configuration](configuration.md) — set `PULSE_EP_DATABASE_URL`,
   `PULSE_EP_JWT_SECRET_KEY` and friends.
 - [Docker deployment](../guides/docker-deployment.md) — bring up the

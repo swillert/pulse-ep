@@ -169,7 +169,7 @@ def compute_local_velocity(i, projected_coords, act_times, Vt, neighbours_model)
     return v_i @ Vt[:2]
 
 
-def generate_conduct_velocity_vectors(mesh, scalars="act"):
+def generate_conduct_velocity_vectors(mesh, scalars="activation_time"):
     # Get the activation times and coordinates from the mesh
     act_times = mesh.point_data[scalars]
     coords = mesh.points

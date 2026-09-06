@@ -21,8 +21,12 @@ _DIF = (
 
 
 def _make_export(root):
-    (root / "Contact_Mapping_Model_Endo_Voltage_Pre-bi.xml").write_text(_DIF.format(vals="0.5 1.0 1.5 2.0"))
-    (root / "Contact_Mapping_Model_Endo_Voltage_Pre-uni.xml").write_text(_DIF.format(vals="5 6 7 8"))
+    (root / "Contact_Mapping_Model_Endo_Voltage_Pre-bi.xml").write_text(
+        _DIF.format(vals="0.5 1.0 1.5 2.0")
+    )
+    (root / "Contact_Mapping_Model_Endo_Voltage_Pre-uni.xml").write_text(
+        _DIF.format(vals="5 6 7 8")
+    )
     (root / "AutoMark_Data.csv").write_text(
         "Export File Version: 7.0\n"
         "Export Data Element: AutoMark_Data\n"

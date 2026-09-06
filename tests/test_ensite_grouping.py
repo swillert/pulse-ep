@@ -11,6 +11,8 @@ from pulse_ep.core.importers.ensite import (
     group_dif_files,
     group_key,
     merge_dif_group,
+    parse_map_descriptor,
+    split_polarity,
 )
 
 _VERTS = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]], dtype=float)
@@ -45,6 +47,35 @@ def test_group_dif_files_pairs_bi_and_uni():
     groups = group_dif_files(names)
     assert set(groups) == {"M_Voltage_Pre", "M_ReMap"}
     assert len(groups["M_Voltage_Pre"]) == 2 and len(groups["M_ReMap"]) == 2
+
+
+def test_group_key_is_case_insensitive():
+    """One study exported the same map as ``RVStimPre-uni`` and ``RvStimPre-bi``."""
+    names = ["M_RVStimPre-unipolar.xml", "M_RvStimPre-bipolar.xml"]
+    groups = group_dif_files(names)
+    assert len(groups) == 1
+    assert sorted(next(iter(groups.values()))) == sorted(names)
+    # the key keeps the first file's spelling rather than a casefolded one
+    assert next(iter(groups)) == "M_RVStimPre"
+
+
+def test_polarity_suffix_tolerates_missing_letter():
+    """``-bpolar`` is a real operator typo; it must still pair with ``-unipolar``."""
+    assert split_polarity("M_VT-bpolar") == ("M_VT", "bipolar")
+    assert split_polarity("M_VT-unipolar") == ("M_VT", "unipolar")
+    groups = group_dif_files(["M_VT-bpolar.xml", "M_VT-unipolar.xml"])
+    assert set(groups) == {"M_VT"} and len(groups["M_VT"]) == 2
+
+
+def test_descriptor_polarity_agrees_with_grouping():
+    """A typo must not silently fall through to the bipolar default."""
+    assert parse_map_descriptor("Contact_Mapping_Model_VT-bpolar.xml")["polarity"] == "bipolar"
+    assert parse_map_descriptor("Contact_Mapping_Model_VT-unipolar.xml")["polarity"] == "unipolar"
+
+
+def test_unpaired_map_keeps_its_own_group():
+    groups = group_dif_files(["M_VT-unipolar.xml", "M_Other-bipolar.xml"])
+    assert set(groups) == {"M_VT", "M_Other"}
 
 
 def test_merge_bi_uni_into_one_map():

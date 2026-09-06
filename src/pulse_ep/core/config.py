@@ -116,6 +116,13 @@ class Settings(BaseSettings):
         default="drop",
         description="Drop directory the import watcher scans for new export bundles.",
     )
+    waveform_store_dir: str = Field(
+        default="",
+        description=(
+            "Root directory for Parquet waveform storage. Empty disables waveform "
+            "import via the queue; the CLI takes --store-dir instead."
+        ),
+    )
 
     # ------------------------------------------------------------------
     # Validators

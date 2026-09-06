@@ -13,6 +13,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from pulse_ep.core.config import get_settings
 from pulse_ep.core.database import get_db_session
+from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.models import (
     AttributeMetadata,
     ColormapModel,
@@ -22,6 +23,7 @@ from pulse_ep.core.models import (
     StudyModel,
     UserModel,
 )
+from pulse_ep.core.scalar_field import default_unit
 
 _settings = get_settings()
 
@@ -146,6 +148,45 @@ def list_epmaps_in_study(study_id):
     return jsonify(epmaps_serializable)
 
 
+@app.route("/epmaps/<int:map_id>/scalars", methods=["GET"])
+@jwt_required()
+def list_map_scalars(map_id):
+    """The quantities this map actually carries.
+
+    The viewer used to offer a fixed ACT / VOL dropdown — CARTO's field names —
+    so an EnSiteX map could not be displayed at all. Clients read the choices
+    from here instead, and each entry carries its ``kind`` and unit for
+    labelling and colour scaling.
+    """
+    with get_db_session() as session:
+        epmap_model = EPMapModel.retrieve(session, map_id)
+        if not epmap_model:
+            return jsonify({"error": f"EPMap {map_id} not found"}), 404
+        fields = epmap_model.scalar_fields or {}
+
+    primary = None
+    for kind in EPMap.PRIMARY_SCALAR_ORDER:
+        if kind in fields:
+            primary = kind
+            break
+    scalars = [
+        {
+            "name": name,
+            "kind": f.get("kind"),
+            "unit": f.get("unit") or default_unit(f.get("kind", "")),
+            "source": f.get("source"),
+        }
+        for name, f in fields.items()
+    ]
+    return jsonify(
+        {
+            "map_id": map_id,
+            "primary": primary or (scalars[0]["name"] if scalars else None),
+            "scalars": scalars,
+        }
+    )
+
+
 def get_epmap_from_db(map_id, include_points=True):
     with get_db_session() as session:
         epmap_model = EPMapModel.retrieve(session, map_id)
@@ -206,7 +247,9 @@ def get_mesh_data():
     print("Received request for /get_mesh_data")
 
     map_id = request.args.get("map_id")
-    scalar_name = request.args.get("scalar_name", "act")
+    # No scalar named: let the map choose its own primary quantity, which
+    # differs per vendor ("act" was CARTO-only and 404s every EnSiteX map).
+    scalar_name = request.args.get("scalar_name") or None
 
     print(f"Received map_id: {map_id}, scalar_name: {scalar_name}")
 
@@ -469,7 +512,7 @@ def calculate_areas_for_intervals_endpoint():
         return jsonify({"error": "No input data provided"}), 400
 
     map_id = data.get("map_id")
-    scalar_name = data.get("scalar_name", "act")
+    scalar_name = data.get("scalar_name") or None
     distance = data.get("distance", 5)
     intervals = data.get("intervals")
 
@@ -661,7 +704,7 @@ def save_report():
     report_name = data.get("report_name")
     colormap_id = data.get("colormap_id")
     colormap_name = data.get("colormap_name")
-    datatype = data.get("datatype", "act")
+    datatype = data.get("datatype") or None
     distance = data.get("distance", 5.0)
     map_ids = data.get("map_ids", [])
     additional_data = data.get("additional_data", {})
@@ -722,7 +765,7 @@ def _build_report_excel(report_id):
 
             additional = dict(report.additional_data or {})
             report_name = additional.get("report_name", f"report_{report_id}")
-            datatype = additional.get("datatype", "act")
+            datatype = additional.get("datatype") or None
             distance = float(additional.get("distance", 5.0))
             colormap_id = additional.get("colormap_id")
             map_ids = list(report.map_ids)

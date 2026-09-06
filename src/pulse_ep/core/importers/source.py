@@ -89,9 +89,7 @@ class ZipSource:
     def size(self, name: str) -> int:
         return self._zf.getinfo(name).file_size
 
-    def materialize(
-        self, members: list[str] | None = None, dest: str | Path | None = None
-    ) -> Path:
+    def materialize(self, members: list[str] | None = None, dest: str | Path | None = None) -> Path:
         """Extract selected members (or all) to a temp dir; return its path.
 
         Passing ``members`` (e.g. only the DIF meshes + point tables) keeps a

@@ -12,7 +12,7 @@ export class MeshHelper {
         this.currentColormap = 'jet';
         this.isRelative = false;
         this.clipping = true;
-        this.currentDatatype = 'act';
+        this.currentDatatype = null; // set from the map's own scalars
         this.center = new THREE.Vector3();
     }
 

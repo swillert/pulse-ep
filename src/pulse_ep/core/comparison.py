@@ -123,7 +123,9 @@ def compare_maps(
     if metric == "euclidean":
         b_at, dist = _euclidean(a_verts, b_verts, b_vals)
     elif metric == "geodesic":
-        b_at, dist = _geodesic(a_verts, np.asarray(map_a.triangles), b_verts, b_vals, geodesic_solver)
+        b_at, dist = _geodesic(
+            a_verts, np.asarray(map_a.triangles), b_verts, b_vals, geodesic_solver
+        )
     else:
         raise ValueError(f"unknown metric {metric!r} (use 'euclidean' or 'geodesic')")
 

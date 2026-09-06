@@ -1,7 +1,8 @@
 """Abbott EnSiteX (St. Jude) DIF decode.
 
 Parses the ``SJM_DIF_5.0`` XML meshes (``Contact_Mapping_Model*.xml``,
-``Model_Groups.xml``) into vendor-neutral geometry + scalar fields.
+``Model_Groups.xml``, ``difNNN.xml``) into vendor-neutral geometry +
+scalar fields.
 
 Verified DIF quirks handled here (see the project notes):
 - ``<Polygons>`` indices are **1-based** — converted to 0-based.
@@ -25,17 +26,23 @@ from lxml import etree
 
 from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.importers.base import register_importer
+from pulse_ep.core.importers.lexicon import (
+    ENSITE_DXL_CHANNELS,
+    ENSITE_POINT_COLUMNS,
+    ENSITE_POLARITY,
+    ENSITE_POLARITY_CHANNELS,
+    resolve,
+)
 from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan, WaveformPlan
 from pulse_ep.core.importers.source import ImportSource
 from pulse_ep.core.measurement import MeasurementPoint
 from pulse_ep.core.placed_point import ABLATION, ABLATION_PFA, LANDMARK, MARKER, PlacedPoint
 from pulse_ep.core.scalar_field import (
-    ACTIVATION_TIME,
+    ANNOTATION_TIME,
     CONTACT_FORCE,
-    CORRELATION,
-    SNR,
+    UNKNOWN,
     VOLTAGE_BIPOLAR,
-    VOLTAGE_UNIPOLAR,
+    field_name,
 )
 from pulse_ep.core.study import Study
 from pulse_ep.core.waveform import Waveform
@@ -87,7 +94,9 @@ def parse_dif(xml: bytes | str) -> list[DifVolume]:
         status_mask = None if status is None else (status == 0.0)
 
         chl = _floats(vol.find("Color_high_low"))
-        color_high_low = (float(chl[0]), float(chl[1])) if chl is not None and chl.size >= 2 else None
+        color_high_low = (
+            (float(chl[0]), float(chl[1])) if chl is not None and chl.size >= 2 else None
+        )
 
         labels = [le.text.strip() for le in vol.findall(".//Label") if le.text]
 
@@ -112,7 +121,15 @@ def parse_dif(xml: bytes | str) -> list[DifVolume]:
 # --- filename descriptor ---------------------------------------------------
 
 _TYPE_TOKENS = (
-    "voltage", "remap", "premap", "vt", "stim", "lvstim", "rvstim", "deep", "pre",
+    "voltage",
+    "remap",
+    "premap",
+    "vt",
+    "stim",
+    "lvstim",
+    "rvstim",
+    "deep",
+    "pre",
 )
 
 
@@ -134,12 +151,15 @@ def parse_map_descriptor(filename: str) -> dict:
     elif "epi" in low:
         desc["part"] = "epi"
 
-    polarity = None
-    for t in low:
-        if t.startswith("uni"):
-            polarity = "unipolar"
-        elif t.startswith("bi"):
-            polarity = "bipolar"
+    # The trailing suffix is authoritative (and typo-tolerant); the token scan
+    # is the fallback for the rare export that carries it mid-name.
+    _, polarity = split_polarity(stem)
+    if polarity is None:
+        for t in low:
+            if t.startswith("uni"):
+                polarity = "unipolar"
+            elif t.startswith("bi"):
+                polarity = "bipolar"
     desc["polarity"] = polarity
 
     types = [t for t in low if any(t == tok or tok in t for tok in _TYPE_TOKENS)]
@@ -148,16 +168,17 @@ def parse_map_descriptor(filename: str) -> dict:
     return desc
 
 
-def scalar_kind_for(descriptor: dict) -> tuple[str, str]:
-    """Return ``(field_name, kind)`` for a DIF map's ``Map_data``.
+def scalar_kind_for(descriptor: dict) -> str:
+    """The quantity a DIF map's ``Map_data`` holds.
 
-    DIF contact-mapping models carry voltage (mV); polarity comes from the
-    descriptor (defaulting to bipolar). Activation/other map types would need
-    value-range detection — a later refinement, not assumed here.
+    DIF contact-mapping models carry voltage; the polarity comes from the
+    descriptor and is looked up in the lexicon, defaulting to bipolar when the
+    filename says nothing. Activation/other map types would need value-range
+    detection — a later refinement, not assumed here.
     """
-    if descriptor.get("polarity") == "unipolar":
-        return "voltage_unipolar", VOLTAGE_UNIPOLAR
-    return "voltage_bipolar", VOLTAGE_BIPOLAR
+    polarity = descriptor.get("polarity")
+    kind = resolve(ENSITE_POLARITY, polarity) if polarity else UNKNOWN
+    return VOLTAGE_BIPOLAR if kind == UNKNOWN else kind
 
 
 def dif_to_epmap(volume: DifVolume, descriptor: dict, study_name: str, source: str) -> EPMap:
@@ -170,38 +191,63 @@ def dif_to_epmap(volume: DifVolume, descriptor: dict, study_name: str, source: s
         normals=volume.normals,
     )
     if volume.map_data is not None:
-        name, kind = scalar_kind_for(descriptor)
+        kind = scalar_kind_for(descriptor)
         epmap.register_scalar(
-            name, volume.map_data, kind=kind, status_mask=volume.status_mask, source=source
+            field_name(kind),
+            volume.map_data,
+            kind=kind,
+            status_mask=volume.status_mask,
+            source=source,
         )
     return epmap
 
 
 # --- bipolar / unipolar grouping -------------------------------------------
 
-_POLARITY_SUFFIX = re.compile(r"[-_ ]?(bipolar|unipolar|bipol|unipol|bi|uni)$", re.IGNORECASE)
+# ``bi?polar`` / ``uni?polar`` absorb the missing-letter typos seen in real
+# exports (``VT-bpolar``); operators rename maps by hand, so the suffix cannot
+# be assumed well-formed.
+_POLARITY_SUFFIX = re.compile(
+    r"[-_ ]?(?:(?P<bi>bi?polar|bipol|bi)|(?P<uni>uni?polar|unipol|uni))$", re.IGNORECASE
+)
 
 
 class GeometryMismatch(Exception):
     """Raised when maps grouped as one map do not share vertex geometry."""
 
 
+def split_polarity(stem: str) -> tuple[str, str | None]:
+    """Split a DIF filename stem into ``(base, polarity)``.
+
+    The single place polarity is decoded, so grouping and
+    :func:`parse_map_descriptor` can never disagree about a filename.
+    """
+    m = _POLARITY_SUFFIX.search(stem)
+    if m is None:
+        return stem, None
+    return stem[: m.start()], "bipolar" if m.group("bi") else "unipolar"
+
+
 def group_key(filename: str) -> str:
     """Descriptor minus polarity — the identity a bi/uni pair shares."""
-    return _POLARITY_SUFFIX.sub("", Path(filename).stem)
+    return split_polarity(Path(filename).stem)[0]
 
 
 def group_dif_files(names: list[str]) -> dict[str, list[str]]:
-    """Group DIF filenames by :func:`group_key` (bi+uni of one map together)."""
-    groups: dict[str, list[str]] = {}
+    """Group DIF filenames by :func:`group_key` (bi+uni of one map together).
+
+    Grouping is case-insensitive: the same map is exported as ``RVStimPre-uni``
+    and ``RvStimPre-bi`` often enough that a case-sensitive key splits a pair.
+    The dict key keeps the casing of the group's first file, so the map name
+    stays the operator's spelling.
+    """
+    buckets: dict[str, list[str]] = {}
     for name in names:
-        groups.setdefault(group_key(name), []).append(name)
-    return {k: sorted(v) for k, v in groups.items()}
+        buckets.setdefault(group_key(name).casefold(), []).append(name)
+    return {group_key(files[0]): files for files in (sorted(v) for v in buckets.values())}
 
 
-def merge_dif_group(
-    items: list[tuple[str, DifVolume]], study_name: str, source: str
-) -> EPMap:
+def merge_dif_group(items: list[tuple[str, DifVolume]], study_name: str, source: str) -> EPMap:
     """Merge one group's DIF volumes into a single multi-scalar :class:`EPMap`.
 
     bi and uni of the same map are separate files sharing identical geometry;
@@ -225,9 +271,9 @@ def merge_dif_group(
             raise GeometryMismatch(f"{name} geometry differs from {base_name}")
         if vol.map_data is None:
             continue
-        field_name, kind = scalar_kind_for(parse_map_descriptor(name))
+        kind = scalar_kind_for(parse_map_descriptor(name))
         epmap.register_scalar(
-            field_name, vol.map_data, kind=kind, status_mask=vol.status_mask, source=source
+            field_name(kind), vol.map_data, kind=kind, status_mask=vol.status_mask, source=source
         )
     return epmap
 
@@ -307,33 +353,57 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
 
 # --- measurement points (map_*_points.csv) ---------------------------------
 
-# (csv column, measurement name, kind, unit)
-_POINT_MEASUREMENTS = (
-    ("pp", "voltage_bipolar", VOLTAGE_BIPOLAR, "mV"),
-    ("unipoleMaxPP", "voltage_unipolar", VOLTAGE_UNIPOLAR, "mV"),
-    ("correctedLAT", "activation_time", ACTIVATION_TIME, "ms"),
-    ("correlationCoefficient", "correlation", CORRELATION, ""),
-    ("snr", "snr", SNR, ""),
-)
+#: Columns of the raw-archive ``map_*_points.csv``, in the order they are read.
+#: The quantity each denotes comes from the lexicon, and its name from that.
+_POINT_COLUMNS = ("pp", "unipoleMaxPP", "correctedLAT", "correlationCoefficient", "snr")
 
-
-_MAP_PP_KIND = {
-    "bi": ("voltage_bipolar", VOLTAGE_BIPOLAR),
-    "uni": ("voltage_unipolar", VOLTAGE_UNIPOLAR),
-    "omni": ("voltage_bipolar", VOLTAGE_BIPOLAR),  # omnipolar P-P amplitude
-}
 _MAP_PP_SENTINEL = 9000.0  # adjTime uses 10000 as "no annotation"
 
 
+def _dxl_quantity(map_type: str) -> str:
+    """The quantity a DxL ``Map type:`` denotes (e.g. ``CFEmean_bi`` -> cfe_mean).
+
+    One export writes the *same* point set once per channel — same columns,
+    same point ids, only the value column differs — so the channels merge back
+    into one set of points carrying every measurement (:func:`_merge_point_sets`).
+
+    ``PP`` is the one channel whose quantity depends on the polarity suffix
+    rather than the channel token, so it is resolved against that lexicon.
+    A channel neither table knows comes back :data:`UNKNOWN` and is imported
+    under its raw column name — it must not inherit the voltage reading.
+    """
+    channel, _, polarity = map_type.rpartition("_")
+    token = channel or map_type
+    if token.strip().casefold() in ENSITE_POLARITY_CHANNELS:
+        return resolve(ENSITE_POLARITY, polarity)
+    return resolve(ENSITE_DXL_CHANNELS, token)
+
+
+def _value_column(header: list[str]) -> str | None:
+    """The DxL value column — the one paired with a ``"<name> valid"`` sibling.
+
+    Self-describing, so a channel this importer has never seen is still found
+    without a lookup table of column names.
+    """
+    valid = {h[: -len(" valid")] for h in header if h.endswith(" valid")}
+    return next((h for h in header if h in valid), None)
+
+
 def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPoint]:
-    """Parse a native structured ``Map_PP_*.csv`` (DxL point-parameter export).
+    """Parse a native structured ``Map_<channel>_*.csv`` (DxL point export).
 
     Skips the multi-section preamble via its ``Data starts in row,N`` marker,
-    reads the point table, and maps: ``surface x/y/z`` -> position, ``P-P``
-    (when ``P-P valid``) -> voltage (polarity from the ``Map type``),
-    ``adjTime (ms)`` -> activation_time, ``force (g)`` -> contact_force,
+    reads the point table, and maps: ``surface x/y/z`` -> position, the
+    channel's value column (when its ``"<name> valid"`` sibling is set) ->
+    the measurement named by the ``Map type`` (P-P -> voltage, with the
+    polarity from the same header; LAT -> activation_time; CFE mean, Score,
+    …), ``adjTime (ms)`` -> annotation_time, ``force (g)`` -> contact_force,
     ``roving x/y/z`` (labelled by ``Electrodes``) -> electrodes. Trailing
     variable "Rov Tick" columns are ignored, so parsing is done by hand.
+
+    ``adjTime (ms)`` is deliberately *not* activation time: in real exports it
+    is the annotation window offset and is often constant across every point
+    of the study. A map's activation time is the ``LAT`` channel's own column.
     """
     text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
     lines = text.splitlines()
@@ -354,8 +424,12 @@ def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPo
 
     header = [h.strip() for h in lines[data_row - 1].split(",")]
     col = {name: i for i, name in enumerate(header)}
-    polarity = map_type.lower().replace("pp_", "")
-    field_name, kind = _MAP_PP_KIND.get(polarity, ("voltage_bipolar", VOLTAGE_BIPOLAR))
+
+    value_col = _value_column(header) or "P-P"
+    kind = _dxl_quantity(map_type)
+    # An unrecognised channel keeps the export's own column name, so it is
+    # imported and visible rather than dropped or mislabelled as voltage.
+    measurement = field_name(kind, value_col)
 
     def num(fields, name):
         j = col.get(name)
@@ -380,15 +454,17 @@ def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPo
         if pid is not None and pid < len(f):
             point.source_id = f[pid].strip()
 
-        pp = num(f, "P-P")
-        valid_col = col.get("P-P valid")
-        pp_valid = valid_col is None or (valid_col < len(f) and f[valid_col].strip() in ("1", "1.0"))
-        if pp is not None and pp_valid:
-            point.add(field_name, pp, kind, "mV")
+        value = num(f, value_col)
+        valid_col = col.get(f"{value_col} valid")
+        is_valid = valid_col is None or (
+            valid_col < len(f) and f[valid_col].strip() in ("1", "1.0")
+        )
+        if value is not None and is_valid:
+            point.add(measurement, value, kind)
 
-        lat = num(f, "adjTime (ms)")
-        if lat is not None and abs(lat) < _MAP_PP_SENTINEL:
-            point.add("activation_time", lat, ACTIVATION_TIME, "ms")
+        annot = num(f, "adjTime (ms)")
+        if annot is not None and abs(annot) < _MAP_PP_SENTINEL:
+            point.add("annotation_time", annot, ANNOTATION_TIME, "ms")
 
         force = num(f, "force (g)")
         if force is not None and force >= 0:
@@ -424,9 +500,10 @@ def parse_ensite_points(data: bytes | str, name: str = "") -> list[MeasurementPo
         point = MeasurementPoint(
             position=np.array([row["x"], row["y"], row["z"]], dtype=float), index=int(i)
         )
-        for col, field_name, kind, unit in _POINT_MEASUREMENTS:
+        for col in _POINT_COLUMNS:
             if col in cols and pd.notna(row[col]):
-                point.add(field_name, float(row[col]), kind, unit)
+                kind = resolve(ENSITE_POINT_COLUMNS, col)
+                point.add(field_name(kind, col), float(row[col]), kind)
         if "force" in cols and pd.notna(row["force"]) and float(row["force"]) >= 0:
             point.add("contact_force", float(row["force"]), CONTACT_FORCE, "g")
         for label in ("A", "B", "C"):
@@ -453,7 +530,7 @@ def _element_df(data: bytes | str, header_prefix: str):
     if hi is None:
         return None
     block = [lines[hi]]
-    for line in lines[hi + 1:]:
+    for line in lines[hi + 1 :]:
         if not line.strip() or line.startswith(header_prefix):
             break
         block.append(line)
@@ -513,8 +590,11 @@ def parse_ensite_markers(data: bytes | str, point_type: str = MARKER) -> list[Pl
         if pd.isna(r.get("x")):
             continue
         attrs: dict = {}
-        for csv_col, key in (("Type", "marker_type"), ("Diameter", "diameter"),
-                             ("Annotation", "annotation")):
+        for csv_col, key in (
+            ("Type", "marker_type"),
+            ("Diameter", "diameter"),
+            ("Annotation", "annotation"),
+        ):
             if csv_col in df.columns and pd.notna(r[csv_col]):
                 attrs[key] = r[csv_col]
         if {"R", "G", "B"}.issubset(df.columns):
@@ -602,10 +682,20 @@ def _parse_placed_points(source: ImportSource, files: list[str]) -> list[PlacedP
 # --- vendor importer (prepare / commit over an ImportSource) ---------------
 
 _MAP_GLOB = "*Contact_Mapping_Model*.xml"
-_POINTS_GLOB = "*Map_PP_*.csv"
-_ANATOMY_GLOB = "*Model_Groups*.xml"
+# Every DxL channel of a map (Map_PP_bi, Map_LAT_bi, Map_Score_bi, …), not just
+# P-P: they describe the same points, so each adds a measurement to that set.
+_POINTS_GLOB = "*Map_*.csv"
+# Anatomy arrives in two shapes: the chamber shells of ``Model_Groups.xml``,
+# and the numbered ``difNNN.xml`` bundles that carry CT-segmentation volumes
+# (endocardium, wall-thickness shells, channels, fat infiltration).
+_ANATOMY_GLOBS = ("*Model_Groups*.xml", "*dif[0-9][0-9][0-9].xml")
 _WAVEFORM_GLOBS = ("*Waveforms*.csv", "*ECG*.csv")
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
+
+
+def _list_any(source: ImportSource, globs: tuple[str, ...]) -> list[str]:
+    """Sorted union of the members matching any of ``globs``."""
+    return sorted({n for g in globs for n in source.list(g)})
 
 
 def _vertex_count(source: ImportSource, name: str) -> int | None:
@@ -616,10 +706,28 @@ def _vertex_count(source: ImportSource, name: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _is_dxl_points_table(source: ImportSource, name: str) -> bool:
+    """Cheap preamble check — a DxL point table, not some other ``Map_*.csv``.
+
+    Keeps an unrelated file matching the glob from reaching the parser (which
+    would raise and abort the whole study import).
+    """
+    try:
+        with source.open(name) as fh:
+            head = fh.read(4096).decode("utf-8", "ignore").lower()
+    except Exception:
+        return False
+    return "data starts in row" in head and "map type:" in head
+
+
 def _points_files_for(source: ImportSource, map_files: list[str]) -> list[str]:
-    """Map_PP_*.csv siblings of a map's DIF files (in a ``Contact_Mapping/`` subdir)."""
+    """DxL point tables of a map's DIF files (in a ``Contact_Mapping/`` subdir)."""
     dirs = {str(Path(f).parent) for f in map_files}
-    return sorted(pp for pp in source.list(_POINTS_GLOB) if str(Path(pp).parent.parent) in dirs)
+    return sorted(
+        pp
+        for pp in source.list(_POINTS_GLOB)
+        if str(Path(pp).parent.parent) in dirs and _is_dxl_points_table(source, pp)
+    )
 
 
 def _merge_point_sets(point_sets: list[list[MeasurementPoint]]) -> list[MeasurementPoint]:
@@ -660,7 +768,7 @@ class EnsiteImporter:
     name = "ensite"
 
     def sniff(self, source: ImportSource) -> bool:
-        difs = source.list(_MAP_GLOB) or source.list("*Model_Groups*.xml")
+        difs = source.list(_MAP_GLOB) or _list_any(source, _ANATOMY_GLOBS)
         if not difs:
             return False
         try:
@@ -678,8 +786,8 @@ class EnsiteImporter:
             issues = ["vertex counts differ across grouped files"] if len(distinct) > 1 else []
             scalar_fields = {}
             for f in files:
-                field_name, kind = scalar_kind_for(parse_map_descriptor(f))
-                scalar_fields[field_name] = kind
+                kind = scalar_kind_for(parse_map_descriptor(f))
+                scalar_fields[field_name(kind)] = kind
             maps.append(
                 MapPlan(
                     map_name=key,
@@ -692,14 +800,14 @@ class EnsiteImporter:
                 )
             )
 
-        wf_files = sorted({n for g in _WAVEFORM_GLOBS for n in source.list(g)})
+        wf_files = _list_any(source, _WAVEFORM_GLOBS)
         waveforms = WaveformPlan(
             files=wf_files,
             estimated_bytes=sum(source.size(n) for n in wf_files),
             include=False,  # opt-in
         )
         prov = _read_provenance(source)
-        placed_files = sorted({n for g in _PLACED_GLOBS for n in source.list(g)})
+        placed_files = _list_any(source, _PLACED_GLOBS)
         study = StudyPlan(
             study_name=prov.get("study_guid") or "ensite-study",
             vendor="ensite",
@@ -707,7 +815,7 @@ class EnsiteImporter:
             maps=maps,
             waveforms=waveforms,
             placed_point_files=placed_files,
-            anatomy_files=sorted(source.list(_ANATOMY_GLOB)),
+            anatomy_files=_list_any(source, _ANATOMY_GLOBS),
         )
         return ImportPlan(studies=[study])
 
@@ -731,7 +839,9 @@ class EnsiteImporter:
                     study.add_epmap(epmap)
                 except GeometryMismatch:
                     for f, vol in items:  # geometry differs → keep separate
-                        study.add_epmap(dif_to_epmap(vol, parse_map_descriptor(f), sp.study_name, src_tag))
+                        study.add_epmap(
+                            dif_to_epmap(vol, parse_map_descriptor(f), sp.study_name, src_tag)
+                        )
             if sp.include_placed_points and sp.placed_point_files:
                 study.placed_points = _parse_placed_points(source, sp.placed_point_files)
             if sp.include_anatomy and sp.anatomy_files:

@@ -9,12 +9,22 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from pulse_ep.core.importers.plan import ImportPlan
 from pulse_ep.core.importers.source import ImportSource
 from pulse_ep.core.study import Study
 
 
 @runtime_checkable
 class VendorImporter(Protocol):
+    """The minimum an importer must provide: recognise a source, and decode it.
+
+    ``prepare(source) -> ImportPlan`` and ``commit(plan, source)`` are an
+    *optional* refinement on top, for vendors whose exports are worth reviewing
+    before they are written. Importers without them still work everywhere —
+    see :func:`prepare_plan` / :func:`commit_plan`, which every caller should
+    use instead of reaching for the methods directly.
+    """
+
     name: str
 
     def sniff(self, source: ImportSource) -> bool:
@@ -24,6 +34,32 @@ class VendorImporter(Protocol):
     def parse(self, source: ImportSource) -> list[Study]:
         """Decode the source into vendor-neutral Study objects."""
         ...
+
+
+def prepare_plan(importer: VendorImporter, source: ImportSource) -> ImportPlan:
+    """The importer's reviewable plan, or an empty one for vendors without.
+
+    A vendor that only implements ``parse`` cannot describe its export without
+    doing the full (expensive) decode, so it proposes nothing and the plan
+    carries an issue saying so — the import still runs, just unreviewed.
+    """
+    prepare = getattr(importer, "prepare", None)
+    if prepare is not None:
+        return prepare(source)
+    return ImportPlan(
+        issues=[
+            f"{importer.name}: no reviewable plan for this vendor — "
+            "committing imports everything the export contains"
+        ]
+    )
+
+
+def commit_plan(importer: VendorImporter, plan: ImportPlan, source: ImportSource) -> list[Study]:
+    """Execute a (reviewer-edited) plan, falling back to a straight parse."""
+    commit = getattr(importer, "commit", None)
+    if commit is not None:
+        return commit(plan, source)
+    return importer.parse(source)
 
 
 _REGISTRY: list[VendorImporter] = []
