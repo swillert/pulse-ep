@@ -1,9 +1,0 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<Point ID="1013" Date="01/01/26" Time="00:00:00">
-  <Annotations StartTime="10013000" Reference_Annotation="2000" Map_Annotation="2056"/>
-  <WOI From="-170" To="146"/>
-  <Voltages Unipolar="4.817" Bipolar="2.408"/>
-  <Positions>
-    <Connector MEC_CONNECTOR="1-Synthetic_MEC_CONNECTOR_Eleclectrode_Positions_OnAnnotation_10013000.txt"/>
-  </Positions>
-</Point>

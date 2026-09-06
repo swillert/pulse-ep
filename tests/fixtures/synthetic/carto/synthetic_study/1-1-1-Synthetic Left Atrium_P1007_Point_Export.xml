@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Point ID="1007" Date="01/01/26" Time="00:00:00">
+  <Annotations StartTime="10007000" Reference_Annotation="2000" Map_Annotation="2059"/>
+  <WOI From="-170" To="146"/>
+  <Voltages Unipolar="4.599" Bipolar="2.300"/>
+  <Positions>
+    <Connector MEC_CONNECTOR="1-1-1-Synthetic Left Atrium_MEC_CONNECTOR_Eleclectrode_Positions_OnAnnotation_10007000.txt"/>
+  </Positions>
+</Point>

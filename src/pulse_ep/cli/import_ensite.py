@@ -34,6 +34,11 @@ def _print_plan(plan: ImportPlan) -> None:
             f"  waveforms: {len(wf.files)} files ~{wf.estimated_bytes / 1e6:.1f} MB "
             f"(include={wf.include})"
         )
+    # Plan-level issues say what an export cannot deliver — an export with no
+    # geometry, say. Printing only per-map issues hid exactly the case where
+    # there are no maps to hang them on.
+    for issue in plan.issues:
+        print(f"  ! {issue}")
 
 
 def _delete_study(session, study_model) -> None:

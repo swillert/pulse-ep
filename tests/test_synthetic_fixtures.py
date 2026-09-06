@@ -35,7 +35,7 @@ EXPECTED = {
     },
     "carto": {
         "vendor": "carto",
-        "map_name": "1-Synthetic",
+        "map_name": "1-1-1-Synthetic Left Atrium",
         "vertices": 962,
         "triangles": 1920,
         "fields": {"activation_time", "voltage_bipolar"},
