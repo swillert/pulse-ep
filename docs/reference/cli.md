@@ -49,6 +49,23 @@ PostgreSQL required.
 
 The defaults reproduce the smoke-test configuration used in CI.
 
+## `pulse-ep-migrate`
+
+```bash
+pulse-ep-migrate [--revision REV] [--current] [--sql]
+```
+
+Bring the configured database up to the current schema. The migration
+scripts ship inside the package, so this works from a plain `pip install`
+as well as from a checkout — `alembic upgrade head` only works in a
+checkout, where `alembic.ini` exists.
+
+| Flag         | Default | Notes                                                  |
+| ------------ | ------- | ------------------------------------------------------ |
+| `--revision` | `head`  | Target revision; `head` is the newest.                 |
+| `--current`  | off     | Report the database's current revision and exit.       |
+| `--sql`      | off     | Print the SQL instead of executing it (offline mode).  |
+
 ## `pulse-ep-import-carto`
 
 ```bash

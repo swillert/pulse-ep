@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`pulse-ep-migrate`**, and the migrations now ship inside the package.
+  `alembic upgrade head` only ever worked from a source checkout — an
+  installed deployment had no way to run them, which the promise that
+  existing databases keep working across releases depends on.
+
 ### Fixed
 
 - **The cross-language examples worked for CARTO only.** ParaView, R, MATLAB

@@ -72,15 +72,20 @@ See [Configuration](configuration.md) for the full list of variables.
 ### 2.3. Create the schema
 
 ```bash
-alembic upgrade head
+pulse-ep-migrate
 ```
 
-Alembic reads the same `PULSE_EP_DATABASE_URL`, so no separate database
-configuration is needed. On an empty database this creates every table;
-on an existing one it applies only the outstanding migrations. (The server
-also calls `init_db()` at startup, which creates any missing tables — but
-`alembic upgrade head` is what keeps an existing database in step with a
-new release.)
+The migrations ship with the package, so this works from anywhere — a
+source checkout or a plain `pip install`. It reads the same
+`PULSE_EP_DATABASE_URL`, needs no configuration of its own, creates every
+table on an empty database and applies only the outstanding ones on an
+existing database. `pulse-ep-migrate --current` reports where a database
+stands.
+
+From a source checkout, `alembic upgrade head` does the same thing through
+`alembic.ini`. (The server also calls `init_db()` at startup, which creates
+any missing tables — but migrations are what keep an *existing* database in
+step with a new release.)
 
 ### 2.4. Import a study
 

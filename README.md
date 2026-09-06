@@ -131,8 +131,8 @@ docker compose up -d
 cp .env.example .env
 # edit PULSE_EP_DATABASE_URL and PULSE_EP_JWT_SECRET_KEY
 
-# 3) create the schema
-alembic upgrade head
+# 3) create the schema (migrations ship with the package)
+pulse-ep-migrate
 
 # 4) import a study — folder or ZIP, either vendor
 pulse-ep-import-carto  -i /path/to/carto-export-dir   # a directory
