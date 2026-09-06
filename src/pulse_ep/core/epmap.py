@@ -46,9 +46,10 @@ class EPMap:
         self.xyz: np.ndarray | None = xyz
         self.pv_mesh: pv.PolyData | None = pv_mesh
         # Vendor-neutral named per-vertex scalar fields, each carrying its
-        # declared ``kind`` (see :class:`ScalarField`). Importers register
-        # conditioned fields here; the legacy CARTO ``act_bip`` slot is
-        # bridged by ``get_scalar`` until that importer is migrated.
+        # declared ``kind`` (see :class:`ScalarField`). Both importers
+        # register conditioned fields here, named by the quantity they hold.
+        # ``act_bip`` below is the legacy CARTO array, still populated for
+        # figure/tag consumers that read it directly.
         self.scalar_fields: dict[str, ScalarField] = scalar_fields or {}
         # Discrete acquisition points behind this map (rich per-point
         # measurements + electrode geometry); see :class:`MeasurementPoint`.
@@ -548,12 +549,6 @@ class EPMap:
         plotter.show_grid()
         plotter.add_mesh(pv_mesh.outline(), color="black")
         plotter.set_scale(xscale=1, yscale=1, zscale=1)
-
-        # Get the index of the maximum scalar value
-        # max_scalar_index = np.nanargmax(pv_mesh.point_data["act"])
-
-        # Get the coordinates of the vertex with the maximum scalar value
-        # max_scalar_vertex = pv_mesh.points[max_scalar_index]
 
         # Create a vector pointing towards the maximum scalar vertex
         # view_vector = max_scalar_vertex - np.mean(pv_mesh.points, axis=0)
