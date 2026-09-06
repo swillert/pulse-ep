@@ -27,8 +27,8 @@ EXPECTED = {
     "ensite": {
         "vendor": "ensite",
         "map_name": "Contact_Mapping_Model",
-        "vertices": 122,
-        "triangles": 240,
+        "vertices": 962,
+        "triangles": 1920,
         "fields": {"voltage_bipolar"},
         "points": 64,
         "measurements": {"voltage_bipolar"},
@@ -36,8 +36,8 @@ EXPECTED = {
     "carto": {
         "vendor": "carto",
         "map_name": "1-Synthetic",
-        "vertices": 122,
-        "triangles": 240,
+        "vertices": 962,
+        "triangles": 1920,
         "fields": {"activation_time", "voltage_bipolar"},
         "points": 64,
         "measurements": {"activation_time", "voltage_bipolar", "voltage_unipolar"},
