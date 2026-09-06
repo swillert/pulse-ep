@@ -6,15 +6,44 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.1] — 2026-09-06
+
+Everything here was found by installing 0.2.0 from its published tag into a
+clean directory and walking through the documented setup against real
+exports. None of it was visible in a working copy, and none of it was caught
+by the test suite — the gap was that nothing exercised the *installed*
+package or the viewer end to end.
+
 ### Fixed
 
+- **EnSiteX maps could not be displayed in the viewer at all.** The mesh
+  endpoint projected measurement positions from the legacy CARTO `xyz`
+  array, which EnSiteX imports never populate, so every EnSiteX map failed
+  with `self.xyz must be defined`. Positions now fall back to the
+  vendor-neutral measurement points, and a map with no measurements at all —
+  a DIF mesh carrying only per-vertex fields — renders unmasked instead of
+  failing.
+- **A reload stacked meshes instead of replacing them.** The scene was
+  cleared only on a first load, so changing the datatype, colormap or
+  distance added another mesh on top of the previous one. Clearing now also
+  keeps the scene's lights (it used to remove them) and disposes geometries
+  and materials, which a 50k-vertex mesh reloaded on every change otherwise
+  leaks.
+- The viewer sent the literal string `"null"` as `scalar_name` when no
+  quantity had been chosen yet; the parameter is now omitted so the server
+  resolves the map's primary quantity.
+- The datatype selector was populated by a function that was never called,
+  leaving it empty after the hardcoded ACT / VOL options were removed.
 - **`pulse-ep-import-carto` produced studies the rest of the platform could
   not recognise.** The CLI has its own import loop, and it never set
   `vendor`, never wrote vendor-neutral `measurement_points` (only the legacy
   fixed-column rows), and reported every per-point XML as a failed study —
-  ~1946 warnings on a real export. A CARTO study imported the documented way
-  therefore could not be compared with an EnSiteX one, which is the point of
-  0.2.0.
+  ~1946 warnings on a real export, and never wrote `scalar_fields` either —
+  so a CARTO map reached the viewer with no quantities to offer at all. A
+  CARTO study imported the documented way therefore could not be compared
+  with an EnSiteX one, which is the point of 0.2.0.
 - Study names began with the literal `"None-"` when an export sat in a path
   too shallow for the distinguishing component; the name now falls back to
   the study's own name.

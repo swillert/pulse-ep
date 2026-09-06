@@ -33,7 +33,12 @@ export class MeshHelper {
 
     async fetchAndRenderMesh(mapId, mapName, studyName, isReload = false) {
         const token = localStorage.getItem('token');
-        const url = `/get_mesh_data?map_id=${mapId}&distance=${this.currentDistance}&scalar_name=${this.currentDatatype}`;
+        // Omit scalar_name entirely when none is chosen yet, so the server
+        // picks the map's own primary quantity. Interpolating a null here sent
+        // the literal string "null", which no map has a field for.
+        const params = new URLSearchParams({ map_id: mapId, distance: this.currentDistance });
+        if (this.currentDatatype) params.set('scalar_name', this.currentDatatype);
+        const url = `/get_mesh_data?${params}`;
 
         try {
             console.log('Fetching mesh data with URL:', url);
@@ -48,9 +53,10 @@ export class MeshHelper {
             const data = await response.json();
             console.log('Mesh data received:', data);
 
-            if (!isReload) {
-                this.clearScene();
-            }
+            // Always clear first. This used to be skipped on a reload, so
+            // changing the datatype or colormap added another mesh on top of
+            // the previous one instead of replacing it.
+            this.clearScene();
 
             // Fetch the colormap data once and use it for both mesh and points
             const colormapResponse = await fetch(`/colormaps/${this.currentColormap}`, {
@@ -286,7 +292,8 @@ export class MeshHelper {
                 body: JSON.stringify({
                     map_id: mapId,
                     intervals: intervals,
-                    scalar_name: this.currentDatatype,
+                    // omitted when unset — the server resolves the map's primary
+                    ...(this.currentDatatype ? { scalar_name: this.currentDatatype } : {}),
                     distance: this.currentDistance
                 })
             });
@@ -318,9 +325,24 @@ export class MeshHelper {
         overlayText.innerHTML = content.replace(/\n/g, '<br/>');
     }
 
+    /**
+     * Remove the rendered objects, keeping the scene's lights.
+     *
+     * This used to remove *every* child, lights included — harmless only
+     * because the mesh material is unlit, and a trap for anyone who changes
+     * that. Geometries and materials are disposed explicitly: a 50k-vertex
+     * mesh reloaded on every datatype change otherwise leaks GPU memory.
+     */
     clearScene() {
-        while (this.scene.children.length > 0) {
-            this.scene.remove(this.scene.children[0]);
+        const disposable = this.scene.children.filter((child) => !child.isLight);
+        for (const child of disposable) {
+            this.scene.remove(child);
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+                child.material.forEach((m) => m.dispose());
+            } else {
+                child.material?.dispose();
+            }
         }
     }
 }

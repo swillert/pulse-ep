@@ -18,18 +18,23 @@ class ColormapWidget {
      *
      * The options used to be a hardcoded ACT / VOL pair — CARTO's field names —
      * so an EnSiteX map offered nothing it could answer to. The server reports
-     * the map's own fields, and the selection resets to the map's primary
+     * the map's own fields, and the selection falls back to the map's primary
      * quantity whenever the current one is not among them.
      */
-    async loadScalarsForMap(mapId, fetchJson) {
+    async loadScalarsForMap(mapId) {
         const select = document.getElementById('datatype-select');
         let payload;
         try {
-            payload = await fetchJson(`/epmaps/${mapId}/scalars`);
+            const response = await fetch(`/epmaps/${mapId}/scalars`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            payload = await response.json();
         } catch (err) {
             console.warn('Could not load scalars for map', mapId, err);
             return;
         }
+
         const scalars = payload.scalars || [];
         if (select) {
             select.innerHTML = '';
@@ -40,17 +45,24 @@ class ColormapWidget {
                 select.appendChild(option);
             }
         }
+
         const names = scalars.map((s) => s.name);
+        const previous = this.currentDatatype;
         if (!names.includes(this.currentDatatype)) {
             this.currentDatatype = payload.primary || names[0] || null;
         }
         if (select && this.currentDatatype) select.value = this.currentDatatype;
-        this.emitColormapChanged();
+
+        // Only re-render when the choice actually moved: the mesh is already
+        // being loaded by the same event that brought us here.
+        if (this.currentDatatype !== previous) this.emitColormapChanged();
         return scalars;
     }
 
     initialize() {
         this.initializeColormapWidget();
+        // Repopulate the quantities whenever a different map is opened.
+        this.eventEmitter.on('loadMesh', (mapId) => this.loadScalarsForMap(mapId));
     }
 
     initializeColormapWidget() {
