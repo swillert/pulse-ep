@@ -24,13 +24,22 @@ from pulse_ep.core.database import get_db_session
 from pulse_ep.core.models import EPMapAttributes, EPMapModel, EPMapPoint
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
-ap = argparse.ArgumentParser()
-ap.add_argument("--apply", action="store_true", help="Write to DB (default: dry-run)")
-ap.add_argument(
-    "--skip-existing", action="store_true", help="Skip maps with attributes already set"
-)
-ap.add_argument("--study", default=None, help="Filter to study names containing this substring")
-args = ap.parse_args()
+#
+# Built on demand, never at import: parsing sys.argv while the module is being
+# imported made argparse read *the importing program's* arguments and call
+# sys.exit(2). Importing this module from anything with its own command line —
+# a test runner, another CLI — crashed it.
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="pulse-ep-tag-maps")
+    ap.add_argument("--apply", action="store_true", help="Write to DB (default: dry-run)")
+    ap.add_argument(
+        "--skip-existing", action="store_true", help="Skip maps with attributes already set"
+    )
+    ap.add_argument("--study", default=None, help="Filter to study names containing this substring")
+    return ap
+
 
 SENTINEL = -9999.0
 
@@ -316,7 +325,8 @@ def build_attributes(m, vera_alles_centroid, xyz=None) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def main():
+def main(argv: list[str] | None = None):
+    args = _build_parser().parse_args(argv)
     mode = "APPLY" if args.apply else "DRY-RUN"
     print(f"\n{'=' * 70}")
     print(f"  tag_maps.py  [{mode}]")
@@ -381,4 +391,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -215,5 +215,15 @@ def populate_colormaps():
         print("Colormaps have been added to the database.")
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
+    """Console-script entry point (``pulse-ep-populate-colormaps``).
+
+    The entry point in ``pyproject.toml`` names ``main``; without it the
+    installed script raised ImportError instead of running.
+    """
     populate_colormaps()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
