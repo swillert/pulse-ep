@@ -124,7 +124,7 @@ def import_carto(filename: str, filter=None):
 
     path = os.path.dirname(filename)
 
-    study = Study(extract_subfolder(filename, 4) + "-" + study_name)
+    study = Study(study_name_for(filename, study_name))
 
     nMaps, names, numPtsPerMap, filenames = xml_proc.get_maps(xml_tree)
 
@@ -294,14 +294,26 @@ def get_filenames_from_csv(file_with_studies):
 
 
 def extract_subfolder(file, n):
-    # Normalize the path to ensure correct handling of path separators
+    """The *n*-th path component of ``file``'s directory, or ``None``.
+
+    Used to prefix a study name so two exports of the same study from
+    different folders stay distinguishable. Callers must handle ``None``:
+    a shallow path (an export unpacked into ``/tmp``, say) has no such
+    component, and interpolating the result blindly produced study names
+    beginning with the literal ``"None-"``.
+    """
     file = os.path.normpath(file)
-
-    # split the file path into a list of directories
     directories = os.path.dirname(file).split(os.sep)
-
-    # check if the desired subfolder index is valid
     if n < len(directories):
         return directories[n]
-    else:
-        return None
+    return None
+
+
+def study_name_for(file, raw_name, n=4):
+    """Build a study name from an export path and the name inside it.
+
+    Falls back to the bare name when the path is too shallow to carry a
+    distinguishing component, rather than prefixing ``"None-"``.
+    """
+    prefix = extract_subfolder(file, n)
+    return f"{prefix}-{raw_name}" if prefix else str(raw_name)

@@ -8,6 +8,16 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`pulse-ep-import-carto` produced studies the rest of the platform could
+  not recognise.** The CLI has its own import loop, and it never set
+  `vendor`, never wrote vendor-neutral `measurement_points` (only the legacy
+  fixed-column rows), and reported every per-point XML as a failed study —
+  ~1946 warnings on a real export. A CARTO study imported the documented way
+  therefore could not be compared with an EnSiteX one, which is the point of
+  0.2.0.
+- Study names began with the literal `"None-"` when an export sat in a path
+  too shallow for the distinguishing component; the name now falls back to
+  the study's own name.
 - **Three console scripts were broken once installed.**
   `pulse-ep-populate-colormaps` pointed at a `main` that did not exist;
   `pulse-ep-extract-meshes` ran its whole body at import time, so it
