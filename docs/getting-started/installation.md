@@ -101,6 +101,7 @@ schema creation on SQLite, which cannot render the PostgreSQL `JSONB` and
 | Extra      | Pulls in                                              | When you need it                            |
 | ---------- | ----------------------------------------------------- | ------------------------------------------- |
 | `server`   | Flask, Flask-JWT-Extended, Flask-CORS, Flask-Bcrypt, gunicorn | Running the REST API and 3D viewer.         |
+| `sevenzip` | py7zr                                                 | Reading CARTO exports delivered as 7-Zip archives (common, and often named `.zip`). |
 | `figures`  | reportlab, openpyxl, simplekml                        | Generating PDF / Excel / KML reports.       |
 | `dev`      | pytest, pytest-cov, ruff, mypy                        | Contributing to pulse-ep itself.            |
 | `docs`     | mkdocs-material, mkdocstrings, pymdown-extensions     | Building this documentation site locally.   |

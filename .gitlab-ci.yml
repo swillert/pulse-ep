@@ -5,8 +5,9 @@
 #   test  -> Python matrix 3.10 / 3.11 / 3.12, pytest
 #   pages -> mkdocs-material site, deployed to GitLab Pages
 #
-# The test job installs pulse-ep with the [server,figures,dev] extras so
-# the demo / EPMap tests have pyvista, vtk and matplotlib available.
+# The test job installs pulse-ep with the [server,figures,sevenzip,dev] extras
+# so the demo / EPMap tests have pyvista, vtk and matplotlib, and the 7-Zip
+# import tests actually run instead of skipping.
 
 stages:
   - lint
@@ -47,7 +48,7 @@ ruff:
   script:
     # System libs that pyvista/vtk and matplotlib's headless backend need.
     - apt-get update && apt-get install -y --no-install-recommends libgl1 libglu1-mesa libxrender1 libsm6 libxext6 libfontconfig1 libxkbcommon0
-    - pip install -e ".[server,figures,dev]"
+    - pip install -e ".[server,figures,sevenzip,dev]"
     - pytest -v --maxfail=5
   coverage: '/^TOTAL.*?(\d+\%)$/'
 
