@@ -313,6 +313,78 @@ meaning the report has been saved but `generate` was never called).
 Stream the generated `.xlsx`. `404` if the report has not been generated
 or the file is missing on disk.
 
+## Scalar fields of a map
+
+### `GET /epmaps/<map_id>/scalars`
+
+The quantities this map actually carries. Clients should read the choices
+from here rather than assuming any particular field name: the fields
+differ per vendor and per map type.
+
+```json
+{
+  "map_id": 12,
+  "primary": "voltage_bipolar",
+  "scalars": [
+    {"name": "voltage_bipolar", "kind": "voltage_bipolar", "unit": "mV",
+     "source": "ensite/6.0.0.683129"},
+    {"name": "voltage_unipolar", "kind": "voltage_unipolar", "unit": "mV",
+     "source": "ensite/6.0.0.683129"}
+  ]
+}
+```
+
+`primary` names the map's most representative quantity — the one analysis
+endpoints use when no `scalar_name` is given. `404` if the map does not
+exist.
+
+## Map comparison
+
+### `POST /api/compare`
+
+Delta of one quantity between two maps (`a − b`), projected onto map A's
+geometry.
+
+```json
+{
+  "map_a_id": 12,
+  "map_b_id": 13,
+  "scalar_name": "voltage_bipolar",
+  "metric": "geodesic",
+  "max_distance": 10.0
+}
+```
+
+| Field          | Default     | Notes                                                        |
+| -------------- | ----------- | ------------------------------------------------------------ |
+| `map_a_id`     |             | Required. The geometry the result lives on.                  |
+| `map_b_id`     |             | Required. The map subtracted from A.                         |
+| `scalar_name`  |             | Required. Must exist on both maps.                           |
+| `metric`       | `euclidean` | `euclidean` (nearest vertex) or `geodesic` (along A's surface). |
+| `max_distance` | none        | Correspondences further than this become `NaN`.              |
+
+Use `geodesic` when the two meshes differ: it will not match across a
+wall or fold that is close in space but far along the tissue.
+
+## Import queue
+
+All routes below are under `/api/import-jobs` and are JWT-protected.
+They drive the lifecycle `detected → needs_review → importing → done |
+error`; see the [EnSiteX import guide](../guides/ensite-import.md#the-import-queue).
+
+| Method + path                        | Purpose                                                     |
+| ------------------------------------ | ----------------------------------------------------------- |
+| `GET /api/import-jobs`               | List jobs.                                                  |
+| `GET /api/import-jobs/<id>`          | One job, including its full plan.                           |
+| `POST /api/import-jobs`              | Enqueue an export by path. Auto-detects the vendor.         |
+| `POST /api/import-jobs/scan`         | Scan the drop directory for new bundles.                    |
+| `POST /api/import-jobs/<id>/prepare` | Build the import plan (no writes).                          |
+| `PATCH /api/import-jobs/<id>/plan`   | Store the reviewer's edited plan.                           |
+| `POST /api/import-jobs/<id>/commit`  | Execute the plan and persist.                               |
+
+Committing is idempotent by study identity: a study already in the
+database is not written again, and the job points at the existing one.
+
 ## Error model
 
 pulse-ep uses standard HTTP status codes:

@@ -4,13 +4,49 @@ class ColormapWidget {
     constructor(eventEmitter) {
         this.eventEmitter = eventEmitter;
         this.currentColormap = 'jet'; // Initialize with a default colormap
-        this.currentDatatype = 'act'; // Initialize with a default datatype
+        this.currentDatatype = null; // resolved from the map's own scalars
         this.editingColormapId = null; // Track which colormap is being edited
         this.useGradient = true; // Initialize with default gradient option
         this.isRelative = false; // Initialize with default relative option
         this.clipping = true; // Initialize with default clipping option
         this.formClipping = true; // Initialize form clipping option
         this.currentDistance = 5;
+    }
+
+    /**
+     * Fill the datatype selector from the quantities a map actually carries.
+     *
+     * The options used to be a hardcoded ACT / VOL pair — CARTO's field names —
+     * so an EnSiteX map offered nothing it could answer to. The server reports
+     * the map's own fields, and the selection resets to the map's primary
+     * quantity whenever the current one is not among them.
+     */
+    async loadScalarsForMap(mapId, fetchJson) {
+        const select = document.getElementById('datatype-select');
+        let payload;
+        try {
+            payload = await fetchJson(`/epmaps/${mapId}/scalars`);
+        } catch (err) {
+            console.warn('Could not load scalars for map', mapId, err);
+            return;
+        }
+        const scalars = payload.scalars || [];
+        if (select) {
+            select.innerHTML = '';
+            for (const s of scalars) {
+                const option = document.createElement('option');
+                option.value = s.name;
+                option.textContent = s.unit ? `${s.name} (${s.unit})` : s.name;
+                select.appendChild(option);
+            }
+        }
+        const names = scalars.map((s) => s.name);
+        if (!names.includes(this.currentDatatype)) {
+            this.currentDatatype = payload.primary || names[0] || null;
+        }
+        if (select && this.currentDatatype) select.value = this.currentDatatype;
+        this.emitColormapChanged();
+        return scalars;
     }
 
     initialize() {

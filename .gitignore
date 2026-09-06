@@ -59,6 +59,14 @@ validation_full/
 config.local.ini
 
 # Data paths (never commit patient-identifiable data)
+# The GitHub mirror force-pushes every commit on main to a public repo,
+# so anything committed here is published irreversibly.
+data/
+drop/
+# local working notes, not part of the published repo
+CLAUDE.md
+*.zip
+*.7z
 study.csv
 studies.csv
 *.patient.csv

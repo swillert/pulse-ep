@@ -3,12 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-An open-source platform for programmatic access to **CARTO 3**
-electroanatomical mapping data.
+An open-source platform for programmatic access to **electroanatomical
+mapping data** from multiple vendors.
 
-`pulse-ep` parses CARTO 3 (Biosense Webster / Johnson & Johnson) export
-archives into a relational PostgreSQL database and exposes the data
-through three independent surfaces:
+`pulse-ep` parses **CARTO 3** (Biosense Webster / Johnson & Johnson) and
+**EnSiteX** (Abbott / St. Jude) export archives into a relational
+PostgreSQL database and exposes the data through three independent
+surfaces:
 
 - a **JWT-authenticated REST API** (Flask),
 - a **browser-based interactive 3D viewer** (Three.js / WebGL), and
@@ -18,31 +19,45 @@ through three independent surfaces:
 
 ## Why?
 
-CARTO 3 records ablation procedures as triangulated chamber meshes with
-per-vertex activation times, bipolar voltages, and pace-mapping similarity
-scores. It is excellent for real-time clinical decision-making but
-provides **no programmatic interface** — quantitative research requires
+Clinical mapping systems record ablation procedures as triangulated
+chamber meshes with per-vertex activation times, bipolar voltages and
+pace-mapping scores. They are excellent for real-time decision-making but
+provide **no programmatic interface** — quantitative research requires
 external access to raw mesh geometry and measurement-point coordinates.
 
-`pulse-ep` turns the proprietary archive into a queryable hub. From there,
-heterogeneous clients can analyse the data: Python and MATLAB scripts,
-R workflows, Excel reports, or the bundled web viewer.
+Worse, each vendor names the same physical quantity differently, so data
+from two systems cannot be compared without a translation layer.
+`pulse-ep` supplies one: every value is stored under **the name of the
+quantity it holds** (`voltage_bipolar`, `activation_time`, …), decided
+once at import from a per-vendor lexicon. One query then spans a CARTO
+map and an EnSiteX map alike.
+
+From there, heterogeneous clients can analyse the data: Python and MATLAB
+scripts, R workflows, Excel reports, or the bundled web viewer.
 
 ## Architecture
 
 ```
-                ┌─────────────────────────────────────────────────┐
-CARTO export ──►│  pulse_ep.core.importer   (XML + mesh parsing)  │──► PostgreSQL
-                └─────────────────────────────────────────────────┘
+CARTO export  ─┐   ┌────────────────────────────────────────────────┐
+               ├──►│ pulse_ep.core.importers                        │
+EnSiteX export┘   │   sniff → prepare → (human review) → commit     │──► PostgreSQL
+   (folder/ZIP)    │   vendor decode + lexicon → vendor-neutral      │
+                   └────────────────────────────────────────────────┘
                                        │
         ┌──────────────────────────────┼──────────────────────────────┐
         ▼                              ▼                              ▼
   pulse_ep.server                pulse_ep.cli                   pulse_ep.core
   Flask + JWT,                   import_carto,                  EPMap, Study,
-  Three.js viewer,               tag_maps,                      mesh_proc,
-  REST API,                      populate_colormaps,            xml_proc,
+  Three.js viewer,               import_ensite,                 ScalarField,
+  REST API,                      tag_maps,                      MeasurementPoint,
+  import review UI,              populate_colormaps,            geodesic, comparison,
   HTML reports                   check_mesh, demo               SQLAlchemy models
 ```
+
+An export is auto-detected, turned into a **reviewable import plan**
+(what would be imported, with issues flagged), and only written once the
+plan is committed — by CLI, or through the drop-directory watcher and the
+browser review UI.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the internal engineering
 documentation (module layout, design choices, quality gate).
@@ -105,7 +120,7 @@ pulse-ep-demo
 Builds a synthetic atrial mesh with a Gaussian score field, ingests it
 into an in-memory SQLite, and prints the per-interval area breakdown.
 
-### 2. Real CARTO study (local Python install)
+### 2. A real study (local Python install)
 
 ```bash
 # 1) start Postgres (Docker)
@@ -115,17 +130,26 @@ docker compose up -d
 cp .env.example .env
 # edit PULSE_EP_DATABASE_URL and PULSE_EP_JWT_SECRET_KEY
 
-# 3) import a study from a CARTO export folder
-pulse-ep-import-carto /path/to/study-export.zip
+# 3) create the schema
+alembic upgrade head
 
-# 4) seed default colormaps and create an admin user
+# 4) import a study — folder or ZIP, either vendor
+pulse-ep-import-carto  /path/to/carto-export.zip
+pulse-ep-import-ensite -i /path/to/ensite-export.zip --dry-run   # plan only
+pulse-ep-import-ensite -i /path/to/ensite-export.zip
+
+# 5) seed default colormaps and create an admin user
 pulse-ep-populate-colormaps
 pulse-ep-create-user --username admin --role admin
 
-# 5) launch the web app
+# 6) launch the web app
 pulse-ep-server
 # → http://localhost:5000
 ```
+
+`--dry-run` prints the import plan — which maps, which scalar fields, how
+many points, and any issues detected — without writing anything. Run it
+first on an unfamiliar export.
 
 ### 3. Full Docker stack
 
@@ -149,11 +173,18 @@ Postgres volume.
 
 ```
 src/pulse_ep/
-├── core/           # Domain (EPMap, Study), CARTO parsing, ORM, importer
+├── core/
+│   ├── importers/  # Per-vendor decode: carto, ensite, the lexicon,
+│   │               #   ImportSource (dir/ZIP) and the ImportPlan
+│   ├── ...         # EPMap, Study, ScalarField, MeasurementPoint,
+│   │               #   PlacedPoint, comparison, geodesic, ORM models
+│   └── ingest_*    # Import queue + drop-directory watcher
 ├── cli/            # Console scripts for data ingestion and utilities
 ├── figures/        # Clinical / journal heatmap generators
-├── server/         # Flask app, REST API, Three.js viewer
+├── server/         # Flask app, REST API, Three.js viewer, review UI
 └── examples/       # Synthetic end-to-end demo (pulse-ep-demo)
+
+alembic/            # Database schema migrations
 
 examples/           # Cross-language client examples — see examples/README.md
 ├── paraview/         ParaView Programmable Source + CLI .vtu export
@@ -161,6 +192,15 @@ examples/           # Cross-language client examples — see examples/README.md
 ├── matlab/           webread/webwrite client + trisurf demo
 └── notebooks/        Jupyter walkthrough (PyVista)
 ```
+
+## Documentation
+
+Full documentation — installation, configuration, per-vendor import
+guides, REST reference and the data model — is at
+<https://sw.gitlab-pages.willert.net/pulse-ep/>, and its sources live in
+[`docs/`](docs/). Start with
+[Installation](docs/getting-started/installation.md) and the
+[Quickstart](docs/getting-started/quickstart.md).
 
 ## Interoperability examples
 
@@ -186,4 +226,5 @@ MIT — see [LICENSE](LICENSE).
 ## Contributing
 
 Issue tracker: [GitLab Issues](https://gitlab.willert.net/sw/pulse-ep/-/issues).
-PRs welcome; please run `ruff check` and `pytest` before opening one.
+PRs welcome; please run `ruff check .`, `ruff format --check .` and
+`pytest` before opening one.

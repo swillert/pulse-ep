@@ -66,6 +66,30 @@ Import a CARTO 3 export from a zip archive or an unpacked directory.
 See the [CARTO import guide](../guides/carto-import.md) for the
 multi-study CSV-driven workflow and the troubleshooting notes.
 
+## `pulse-ep-import-ensite`
+
+```bash
+pulse-ep-import-ensite -i <PATH> [--dry-run] [--clear]
+                       [--waveforms --store-dir DIR]
+```
+
+Import an Abbott EnSiteX (St. Jude) export from a ZIP archive or an
+unpacked directory.
+
+| Flag           | Default | Notes                                                                    |
+| -------------- | ------- | ------------------------------------------------------------------------ |
+| `-i, --input`  |         | Required. ZIP archive or directory.                                      |
+| `--dry-run`    | off     | Print the import plan and exit. Writes nothing.                          |
+| `--clear`      | off     | Re-import a study that is already present (otherwise it is skipped).     |
+| `--waveforms`  | off     | Also import signal traces. They can dwarf the rest of the export.        |
+| `--store-dir`  |         | Where to write Parquet waveforms. Required together with `--waveforms`.  |
+
+Imports are idempotent by the export's study GUID. Run `--dry-run` first
+on an export from an unfamiliar site — it lists the detected maps, their
+vertex counts, the quantities each carries and any issues found.
+
+See the [EnSiteX import guide](../guides/ensite-import.md).
+
 ## `pulse-ep-tag-maps`
 
 ```bash

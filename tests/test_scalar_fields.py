@@ -68,12 +68,45 @@ def ensite_like_map():
 # --- resolver: CARTO scalars come from registered fields -----------------
 
 
-def test_carto_registered_scalars_match_columns(carto_like_map) -> None:
-    # Positive scores → activation_time (no flip); registered "act"/"vol"
-    # resolve to the decoded primary/voltage columns.
-    np.testing.assert_array_equal(carto_like_map.get_scalar("act"), carto_like_map.act_bip[:, 0])
-    np.testing.assert_array_equal(carto_like_map.get_scalar("vol"), carto_like_map.act_bip[:, 1])
-    assert carto_like_map.get_field("act").kind == ACTIVATION_TIME
+def test_carto_registers_scalars_under_the_quantity_name(carto_like_map) -> None:
+    """CARTO's fields carry the same names EnSiteX uses, so one query spans
+    both vendors — they used to be CARTO-only ``act``/``vol``."""
+    # Positive scores → activation_time (no flip)
+    np.testing.assert_array_equal(
+        carto_like_map.get_scalar("activation_time"), carto_like_map.act_bip[:, 0]
+    )
+    np.testing.assert_array_equal(
+        carto_like_map.get_scalar("voltage_bipolar"), carto_like_map.act_bip[:, 1]
+    )
+    assert carto_like_map.get_field("activation_time").kind == ACTIVATION_TIME
+    assert "act" not in carto_like_map.scalar_fields
+
+
+def test_legacy_carto_names_still_resolve(carto_like_map) -> None:
+    """Studies imported before the rename, and clients still asking for
+    ``act``/``vol``, must keep working."""
+    np.testing.assert_array_equal(
+        carto_like_map.get_scalar("act"), carto_like_map.get_scalar("activation_time")
+    )
+    np.testing.assert_array_equal(
+        carto_like_map.get_scalar("vol"), carto_like_map.get_scalar("voltage_bipolar")
+    )
+
+
+def test_legacy_act_resolves_to_whichever_quantity_the_map_holds() -> None:
+    """``act`` was overloaded — activation time *or* pace-mapping score."""
+    from pulse_ep.core.scalar_field import PACEMAP_SCORE
+
+    m = EPMap(map_name="pacemap", study_name="s")
+    m.register_scalar("pacemap_score", np.array([80.0, 90.0]), kind=PACEMAP_SCORE)
+    np.testing.assert_array_equal(m.get_scalar("act"), [80.0, 90.0])
+
+
+def test_field_of_kind_finds_a_field_under_any_name() -> None:
+    m = EPMap(map_name="m", study_name="s")
+    m.register_scalar("some_vendor_token", np.array([1.0]), kind=ACTIVATION_TIME)
+    assert m.field_of_kind(ACTIVATION_TIME) is not None
+    assert m.field_of_kind("voltage_bipolar") is None
 
 
 def test_get_scalar_prefers_registered_field(ensite_like_map) -> None:
@@ -171,3 +204,43 @@ def test_calculate_areas_ensite_voltage_path(ensite_like_map) -> None:
     )
     assert len(areas) == 2
     assert all(np.isfinite(a) for a in areas)
+
+
+# --- the analysis default is the map's own primary quantity ----------------
+
+
+def test_primary_scalar_prefers_the_most_representative_quantity() -> None:
+    from pulse_ep.core.scalar_field import VOLTAGE_BIPOLAR
+
+    m = EPMap(map_name="m", study_name="s")
+    m.register_scalar("voltage_bipolar", np.array([1.0]), kind=VOLTAGE_BIPOLAR)
+    assert m.primary_scalar() == "voltage_bipolar"
+
+    m.register_scalar("activation_time", np.array([2.0]), kind=ACTIVATION_TIME)
+    assert m.primary_scalar() == "activation_time"  # outranks voltage
+
+
+def test_primary_scalar_falls_back_to_whatever_exists() -> None:
+    m = EPMap(map_name="m", study_name="s")
+    m.register_scalar("Peak Neg", np.array([1.0]), kind="unknown")
+    assert m.primary_scalar() == "Peak Neg"
+
+
+def test_primary_scalar_is_none_without_fields() -> None:
+    assert EPMap(map_name="m", study_name="s").primary_scalar() is None
+
+
+def test_carto_and_ensite_answer_to_the_same_name() -> None:
+    """A cross-vendor query — the thing the old act/vol naming made impossible."""
+    from pulse_ep.core.importers.carto import register_carto_scalars
+    from pulse_ep.core.scalar_field import VOLTAGE_BIPOLAR
+
+    carto = EPMap(map_name="c", study_name="s")
+    register_carto_scalars(carto, np.array([[10.0, 1.5], [20.0, 2.5]]))
+
+    ensite = EPMap(map_name="e", study_name="s")
+    ensite.register_scalar("voltage_bipolar", np.array([0.5, 0.9]), kind=VOLTAGE_BIPOLAR)
+
+    for m in (carto, ensite):
+        assert m.get_scalar("voltage_bipolar") is not None
+        assert m.field_of_kind(VOLTAGE_BIPOLAR).kind == VOLTAGE_BIPOLAR

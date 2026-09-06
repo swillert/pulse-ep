@@ -80,18 +80,61 @@ class EPMap:
         """Return the :class:`ScalarField` (values + metadata), or ``None``."""
         return self.scalar_fields.get(scalar_name)
 
+    #: Which quantity a map "is about" when the caller does not say, most
+    #: interesting first. Every analysis default resolves through this — a
+    #: literal ``"act"`` default (CARTO's old name) made those calls fail on
+    #: every EnSiteX map.
+    PRIMARY_SCALAR_ORDER = (
+        "activation_time",
+        "pacemap_score",
+        "voltage_bipolar",
+        "voltage_unipolar",
+    )
+
+    def primary_scalar(self) -> str | None:
+        """The name of this map's most representative scalar, or ``None``.
+
+        Prefers a quantity from :data:`PRIMARY_SCALAR_ORDER`; failing that,
+        falls back to whatever was registered first, so a map carrying only
+        vendor-specific fields still has a sensible default.
+        """
+        for kind in self.PRIMARY_SCALAR_ORDER:
+            if (f := self.field_of_kind(kind)) is not None:
+                return next(n for n, v in self.scalar_fields.items() if v is f)
+        return next(iter(self.scalar_fields), None)
+
+    def field_of_kind(self, kind: str) -> ScalarField | None:
+        """The first field holding this quantity, whatever it is named.
+
+        Fields are normally named by their kind, so this is usually the same
+        as a name lookup — it matters for studies imported under the old
+        CARTO names, and for a map carrying a second field of one kind.
+        """
+        if (direct := self.scalar_fields.get(kind)) is not None:
+            return direct
+        return next((f for f in self.scalar_fields.values() if f.kind == kind), None)
+
     def get_scalar(self, scalar_name: str) -> np.ndarray:
         """Resolve a named per-vertex scalar as a 1-D array of values.
 
-        Reads from the vendor-neutral ``scalar_fields`` — importers register
-        conditioned fields with an explicit ``kind``; the core holds no
-        vendor-specific fallback.
+        Fields are registered under the name of the quantity they hold, so a
+        name is a kind and one name spans both vendors. CARTO's historical
+        ``act`` / ``vol`` still resolve, via the lexicon, to whichever quantity
+        the map actually carries — ``act`` held either an activation time or a
+        pace-mapping score.
 
         :raises ValueError: if the name resolves to no registered scalar.
         """
         field = self.scalar_fields.get(scalar_name)
         if field is not None:
             return field.values
+
+        from pulse_ep.core.importers.lexicon import CARTO_LEGACY_NAMES
+
+        for kind in CARTO_LEGACY_NAMES.get(scalar_name.strip().casefold(), ()):
+            legacy = self.field_of_kind(kind)
+            if legacy is not None:
+                return legacy.values
         raise ValueError(f"Unsupported scalar_name: {scalar_name}")
 
     def generate_anatomical_pv_mesh(self, simplify: bool = True) -> pv.PolyData:
@@ -123,16 +166,20 @@ class EPMap:
         return closest_points, projected_vertices_coords
 
     def create_polydata_for_projected_points(
-        self, scalar_data: np.ndarray, scalar_name: str = "act", scalars_on_vertices: bool = True
+        self,
+        scalar_data: np.ndarray,
+        scalar_name: str | None = None,
+        scalars_on_vertices: bool = True,
     ) -> pv.PolyData:
         """
         Create a PyVista PolyData object for projected vertices and assign them corresponding scalar values.
 
         :param scalar_data: Original scalar data.
-        :param scalar_name: Name of the scalar attribute. Defaults to 'act'.
+        :param scalar_name: Scalar attribute name; defaults to the map's primary scalar.
         :param scalars_on_vertices: Flag indicating if scalar values are based on vertices (True) or xyz points (False). Defaults to True.
         :return: PyVista PolyData object.
         """
+        scalar_name = scalar_name or self.primary_scalar()
         # Generate pv_mesh if not already generated
         if self.pv_mesh is None:
             self.generate_anatomical_pv_mesh()
@@ -194,7 +241,7 @@ class EPMap:
     def interpolate_scalar_values(
         self,
         scalar: np.ndarray,
-        scalar_name: str = "act",
+        scalar_name: str | None = None,
         distance_threshold: float | None = None,
         scalars_on_vertices: bool = True,
     ) -> pv.PolyData:
@@ -202,11 +249,12 @@ class EPMap:
         Interpolate scalar values for all vertices (points) that are within a certain distance from the points in the map.
 
         :param scalar: Original scalar values.
-        :param scalar_name: Name of the scalar attribute. Defaults to 'act'.
+        :param scalar_name: Scalar attribute name; defaults to the map's primary scalar.
         :param distance_threshold: Maximum distance for interpolation. Defaults to None.
         :param scalars_on_vertices: Flag indicating if scalar values are based on vertices (True) or xyz points (False). Defaults to True.
         :return: Interpolated PyVista mesh.
         """
+        scalar_name = scalar_name or self.primary_scalar()
         # Generate pv_mesh if not already generated
         if self.pv_mesh is None:
             self.generate_anatomical_pv_mesh()
@@ -321,15 +369,16 @@ class EPMap:
         print("Mesh repair and simplification completed.")
 
     def get_average_face_scalars(
-        self, scalar_name: str = "act", pv_mesh: pv.core.pointset.PolyData | None = None
+        self, scalar_name: str | None = None, pv_mesh: pv.core.pointset.PolyData | None = None
     ) -> np.ndarray:
         """
         Calculate the average scalar value for each face in the mesh.
 
-        :param scalar_name: Name of the scalar attribute. Defaults to 'act'.
+        :param scalar_name: Scalar attribute name; defaults to the map's primary scalar.
         :param pv_mesh: The PyVista mesh object. If None, the stored mesh will be used.
         :return: Array of average face scalar values.
         """
+        scalar_name = scalar_name or self.primary_scalar()
         if pv_mesh is None:
             pv_mesh = self.pv_mesh
 
@@ -344,10 +393,11 @@ class EPMap:
 
     def plot_histogram(
         self,
-        scalar_name: str = "act",
+        scalar_name: str | None = None,
         clim: tuple[float, float] | None | None = None,
         step_size: float = 5,
     ) -> tuple[plt.figure, dict]:
+        scalar_name = scalar_name or self.primary_scalar()
 
         clim = clim or [65, 100]
         intervals = list(range(min(clim), max(clim) + 1, step_size))
@@ -409,7 +459,7 @@ class EPMap:
 
     def plot_mesh(
         self,
-        scalar_name: str = "act",
+        scalar_name: str | None = None,
         distance: float | None = None,
         off_screen: bool = True,
         clim: tuple[float, float] | None | None = None,
@@ -426,13 +476,14 @@ class EPMap:
         :param clim: Optional color range limits (default: None).
         :return: The PyVista plotter object and the face scalars.
         """
+        scalar_name = scalar_name or self.primary_scalar()
         # print("Working on: " + self.map_name)
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
 
-        # Resolve the requested scalar (defaults to activation "act" for the
-        # legacy CARTO layout; any registered vendor-neutral field works too).
+        # Resolve the requested scalar (defaults to the map's primary
+        # quantity — see ``primary_scalar``).
         scalar_data = self.get_scalar(scalar_name)
 
         # Calculate the 98th percentile value
@@ -482,11 +533,11 @@ class EPMap:
         plotter.add_text(self.map_name, position="upper_edge", font_size=20, color="black")
         plotter.add_text(self.study_name, position=(0.5, 0.8), font_size=20, color="black")
 
-        plotter.add_mesh(pv_mesh, scalars="act", show_scalar_bar=False, cmap=cmap, clim=clim)
-        plotter.add_points(p_points, scalars="act", cmap=cmap, clim=clim, point_size=5)
+        plotter.add_mesh(pv_mesh, scalars=scalar_name, show_scalar_bar=False, cmap=cmap, clim=clim)
+        plotter.add_points(p_points, scalars=scalar_name, cmap=cmap, clim=clim, point_size=5)
 
         plotter.add_scalar_bar(
-            title="act",
+            title=scalar_name,
             position_x=0.90,
             position_y=0.1,
             label_font_size=20,
@@ -540,9 +591,9 @@ class EPMap:
     def extract_mesh_data(
         self, scalar_name: str | None = None, distance: float | None = None
     ) -> dict:
-        # Set default scalar_name to 'act' if not provided
+        scalar_name = scalar_name or self.primary_scalar()
         if scalar_name is None:
-            scalar_name = "act"
+            scalar_name = self.primary_scalar()
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
@@ -632,13 +683,13 @@ class EPMap:
         Prepare the mesh and calculate the areas for a given list of intervals.
 
         :param intervals: List of (min_value, max_value) tuples defining the intervals.
-        :param scalar_name: Optional name of the scalar attribute to use. Defaults to 'act'.
+        :param scalar_name: Scalar attribute name; defaults to the map's primary scalar.
         :param distance: Optional maximum distance to set color values.
         :return: List of areas corresponding to each interval.
         """
-        # Set default scalar_name to 'act' if not provided
+        scalar_name = scalar_name or self.primary_scalar()
         if scalar_name is None:
-            scalar_name = "act"
+            scalar_name = self.primary_scalar()
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh(simplify=False)
@@ -663,13 +714,15 @@ class EPMap:
         return areas
 
     def save_mesh_to_OBJ(
-        self, filename: str, scalar_name: str = "act", distance: float | None = None
+        self, filename: str, scalar_name: str | None = None, distance: float | None = None
     ) -> None:
+        scalar_name = scalar_name or self.primary_scalar()
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
         pv_mesh.save(filename)
 
-    def area_of_range(self, min_value, max_value, scalar_name: str = "act"):
+    def area_of_range(self, min_value, max_value, scalar_name: str | None = None):
+        scalar_name = scalar_name or self.primary_scalar()
         if "Area" not in self.pv_mesh.cell_data:
             self.precompute_areas()
 
@@ -727,7 +780,8 @@ class EPMap:
         report = f"Name: {self.study_name}/{self.map_name}, min: {min_scalar}, max: {max_scalar}, avg: {avg_scalar}, std: {std_scalar}"
         return report
 
-    def distance_within_range(self, min_value, max_value, scalar_name: str = "act"):
+    def distance_within_range(self, min_value, max_value, scalar_name: str | None = None):
+        scalar_name = scalar_name or self.primary_scalar()
         # Extract points within the range
         thresholded_mesh = self.pv_mesh.threshold([min_value, max_value], scalars=scalar_name)
         points = thresholded_mesh.points
@@ -762,13 +816,14 @@ class EPMap:
 
         return min_distance, max_distance, average_distance, median_distance
 
-    def get_scalar_statistics(self, scalar_name: str = "act"):
+    def get_scalar_statistics(self, scalar_name: str | None = None):
         """
         Calculate the minimum, maximum, average, and standard deviation of scalar values.
 
-        :param scalar_name: Name of the scalar attribute. Defaults to 'act'.
+        :param scalar_name: Scalar attribute name; defaults to the map's primary scalar.
         :return: Tuple containing (min, max, avg, std) of scalar values.
         """
+        scalar_name = scalar_name or self.primary_scalar()
         # Ensure self.pv_mesh is not None
         if self.pv_mesh is None:
             raise ValueError(

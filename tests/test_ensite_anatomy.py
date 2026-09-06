@@ -35,6 +35,34 @@ def test_model_groups_become_anatomy_maps(tmp_path):
     assert a.map_name.startswith("Anatomy:")
 
 
+def test_dif_bundle_is_an_anatomy_source(tmp_path):
+    """``difNNN.xml`` carries the CT segmentation (wall-thickness shells,
+    channels, fat) — geometry that is not in ``Model_Groups.xml``."""
+    (tmp_path / "Model_Groups.xml").write_text(_MG)
+    (tmp_path / "dif001.xml").write_text(
+        _MG.replace('name="Right"', 'name="LV WT 3mm (CT)"').replace(
+            'name="Left"', 'name="Channel"'
+        )
+    )
+    src = DirSource(tmp_path)
+    imp = EnsiteImporter()
+
+    plan = imp.prepare(src)
+    assert plan.studies[0].anatomy_files == ["Model_Groups.xml", "dif001.xml"]
+
+    study = imp.commit(plan, src)[0]
+    chambers = {
+        e.attributes["chamber"] for e in study.epmaps if e.attributes.get("kind") == "anatomy"
+    }
+    assert chambers == {"Right", "Left", "LV WT 3mm (CT)", "Channel"}
+
+
+def test_dif_bundle_alone_is_recognised(tmp_path):
+    """An export with no contact-mapping model at all still sniffs as EnSite."""
+    (tmp_path / "dif001.xml").write_text(_MG)
+    assert EnsiteImporter().sniff(DirSource(tmp_path)) is True
+
+
 def test_opt_out_of_anatomy(tmp_path):
     (tmp_path / "Model_Groups.xml").write_text(_MG)
     src = DirSource(tmp_path)

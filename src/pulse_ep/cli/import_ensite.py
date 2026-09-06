@@ -104,7 +104,9 @@ def import_ensite(
             print(f"imported {study.name}: {len(study.epmaps)} maps, {n_points} points")
 
             if store is not None and sp.waveforms.include:
-                rows = ingest_waveforms(ImportPlan(studies=[sp]), source, store, study_id=study_model.id)
+                rows = ingest_waveforms(
+                    ImportPlan(studies=[sp]), source, store, study_id=study_model.id
+                )
                 for row in rows:
                     session.add(row)
                 session.commit()

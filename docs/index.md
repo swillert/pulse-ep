@@ -5,10 +5,11 @@ hide:
 
 # pulse-ep
 
-**An open-source platform for programmatic access to CARTO 3 electroanatomical mapping data.**
+**An open-source platform for programmatic access to electroanatomical mapping data.**
 
-`pulse-ep` parses CARTO 3 (Biosense Webster / Johnson & Johnson) export archives into a
-relational PostgreSQL database and exposes the data through three independent surfaces:
+`pulse-ep` parses **CARTO 3** (Biosense Webster / Johnson & Johnson) and **EnSiteX**
+(Abbott / St. Jude) export archives into a relational PostgreSQL database — under one
+vendor-neutral vocabulary — and exposes the data through three independent surfaces:
 
 <div class="grid cards" markdown>
 
@@ -35,8 +36,9 @@ relational PostgreSQL database and exposes the data through three independent su
 
     ---
 
-    `pulse_ep.core` — domain classes (`EPMap`, `Study`), CARTO XML
-    parsing, geodesic distances, surface-area integration, ORM models.
+    `pulse_ep.core` — domain classes (`EPMap`, `Study`, `ScalarField`,
+    `MeasurementPoint`), per-vendor decode, geodesic distances,
+    surface-area integration, map comparison, ORM models.
 
     [:octicons-arrow-right-24: Python API](reference/python-api.md)
 
@@ -44,8 +46,8 @@ relational PostgreSQL database and exposes the data through three independent su
 
     ---
 
-    `pulse-ep-import-carto`, `pulse-ep-server`, `pulse-ep-create-user`,
-    `pulse-ep-demo`, … — scriptable platform operations.
+    `pulse-ep-import-carto`, `pulse-ep-import-ensite`, `pulse-ep-server`,
+    `pulse-ep-create-user`, `pulse-ep-demo`, … — scriptable operations.
 
     [:octicons-arrow-right-24: CLI reference](reference/cli.md)
 
@@ -53,23 +55,29 @@ relational PostgreSQL database and exposes the data through three independent su
 
 ## Why pulse-ep?
 
-CARTO 3 records ablation procedures as triangulated chamber meshes with
-per-vertex activation times, bipolar voltages, and pace-mapping similarity
-scores. It is excellent for real-time clinical decision-making but provides
-**no programmatic interface** — quantitative research requires external access
-to raw mesh geometry and measurement-point coordinates.
+Clinical mapping systems record ablation procedures as triangulated chamber
+meshes with per-vertex activation times, bipolar voltages, and pace-mapping
+similarity scores. They are excellent for real-time clinical decision-making
+but provide **no programmatic interface** — quantitative research requires
+external access to raw mesh geometry and measurement-point coordinates.
 
-`pulse-ep` turns the proprietary archive into a queryable hub. From there,
-heterogeneous clients — Python and MATLAB scripts, R workflows, Excel reports,
-the bundled web viewer, ParaView, or your own client — can analyse the data
-on equal footing.
+They also disagree with each other: the same physical quantity carries a
+different name in every system. `pulse-ep` resolves that once, at import.
+Every value is stored under **the name of the quantity it holds** —
+`voltage_bipolar`, `activation_time` — so a single query spans a CARTO map
+and an EnSiteX map alike.
+
+From there, heterogeneous clients — Python and MATLAB scripts, R workflows,
+Excel reports, the bundled web viewer, ParaView, or your own client — can
+analyse the data on equal footing.
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart LR
-    A[CARTO 3 export] --> B[pulse_ep.core.importer<br/>XML + mesh parsing]
-    B --> C[(PostgreSQL)]
+    A1[CARTO 3 export] --> B
+    A2[EnSiteX export] --> B
+    B[pulse_ep.core.importers<br/>sniff → prepare → review → commit] --> C[(PostgreSQL)]
     C --> D[pulse_ep.server<br/>Flask + JWT REST]
     C --> E[pulse_ep.cli<br/>scriptable ops]
     C --> F[pulse_ep.core<br/>Python toolkit]
@@ -95,12 +103,12 @@ into an in-memory SQLite, and prints the per-interval area breakdown. It is
 the smallest working example of the full pipeline, intended for first-time
 users and CI smoke tests.
 
-For real CARTO data and the web viewer, see the [Quickstart](getting-started/quickstart.md).
+For real study data and the web viewer, see the [Quickstart](getting-started/quickstart.md).
 
 ## How to read this documentation
 
 - **[Getting started](getting-started/installation.md)** — install, configure
-  and run pulse-ep against either a synthetic dataset or your own CARTO export.
+  and run pulse-ep against either a synthetic dataset or your own export.
 - **[Guides](guides/carto-import.md)** — task-oriented walkthroughs: importing
   a study, navigating the web viewer, deploying with Docker, managing users,
   building reports.

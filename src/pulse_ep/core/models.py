@@ -505,9 +505,7 @@ class WaveformModel(Base):
     study_id = Column(
         Integer, ForeignKey("studies.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    map_id = Column(
-        Integer, ForeignKey("epmaps.id", ondelete="CASCADE"), nullable=True, index=True
-    )
+    map_id = Column(Integer, ForeignKey("epmaps.id", ondelete="CASCADE"), nullable=True, index=True)
 
     signal_type = Column(String)  # egm_bipolar | egm_unipolar | ecg
     channels = Column(PortableJSON)  # list[str]
@@ -589,9 +587,7 @@ class MeasurementPointModel(Base):
     measurements = Column(PortableJSON)  # {name: {value, kind, unit}}
     electrodes = Column(PortableJSON)  # {label: [x, y, z]}
 
-    __table_args__ = (
-        Index("ix_measurement_points_map_point", "map_id", "point_index"),
-    )
+    __table_args__ = (Index("ix_measurement_points_map_point", "map_id", "point_index"),)
 
     def to_measurement_point(self) -> MeasurementPoint:
         measurements = {
@@ -626,9 +622,7 @@ def measurement_points_to_models(
                     name: {"value": m.value, "kind": m.kind, "unit": m.unit}
                     for name, m in p.measurements.items()
                 },
-                electrodes={
-                    label: [float(x) for x in pos] for label, pos in p.electrodes.items()
-                },
+                electrodes={label: [float(x) for x in pos] for label, pos in p.electrodes.items()},
             )
         )
     return rows
@@ -652,7 +646,11 @@ def persist_study(session, study) -> StudyModel:
         map_model = EPMapModel.from_epmap(epmap, study_model.id)
         session.add(map_model)
         session.flush()  # assign map_model.id
-        session.add(EPMapAttributes(map_id=map_model.id, attributes=getattr(epmap, "attributes", None) or {}))
+        session.add(
+            EPMapAttributes(
+                map_id=map_model.id, attributes=getattr(epmap, "attributes", None) or {}
+            )
+        )
         for row in measurement_points_to_models(
             getattr(epmap, "measurement_points", None) or [], map_model.id
         ):

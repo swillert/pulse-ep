@@ -37,13 +37,62 @@ def test_skips_preamble_and_reads_points():
 def test_maps_columns_to_measurements():
     p0 = parse_ensite_map_pp(_MAP_PP)[0]
     assert p0.get("voltage_bipolar") == 0.965  # from P-P, map type PP_bi
-    assert p0.get("activation_time") == 8.0  # adjTime (ms)
     assert p0.get("contact_force") == 3.2  # force (g)
     np.testing.assert_allclose(p0.electrodes["A1 A2"], [49.8, -208.3, 391.6])
+
+
+def test_adjtime_is_annotation_not_activation():
+    """``adjTime`` is the annotation window offset — real exports hold one
+    constant value for every point — so it must not pose as activation time."""
+    p0 = parse_ensite_map_pp(_MAP_PP)[0]
+    assert p0.get("annotation_time") == 8.0
+    assert "activation_time" not in p0.measurements
 
 
 def test_invalid_pp_and_force_are_dropped():
     p1 = parse_ensite_map_pp(_MAP_PP)[1]
     assert "voltage_bipolar" not in p1.measurements  # P-P valid == 0
     assert "contact_force" not in p1.measurements  # force == "invalid"
-    assert p1.get("activation_time") == 12.0
+    assert p1.get("annotation_time") == 12.0
+
+
+def _channel_csv(map_type: str, value_col: str, v0: str, v1: str) -> str:
+    """The same export, re-emitted for another DxL channel: identical columns
+    and point ids, only the value column pair changes."""
+    hdr = _HDR.replace("P-P,P-P valid", f"{value_col},{value_col} valid")
+    body = _MAP_PP.split("\n")[6:8]
+    rows = [r.replace(",0.965,1,", f",{v0},1,").replace(",0.500,0,", f",{v1},1,") for r in body]
+    return (
+        "Export Data Element: DxL\nMap name:,Test Map\n"
+        f"Map type:,{map_type}\n# mapping pts:,2\nData starts in row,6\n"
+        f"{hdr}\n" + "\n".join(rows) + "\n"
+    )
+
+
+def test_lat_channel_is_activation_time():
+    p0 = parse_ensite_map_pp(_channel_csv("LAT_bi", "LAT", "193.028", "12.5"))[0]
+    assert p0.get("activation_time") == 193.028
+    assert "voltage_bipolar" not in p0.measurements
+
+
+def test_each_dxl_channel_maps_to_its_own_measurement():
+    for map_type, column, field in [
+        ("Score_bi", "Score", "map_score"),
+        ("CFEmean_bi", "CFE mean", "cfe_mean"),
+        ("CFEstdDev_bi", "CFE StdDev", "cfe_stddev"),
+        ("Fractionation_bi", "Fractionation (CFE count)", "fractionation"),
+        ("PFreq_bi", "PeakFrequency", "peak_frequency"),
+        ("PNeg_bi", "Peak Neg", "voltage_peak_negative"),
+    ]:
+        p0 = parse_ensite_map_pp(_channel_csv(map_type, column, "42.0", "1.0"))[0]
+        assert p0.get(field) == 42.0, f"{map_type} -> {field}"
+
+
+def test_unknown_channel_keeps_its_vendor_name():
+    """A channel the lexicon does not know is still imported — under the
+    export's own column name, so it stays visible instead of being dropped or
+    silently mislabelled as a voltage."""
+    p0 = parse_ensite_map_pp(_channel_csv("Whatever_bi", "Whatever", "7.5", "1.0"))[0]
+    assert p0.get("Whatever") == 7.5
+    assert p0.measurements["Whatever"].kind == "unknown"
+    assert "voltage_bipolar" not in p0.measurements

@@ -90,7 +90,7 @@ def heat_geodesic(vertices, triangles, sources, m: float = 1.0) -> np.ndarray:
 
     L, mass = _cotan_laplacian_mass(V, F)
     edge_len = np.sqrt(np.sum((V[F[:, 0]] - V[F[:, 1]]) ** 2, axis=1)).mean()
-    t = m * edge_len ** 2
+    t = m * edge_len**2
 
     # 1) heat flow: (Mass - t L) u = u0
     u0 = np.zeros(n)

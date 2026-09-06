@@ -6,7 +6,7 @@ language you work in.
 
 | Folder        | Language           | What it shows                                                        |
 | ------------- | ------------------ | -------------------------------------------------------------------- |
-| `paraview/`   | Python (ParaView)  | Load a CARTO map directly into ParaView via the REST API, plus a CLI VTU exporter that uses `pulse_ep.core` without a running server. |
+| `paraview/`   | Python (ParaView)  | Load a map directly into ParaView via the REST API, plus a CLI VTU exporter that uses `pulse_ep.core` without a running server. |
 | `r/`          | R (httr2 + rgl)    | Minimal REST client, mesh rendering, per-vertex scalar histogram and area-per-interval table — re-computed independently in R. |
 | `matlab/`     | MATLAB (R2020a+)   | `webread` / `webwrite` client, `trisurf` 3D, scalar histogram and area-per-interval table — the same numbers, in MATLAB. |
 | `notebooks/`  | Jupyter / Python   | End-to-end notebook: login → study browsing → 3D plot with PyVista, scalar histogram and area-per-interval table. |
@@ -14,7 +14,7 @@ language you work in.
 ## Why these examples exist (and what they prove)
 
 These examples form the **cross-language reproducibility statement of
-the software paper**: from one CARTO study, served by one REST endpoint,
+the software paper**: from one study, served by one REST endpoint,
 four independent toolchains compute identical platform-level reductions
 — the per-vertex scalar histogram and the per-interval surface-area
 breakdown (`/calculate_areas_for_intervals`). If a clinical co-author

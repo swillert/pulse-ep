@@ -26,6 +26,20 @@ CONTACT_FORCE = "contact_force"
 CORRELATION = "correlation"
 SNR = "snr"
 IMPEDANCE = "impedance"
+#: the annotation offset a map was measured with — a window setting, not a
+#: per-point activation (it is frequently constant across a whole export).
+ANNOTATION_TIME = "annotation_time"
+VOLTAGE_PEAK_NEGATIVE = "voltage_peak_negative"
+#: complex fractionated electrogram descriptors (EnSite "CFE", CARTO "CFAE")
+CFE_MEAN = "cfe_mean"
+CFE_STDDEV = "cfe_stddev"
+FRACTIONATION = "fractionation"
+PEAK_FREQUENCY = "peak_frequency"
+#: the mapping system's own acceptance score for an acquired point
+MAP_SCORE = "map_score"
+#: a quantity the vendor lexicon does not (yet) recognise. It is imported
+#: anyway, under its raw vendor token — see :func:`field_name`.
+UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -53,12 +67,39 @@ KIND_SPECS: dict[str, KindSpec] = {
     CORRELATION: KindSpec(unit="", relative_comparison=True),
     SNR: KindSpec(unit=""),
     IMPEDANCE: KindSpec(unit="ohm"),
+    ANNOTATION_TIME: KindSpec(unit="ms"),
+    VOLTAGE_PEAK_NEGATIVE: KindSpec(unit="mV"),
+    CFE_MEAN: KindSpec(unit="ms"),
+    CFE_STDDEV: KindSpec(unit="ms"),
+    FRACTIONATION: KindSpec(unit=""),  # a count of deflections
+    PEAK_FREQUENCY: KindSpec(unit="Hz"),
+    MAP_SCORE: KindSpec(unit=""),
 }
 
 
 def default_unit(kind: str) -> str:
     spec = KIND_SPECS.get(kind)
     return spec.unit if spec is not None else ""
+
+
+def field_name(kind: str, vendor_token: str | None = None) -> str:
+    """The canonical name a quantity is registered under.
+
+    **A field is named by what it is.** Asking for a name and asking for a
+    kind then become the same question, so CARTO's bipolar voltage answers to
+    the same name as EnSiteX's and one query spans both vendors. (Historically
+    they did not: CARTO wrote ``act``/``vol`` while EnSiteX wrote
+    ``voltage_bipolar`` — the same quantity under two names, findable by
+    neither.)
+
+    A quantity the vendor lexicon does not recognise keeps its raw vendor
+    token instead, so it is still imported and still visible for review — a
+    closed vocabulary that silently drops the unfamiliar is how whole channels
+    go missing.
+    """
+    if kind and kind != UNKNOWN:
+        return kind
+    return (vendor_token or "").strip() or UNKNOWN
 
 
 @dataclass
