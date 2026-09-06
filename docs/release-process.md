@@ -119,6 +119,7 @@ never changes:
 | DOI | Resolves to |
 |---|---|
 | `10.5281/zenodo.20263542` | The concept — always the latest release. |
+| `10.5281/zenodo.22435908` | v0.2.0 specifically. |
 | `10.5281/zenodo.20263543` | v0.1.0-softwarex specifically. |
 
 So for a new release you only append its version DOI:

@@ -33,6 +33,9 @@ identifiers:
   - description: "Concept DOI — resolves to the latest pulse-ep release"
     type: doi
     value: "10.5281/zenodo.20263542"
+  - description: "DOI for release v0.2.0"
+    type: doi
+    value: "10.5281/zenodo.22435908"
   - description: "DOI for release v0.1.0-softwarex"
     type: doi
     value: "10.5281/zenodo.20263543"
