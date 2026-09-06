@@ -135,7 +135,7 @@ cp .env.example .env
 alembic upgrade head
 
 # 4) import a study — folder or ZIP, either vendor
-pulse-ep-import-carto  /path/to/carto-export.zip
+pulse-ep-import-carto  -i /path/to/carto-export-dir   # a directory
 pulse-ep-import-ensite -i /path/to/ensite-export.zip --dry-run   # plan only
 pulse-ep-import-ensite -i /path/to/ensite-export.zip
 

@@ -52,19 +52,42 @@ The defaults reproduce the smoke-test configuration used in CI.
 ## `pulse-ep-import-carto`
 
 ```bash
-pulse-ep-import-carto <PATH> [--on-conflict {skip,update}] [--encoding ENC]
+pulse-ep-import-carto -i <DIR> [--map-filter REGEX] [--dry-run] [--progress]
 ```
 
-Import a CARTO 3 export from a zip archive or an unpacked directory.
+Import CARTO studies from a directory tree, discovering study XML files
+within it.
 
-| Flag             | Default  | Notes                                                       |
-| ---------------- | -------- | ----------------------------------------------------------- |
-| `<PATH>`         |          | Required. Zip archive or directory.                         |
-| `--on-conflict`  | `skip`   | What to do when a `study_name + map_name` already exists.   |
-| `--encoding`     | auto     | Override mesh-file encoding (default uses `chardet.detect`). |
+| Flag            | Default | Notes                                                            |
+| --------------- | ------- | ---------------------------------------------------------------- |
+| `-i`, `--input` |         | Required. **A directory** — extract an archive first.            |
+| `--pattern`     | `*.xml` | Glob for study XML files.                                        |
+| `--no-recursive`| off     | Do not descend into subdirectories.                              |
+| `--map-filter`  | `.*`    | Case-insensitive regex over map names.                           |
+| `--dry-run`     | off     | Discover and parse, write nothing.                               |
+| `--progress`    | off     | Compact one-line progress display.                               |
+| `--clear`       | off     | ⚠️ **Drops and recreates every table** before importing — this is not "reimport this study", it empties the database. |
 
-See the [CARTO import guide](../guides/carto-import.md) for the
-multi-study CSV-driven workflow and the troubleshooting notes.
+!!! warning "`--clear` means something different here than in `pulse-ep-import-ensite`"
+
+    On the EnSiteX importer, `--clear` removes *the one study* being
+    reimported. On this one it drops the **entire schema**. Do not reach for
+    it out of habit.
+
+This command takes a directory, while the vendor-detecting pipeline
+(`ImportSource`) also accepts ZIP and 7-Zip archives. To import an archived
+CARTO export with this CLI, unpack it first:
+
+```bash
+# ZIP
+unzip -q export.zip -d /tmp/carto-export
+
+# 7-Zip — CARTO often writes these, misleadingly named .zip
+python -c "import py7zr; py7zr.SevenZipFile('export.zip').extractall('/tmp/carto-export')"
+```
+
+See the [CARTO import guide](../guides/carto-import.md) for export-format
+details and troubleshooting.
 
 ## `pulse-ep-import-ensite`
 
