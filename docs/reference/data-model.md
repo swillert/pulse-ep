@@ -10,7 +10,11 @@ columns where it matters.
 ```mermaid
 erDiagram
     StudyModel ||--o{ EPMapModel : has
-    EPMapModel ||--o{ EPMapPoint : has
+    StudyModel ||--o{ PlacedPointModel : "markers"
+    StudyModel ||--o{ WaveformModel : "signals"
+    ImportJobModel ||--o| StudyModel : "produced"
+    EPMapModel ||--o{ MeasurementPointModel : "acquisition points"
+    EPMapModel ||--o{ EPMapPoint : "has (legacy)"
     EPMapModel ||--o| EPMapAttributes : tagged_with
     ColormapModel ||--o{ ReportModel : referenced_by
     ReportModel ||--o{ EPMapModel : "links many maps"
@@ -19,10 +23,29 @@ erDiagram
 
     StudyModel {
         int id PK
-        string study_name
-        string patient_id
-        date created_at
-        string atrium
+        string name
+        string vendor
+        jsonb provenance
+    }
+    MeasurementPointModel {
+        int id PK
+        int map_id FK
+        float_array position
+        jsonb measurements
+        jsonb electrodes
+    }
+    PlacedPointModel {
+        int id PK
+        int study_id FK
+        string type
+        float_array position
+        jsonb attributes
+    }
+    ImportJobModel {
+        int id PK
+        string vendor
+        string status
+        jsonb plan
     }
     EPMapModel {
         int id PK
@@ -30,7 +53,9 @@ erDiagram
         string study_name
         string map_name
         int number_of_points
-        json mesh_data
+        float_array vertices
+        float_array triangles
+        jsonb scalar_fields
     }
     EPMapPoint {
         int id PK
@@ -70,18 +95,18 @@ erDiagram
 
 ## Tables
 
-### `StudyModel`
+### `StudyModel` — `studies`
 
-One row per CARTO study (i.e. one patient session). The primary
-identifier is `(id, study_name)`; `study_name` is unique.
+One row per imported study, from either vendor. `name` is unique and is
+what makes an import idempotent: re-importing a study already present is
+skipped rather than duplicated.
 
-| Column        | Type    | Notes                                                |
-| ------------- | ------- | ---------------------------------------------------- |
-| `id`          | int     | Primary key.                                         |
-| `study_name`  | text    | Unique. Sourced from `Study_*.xml` `Name` attribute. |
-| `patient_id`  | text    | Anonymised patient identifier.                       |
-| `created_at`  | date    | Study creation date.                                 |
-| `atrium`      | text    | `LA` / `RA` / `Both` / unknown.                      |
+| Column        | Type    | Notes                                                       |
+| ------------- | ------- | ----------------------------------------------------------- |
+| `id`          | int     | Primary key.                                                |
+| `name`        | text    | Unique. CARTO: folder + study name; EnSiteX: the export GUID. |
+| `vendor`      | text    | `carto` / `ensite` — which system produced the export.       |
+| `provenance`  | jsonb   | Importer-supplied origin (software version, export GUID, …). |
 
 The class exposes `get_study_list(session)` and
 `get_epmap_list_by_id(session, study_id)` as the canonical read-side
@@ -89,25 +114,123 @@ helpers used by `/list_studies` and `/list_epmaps_in_study/<id>`.
 
 ### `EPMapModel`
 
-One row per EP map. The mesh itself is stored as a JSON blob in
-`mesh_data` (vertices + triangles) — this is a trade-off chosen for
-simpler reads at the cost of denormalisation. Each row also has a
-hot link back to `study_name` to avoid a join when listing maps.
+One row per EP map. Geometry is stored as arrays rather than normalised
+into vertex/triangle tables — a trade-off chosen for simpler reads. Each
+row also carries `study_name` to avoid a join when listing maps.
 
-| Column              | Type    | Notes                                              |
-| ------------------- | ------- | -------------------------------------------------- |
-| `id`                | int     | Primary key.                                       |
-| `study_id`          | int     | FK to `StudyModel.id`.                             |
-| `study_name`        | text    | Denormalised for read performance.                 |
-| `map_name`          | text    | From `Map_*.xml` `Name` attribute.                 |
-| `number_of_points`  | int     | Pre-computed for fast UI rendering.                |
-| `mesh_data`         | json    | `{ "vertices": [...], "triangles": [...] }`.       |
+| Column               | Type    | Notes                                                   |
+| -------------------- | ------- | ------------------------------------------------------- |
+| `id`                 | int     | Primary key.                                            |
+| `study_id`           | int     | FK to `StudyModel.id`.                                  |
+| `study_name`         | text    | Denormalised for read performance.                      |
+| `map_name`           | text    | Map name as the acquisition system recorded it.         |
+| `number_of_points`   | int     | Pre-computed for fast UI rendering.                     |
+| `mesh_file`          | text    | Source mesh path, where one exists.                     |
+| `vertices`           | float[] | Flat vertex coordinates.                                |
+| `triangles`          | float[] | Triangle vertex indices, 0-based.                       |
+| `triangle_areas`     | float[] | Pre-computed per-triangle areas.                        |
+| `is_vertex_at_edge`  | float[] | Boundary flag per vertex.                               |
+| `normals`            | float[] | Per-vertex normals.                                     |
+| `act_bip`            | float[] | **Legacy** CARTO two-column slot; kept for figure/tag consumers. New code reads `scalar_fields`. |
+| `uni_imp_frc`        | float[] | Legacy CARTO unipolar / impedance / force columns.      |
+| `scalar_fields`      | jsonb   | The vendor-neutral per-vertex fields — see below.       |
+
+#### `scalar_fields`
+
+The heart of the vendor-neutral layer: a map from field name to a
+serialised `ScalarField`. A field is **named by the quantity it holds**, so
+one query spans both vendors.
+
+```json
+{
+  "voltage_bipolar": {
+    "values": [0.83, 0.85, ...],
+    "kind": "voltage_bipolar",
+    "unit": "mV",
+    "status_mask": [true, false, ...],
+    "source": "ensite/6.0.0.683129"
+  }
+}
+```
+
+`kind` comes from the controlled inventory in `pulse_ep.core.scalar_field`;
+`status_mask` marks which vertices hold a real measurement rather than an
+interpolated one; `source` records which vendor and software version
+produced it.
 
 `retrieve(session, map_id)` is the canonical loader.
 `to_epmap(include_points=True)` constructs an in-memory [`EPMap`][pulse_ep.EPMap]
 domain object suitable for mesh / area / geodesic computations.
 
-### `EPMapPoint`
+### `MeasurementPointModel` — `measurement_points`
+
+The acquisition points behind a map, with an **open** set of measurements
+rather than fixed vendor columns. Successor to `EPMapPoint`.
+
+| Column          | Type    | Notes                                                          |
+| --------------- | ------- | -------------------------------------------------------------- |
+| `id`            | int     | Primary key.                                                   |
+| `map_id`        | int     | FK to `epmaps.id`, `ON DELETE CASCADE`.                        |
+| `point_index`   | int     | Order within the map.                                          |
+| `source_id`     | text    | The vendor's own point id.                                     |
+| `position`      | float[] | `[x, y, z]` on / near the surface.                             |
+| `measurements`  | jsonb   | `{name: {value, kind, unit}}` — keyed by quantity, so a CARTO and an EnSiteX point are directly comparable. |
+| `electrodes`    | jsonb   | `{label: [x, y, z]}` — catheter electrode geometry (`CS_1`, `20A_1`, …). |
+
+### `PlacedPointModel` — `placed_points`
+
+Operator- and system-placed markers: ablation sites, landmarks, labels.
+Study-level, because a marker is a location in the shared study frame
+rather than a property of one mesh.
+
+| Column        | Type    | Notes                                                            |
+| ------------- | ------- | ---------------------------------------------------------------- |
+| `id`          | int     | Primary key.                                                     |
+| `study_id`    | int     | FK to `studies.id`.                                              |
+| `type`        | text    | `ablation`, `ablation_pfa`, `landmark`, `reference`, `marker`, `tag`, `shadow`, `tape_measure`. |
+| `position`    | float[] | `[x, y, z]`.                                                     |
+| `label`       | text    | Operator-visible name, where one exists.                         |
+| `attributes`  | jsonb   | Open, type-specific: RF duration, force, impedance drop, …       |
+| `source_id`   | text    | The vendor's own marker id.                                      |
+
+### `WaveformModel` — `waveforms`
+
+Signal traces are **opt-in** and stored outside the database — the row is
+a reference, the samples live in Parquet.
+
+| Column         | Type   | Notes                                                    |
+| -------------- | ------ | -------------------------------------------------------- |
+| `id`           | int    | Primary key.                                             |
+| `study_id`     | int    | Owning study.                                            |
+| `map_id`       | int    | Owning map, where the trace belongs to one.              |
+| `signal_type`  | text   | ECG, bipolar, unipolar, …                                |
+| `channels`     | jsonb  | Channel labels, in column order.                         |
+| `sample_rate`  | float  | Hz.                                                      |
+| `n_samples` / `n_channels` | int | Shape, so a client can size a read without opening the file. |
+| `segment`      | text   | Which export segment it came from.                       |
+| `filters`      | jsonb  | Filter settings recorded by the acquisition system.      |
+| `data_uri`     | text   | Where the samples live (store-relative).                 |
+| `data_format`  | text   | `parquet`.                                               |
+| `size_bytes` / `checksum` | int / text | Integrity and retention bookkeeping.        |
+| `source`       | text   | Vendor and software version.                             |
+
+### `ImportJobModel` — `import_jobs`
+
+One queued import moving through the review lifecycle.
+
+| Column         | Type      | Notes                                                       |
+| -------------- | --------- | ----------------------------------------------------------- |
+| `id`           | int       | Primary key.                                                |
+| `source_path`  | text      | The export folder or archive.                               |
+| `vendor`       | text      | Auto-detected; `NULL` when detection failed.                |
+| `status`       | text      | `detected` → `needs_review` → `importing` → `done` \| `error`. |
+| `plan`         | jsonb     | The `ImportPlan`, including the reviewer's edits.           |
+| `study_id`     | int       | The study it produced — or the existing one it matched.     |
+| `error`        | text      | Why it failed, when it did.                                 |
+| `created_at` / `updated_at` | timestamptz | Set by the database.                         |
+
+### `EPMapPoint` — `ep_map_points` (legacy)
+
 
 The catheter measurement points — one row per recorded position.
 Coordinates and scalar values are kept separate because some maps have
@@ -198,12 +321,20 @@ See [Managing users](../guides/managing-users.md).
 
 ## Schema migrations
 
-`init_db()` creates the schema with `Base.metadata.create_all()`.
-Schema evolution is **additive** — existing UKSH databases must continue
-to run on every release without data loss.
+Schema evolution is **additive** — an existing database must continue to
+run on every release without data loss.
 
-For richer migrations (column type changes, renamings) the roadmap
-includes Alembic; until then, any breaking schema change must be
+Two paths exist, and they are not interchangeable:
+
+- `init_db()` runs `Base.metadata.create_all()` at server startup. It
+  creates *missing* tables and is what makes a fresh database usable; it
+  never alters an existing one.
+- `alembic upgrade head` applies the migrations in `alembic/versions/`.
+  This is what brings an existing database in step with a new release, and
+  is the step to run after upgrading.
+
+Alembic reads `PULSE_EP_DATABASE_URL` through `Settings`, so it needs no
+configuration of its own. Any breaking schema change must additionally be
 called out in the [Changelog](../changelog.md).
 
 ## See also
@@ -211,5 +342,6 @@ called out in the [Changelog](../changelog.md).
 - [REST API reference](rest-api.md) — endpoints that read/write these tables.
 - [Python API reference](python-api.md) — `pulse_ep.core.models`
   auto-generated docs.
-- [CARTO import guide](../guides/carto-import.md) — the workflow that
-  populates these tables.
+- [CARTO import guide](../guides/carto-import.md) and
+  [EnSiteX import guide](../guides/ensite-import.md) — the workflows that
+  populate these tables.
