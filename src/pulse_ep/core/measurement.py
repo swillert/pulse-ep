@@ -38,6 +38,28 @@ class MeasurementPoint:
     electrodes: dict[str, np.ndarray] = field(default_factory=dict)  # label -> (3,)
     source_id: str | None = None  # vendor point id
     index: int | None = None  # order within the map
+    #: Operator / system markers on the point, by their vendor-defined names
+    #: (CARTO: ``Location Only``, ``Scar``, user-defined labels …). A marker,
+    #: not a measurement — it says what the operator meant the point for.
+    tags: list[str] = field(default_factory=list)
+    #: Where this point's beat sits in the signal recorded for it — the
+    #: acquisition's own bookkeeping, not a measurement of tissue, which is
+    #: why it is not in ``measurements``:
+    #:
+    #: ``start_time``
+    #:     first sample of the recorded window, on the study clock.
+    #: ``reference`` / ``map``
+    #:     the reference and mapping annotations, as offsets into that window.
+    #:     Their *difference* is the activation time (or pace-match score) that
+    #:     ``measurements`` carries; these are the components it came from.
+    #: ``woi_from`` / ``woi_to``
+    #:     the window of interest the annotation was searched in.
+    #:
+    #: Keys absent from an export are absent here. The names are the ones a
+    #: stored :class:`~pulse_ep.core.waveform.Waveform` records for the same
+    #: point, so a window and the point it belongs to describe themselves
+    #: identically instead of by coincidence.
+    annotations: dict = field(default_factory=dict)
 
     def add(self, name: str, value: float, kind: str, unit: str = "") -> None:
         self.measurements[name] = Measurement(value, kind, unit)

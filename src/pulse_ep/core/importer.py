@@ -118,6 +118,23 @@ def fill_positions(point_dicts: list[dict], xyz) -> None:
         pd["position_z"] = float(xyz[i, 2])
 
 
+def fill_tags(point_dicts: list[dict], tags_per_point, tag_names: dict[int, str]) -> None:
+    """Give each point the names of the tags the study catalogue put on it.
+
+    ``tags_per_point`` is :func:`~pulse_ep.core.xml_proc.get_point_tags`
+    output, in the same order as the points; ids are resolved through the
+    study's own tag table (:func:`~pulse_ep.core.xml_proc.get_tag_names`), an
+    id the table does not define is kept as its number. Points beyond the end
+    of the list are left alone.
+    """
+    if not tags_per_point:
+        return
+    for i, pd in enumerate(point_dicts):
+        if i >= len(tags_per_point):
+            break
+        pd["tags"] = [tag_names.get(t, str(t)) for t in tags_per_point[i]]
+
+
 def import_carto(filename: str, filter=None):
     """
     Import Carto data and convert it into a format suitable for further analysis.
@@ -202,7 +219,10 @@ def import_carto(filename: str, filter=None):
             # measurement points exactly as EnSiteX ones do. Best-effort: the
             # legacy arrays above stay populated either way.
             try:
-                from pulse_ep.core.importers.carto import carto_points_to_measurements
+                from pulse_ep.core.importers.carto import (
+                    carto_points_to_measurements,
+                    point_primary_kind,
+                )
                 from pulse_ep.core.point_importer import import_map_points
 
                 point_dicts, _ = import_map_points(path, epmap.map_name)
@@ -213,7 +233,16 @@ def import_carto(filename: str, filter=None):
                 # how this path silently yielded no measurement points at all
                 # while the CLI, which already backfilled, yielded thousands.
                 fill_positions(point_dicts, epmap.xyz)
-                epmap.measurement_points = carto_points_to_measurements(point_dicts)
+                # Tags live in the catalogue as well, as ids the study's own
+                # tag table defines.
+                fill_tags(
+                    point_dicts,
+                    xml_proc.get_point_tags(map_element),
+                    xml_proc.get_tag_names(xml_tree),
+                )
+                epmap.measurement_points = carto_points_to_measurements(
+                    point_dicts, primary_kind=point_primary_kind(epmap)
+                )
             except Exception as point_conv_error:
                 print(f"Warning: no vendor-neutral points for {epmap.map_name}: {point_conv_error}")
 
