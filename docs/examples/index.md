@@ -2,7 +2,7 @@
 
 Cross-language client code for ParaView, R, MATLAB and Jupyter. The
 canonical source lives in the
-[`examples/`](https://gitlab.willert.net/sw/pulse-ep/-/tree/main/examples)
+[`examples/`](https://github.com/swillert/pulse-ep/tree/main/examples)
 directory of the repository; this page is the documentation index.
 
 ## Why these examples exist
@@ -28,7 +28,7 @@ faithful — independent of any one stack.
     (Programmable Source), or use the CLI exporter to write a `.vtu`
     file without a running server.
 
-    [:octicons-arrow-right-24: View on GitLab](https://gitlab.willert.net/sw/pulse-ep/-/tree/main/examples/paraview)
+    [:octicons-arrow-right-24: View on GitHub](https://github.com/swillert/pulse-ep/tree/main/examples/paraview)
 
 -   :simple-r:{ .lg .middle } __R__
 
@@ -38,7 +38,7 @@ faithful — independent of any one stack.
     plot the scalar histogram with `ggplot2`, tabulate per-interval
     areas.
 
-    [:octicons-arrow-right-24: View on GitLab](https://gitlab.willert.net/sw/pulse-ep/-/tree/main/examples/r)
+    [:octicons-arrow-right-24: View on GitHub](https://github.com/swillert/pulse-ep/tree/main/examples/r)
 
 -   :material-language-matlab:{ .lg .middle } __MATLAB__
 
@@ -48,7 +48,7 @@ faithful — independent of any one stack.
     histogram and area-per-interval table — same numbers, different
     language.
 
-    [:octicons-arrow-right-24: View on GitLab](https://gitlab.willert.net/sw/pulse-ep/-/tree/main/examples/matlab)
+    [:octicons-arrow-right-24: View on GitHub](https://github.com/swillert/pulse-ep/tree/main/examples/matlab)
 
 -   :simple-jupyter:{ .lg .middle } __Jupyter__
 
@@ -58,7 +58,7 @@ faithful — independent of any one stack.
     PyVista → scalar histogram → area-per-interval table as a
     `pandas` DataFrame.
 
-    [:octicons-arrow-right-24: View on GitLab](https://gitlab.willert.net/sw/pulse-ep/-/tree/main/examples/notebooks)
+    [:octicons-arrow-right-24: View on GitHub](https://github.com/swillert/pulse-ep/tree/main/examples/notebooks)
 
 </div>
 

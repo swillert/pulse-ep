@@ -42,7 +42,7 @@ skip `dev` and `docs`.
 For contributors and reproducible-research workflows:
 
 ```bash
-git clone https://gitlab.willert.net/sw/pulse-ep.git
+git clone https://github.com/swillert/pulse-ep.git
 cd pulse-ep
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
@@ -67,7 +67,7 @@ For a zero-Python-on-the-host setup, the bundled `compose.yaml` spins up
 PostgreSQL, the API server, and (optionally) pgAdmin:
 
 ```bash
-git clone https://gitlab.willert.net/sw/pulse-ep.git
+git clone https://github.com/swillert/pulse-ep.git
 cd pulse-ep
 cp .env.example .env  # edit PULSE_EP_JWT_SECRET_KEY at minimum
 docker compose --profile server up -d --build

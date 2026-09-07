@@ -102,10 +102,10 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://gitlab.willert.net/sw/pulse-ep"
-Repository = "https://gitlab.willert.net/sw/pulse-ep"
-Issues = "https://gitlab.willert.net/sw/pulse-ep/-/issues"
-Documentation = "https://sw.gitlab-pages.willert.net/pulse-ep/"
+Homepage = "https://github.com/swillert/pulse-ep"
+Repository = "https://github.com/swillert/pulse-ep"
+Issues = "https://github.com/swillert/pulse-ep/issues"
+Documentation = "https://github.com/swillert/pulse-ep/tree/main/docs"
 
 [project.scripts]
 pulse-ep-import-carto = "pulse_ep.cli.import_carto:main"
