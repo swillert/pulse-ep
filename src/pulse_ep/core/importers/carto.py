@@ -383,7 +383,7 @@ def _is_study_catalogue(path: str) -> bool:
     return b"<Study" in head
 
 
-# --- VisiTag ablation sites (UNVERIFIED — see the warning below) ------------
+# --- VisiTag ablation sites -------------------------------------------------
 
 #: Column name -> the ``PlacedPoint.attributes`` key it becomes. Matching is by
 #: *name*, case- and separator-insensitive, never by position: VisiTag's column
@@ -437,20 +437,21 @@ def _numeric(text: str):
 def parse_carto_visitag_sites(data: bytes | str, name: str = "") -> list[PlacedPoint]:
     """Parse a VisiTag ``Sites.txt`` into ablation :class:`PlacedPoint` objects.
 
-    .. warning::
+    A tab-separated table with a header row, one row per ablation site,
+    carrying ``X``/``Y``/``Z`` plus RF parameters. Reading is deliberately
+    **column-name driven**, because VisiTag's column set differs between CARTO
+    versions: an unexpected set yields fewer attributes, never values assigned
+    to the wrong quantity, and a file without recognisable X/Y/Z columns
+    yields no points at all rather than nonsense. Unrecognised columns are
+    preserved under their own names.
 
-       **UNVERIFIED — no VisiTag export has been available to test against.**
-
-       This parser is written from the documented VisiTag layout: a
-       tab-separated table with a header row, one row per ablation site,
-       carrying ``X``/``Y``/``Z`` plus RF parameters. It is deliberately
-       **column-name driven**: an unexpected column set yields fewer
-       attributes, never values assigned to the wrong quantity, and a file
-       without recognisable X/Y/Z columns yields no points at all rather than
-       nonsense. Unrecognised columns are preserved under their own names.
-
-       Confirm against a real VisiTag export before trusting the ablation
-       sites it produces, and delete this warning once that is done.
+    Provenance: written from the documented layout and since **confirmed by a
+    co-author against a real VisiTag export** (September 2026). The fixtures in
+    ``tests/test_carto_visitag.py`` still encode that documented layout rather
+    than a captured header — a real export is patient data and cannot enter
+    this repository — so they pin the parser's *properties*, not one site's
+    column set. Read them as "this is how it fails safely", not as "this is
+    what CARTO writes".
     """
     text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
     lines = [ln for ln in text.splitlines() if ln.strip()]
@@ -605,12 +606,6 @@ class CartoImporter:
                 for name, count, mesh in zip(names, n_points, mesh_files)  # noqa: B905
             ]
             visitag = _visitag_files(source)
-            if visitag:
-                issues.append(
-                    "VisiTag ablation sites found — the parser for them is UNVERIFIED "
-                    "(never tested against a real VisiTag export); check the imported "
-                    "sites before relying on them"
-                )
             studies.append(
                 StudyPlan(
                     study_name=study_name,

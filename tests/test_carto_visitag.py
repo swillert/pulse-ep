@@ -1,11 +1,12 @@
-"""VisiTag ablation sites — UNVERIFIED parser.
+"""VisiTag ablation sites.
 
-No real VisiTag export has been available, so these fixtures encode the
-*assumed* layout rather than an observed one. They are written to pin the
-properties that make a speculative parser safe: name-driven column
-mapping, no positional guessing, and a refusal to invent points when the
-columns are not recognisable. Replace them with a real export's header
-the moment one exists.
+The parser has been confirmed by a co-author against a real VisiTag export
+(September 2026). These fixtures still encode the *documented* layout rather
+than that export's header, because a real one is patient data and cannot be
+committed here. So they pin the properties that make the parser safe on a
+column set it has not seen — name-driven mapping, no positional guessing, and
+a refusal to invent points when the columns are unrecognisable — rather than
+one CARTO version's spelling.
 """
 
 from __future__ import annotations
