@@ -439,6 +439,90 @@ def parse_ensite_contact_force(data: bytes | str, name: str = "") -> Waveform:
     )
 
 
+#: A position column: ``c12x`` -> channel 12, axis x. The file's own glossary
+#: spells it ``c###x|y|z : channel ### x|y|z coordinate``.
+_POSITION_COLUMN = re.compile(r"^c(\d+)([xyz])$", re.IGNORECASE)
+
+#: Header of the channel table that precedes the samples in the location and
+#: contact-index exports.
+_CHANNEL_TABLE_HEADER = "channel,catheter name,electrode name"
+
+
+def parse_channel_map(data: bytes | str) -> dict[str, dict]:
+    """The ``channel,catheter name,electrode name,is visible`` table, by channel.
+
+    This is the bridge between the numbered channels a signal export writes and
+    the electrode labels a measurement point carries (``CS_1``, ``20A_1``) —
+    stated by the export instead of inferred from the labels. It is a second
+    table *inside* the file, above the sample matrix, so it is read separately
+    from :func:`parse_dws_table`.
+    """
+    text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.startswith(_CHANNEL_TABLE_HEADER)), None)
+    if start is None:
+        return {}
+    out: dict[str, dict] = {}
+    for ln in lines[start + 1 :]:
+        cells = [c.strip() for c in ln.split(",")]
+        if not cells or not cells[0].isdigit():
+            break  # the table ends where the numbering does
+        entry = {"catheter": cells[1] if len(cells) > 1 else ""}
+        if len(cells) > 2:
+            entry["electrode"] = cells[2]
+        if len(cells) > 3:
+            entry["visible"] = cells[3] == "1"
+        out[cells[0]] = entry
+    return out
+
+
+def position_channel_unit(column: str) -> str:
+    """Millimetres for a coordinate column, ``unknown`` for the status ones.
+
+    The export states the axis but not the unit. Millimetres is not a guess
+    here: these positions are in the same coordinate frame as the mesh
+    vertices, which the REST layer already declares as ``mm``. The ``_ds`` and
+    ``_ps`` columns are bitfields whose bits the file's own legend names, so
+    they have no unit at all.
+    """
+    return "mm" if _POSITION_COLUMN.match(column.strip()) else UNKNOWN_UNIT
+
+
+def parse_ensite_electrode_locations(data: bytes | str, name: str = "") -> Waveform:
+    """Parse an EnSite X ``Electrode_Locations.csv`` — catheter geometry over time.
+
+    Same ``t_dws`` shape as every other per-timepoint export. Each channel
+    contributes ``c<n>x``/``c<n>y``/``c<n>z`` plus a data- and a
+    position-status column, and the channel table above the matrix says which
+    catheter and electrode each channel is.
+
+    The raw column names are kept rather than rewritten to electrode labels:
+    what is stored then still matches what the export says, and the mapping
+    travels with it in ``meta["channels"]`` for anyone who wants the labels.
+    The status columns are kept too — they are the only record of why a
+    position is unreliable.
+    """
+    meta, df = parse_dws_table(data)
+    channels = [c for c in df.columns if c not in _TIME_COLS]
+    time, sample_rate = _dws_time(df)
+    return Waveform(
+        data=df[channels].to_numpy(dtype=float) if channels else np.empty((len(df), 0)),
+        channels=[str(c) for c in channels],
+        units=[position_channel_unit(str(c)) for c in channels],
+        sample_rate=sample_rate,
+        signal_type="electrode_position",
+        time=time,
+        meta={
+            "segment": meta.get("Export from Segment"),
+            "study_guid": meta.get("Export from Study"),
+            "software_version": meta.get("Exported from Software Version"),
+            "export_data_element": meta.get("Export Data Element"),
+            "export_file_version": meta.get("Export File Version"),
+            "channels": parse_channel_map(data),
+        },
+    )
+
+
 def _reader_for(name: str):
     """The parser for one per-timepoint export, chosen by its file name.
 
@@ -450,6 +534,8 @@ def _reader_for(name: str):
     stem = Path(name).name.casefold()
     if "contact_force" in stem:
         return parse_ensite_contact_force
+    if "electrode_locations" in stem:
+        return parse_ensite_electrode_locations
     return parse_ensite_waveforms
 
 
@@ -846,6 +932,7 @@ _WAVEFORM_GLOBS = (
     "*ECG*.csv",
     "*Wave_*.csv",
     "*Contact_Force_*.csv",
+    "*Electrode_Locations*.csv",
 )
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
 
