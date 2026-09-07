@@ -107,10 +107,12 @@ pip install "pulse-ep[server]"
 pulse-ep-demo
 ```
 
-This builds a synthetic atrial mesh with a Gaussian score field, ingests it
-into an in-memory SQLite, and prints the per-interval area breakdown. It is
-the smallest working example of the full pipeline, intended for first-time
-users and CI smoke tests.
+This builds an atrium-like ellipsoid, paints a Gaussian pace-mapping score
+field onto it, wraps it as an `EPMap` and prints the mesh size, the score
+distribution, the total surface area and the area per score interval. It
+exercises the array-only public API and needs no database, which makes it the
+smallest check that an installation is healthy — for first-time users and CI
+smoke tests alike.
 
 For real study data and the web viewer, see the [Quickstart](getting-started/quickstart.md).
 

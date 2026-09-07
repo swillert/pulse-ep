@@ -10,33 +10,44 @@ pulse-ep-demo
 
 What this does:
 
-1. Generates a 642-vertex synthetic atrial mesh (icosphere, 25 mm radius).
-2. Injects a Gaussian score field with σ = 6 mm, no noise.
-3. Spins up an in-memory SQLite database with the full pulse-ep ORM schema.
-4. Ingests the synthetic study through the same ORM and persistence path
-   used for real study data.
-5. Loads it back as an `EPMap`, computes total surface area and per-interval
-   area breakdowns, and prints the result.
+1. Builds an atrium-like ellipsoid with half-axes 25 / 25 / 35 mm, from a
+   sphere at `--resolution 24` — 530 vertices, 1056 triangles.
+2. Paints a Gaussian pace-mapping score field onto it: σ = 6 mm, with 2 %
+   relative noise.
+3. Wraps mesh and field as an `EPMap` — the same domain object the CARTO and
+   EnSiteX importers produce.
+4. Computes the total surface area and the area falling into each score
+   interval, and prints the result.
 
-It is the smallest end-to-end test of the pipeline. If `pulse-ep-demo` finishes
-cleanly, your install is healthy.
+**No database is involved** — not PostgreSQL, and nothing embedded either.
+Nothing is written and nothing is read back; the demo exercises the array-only
+public API. If `pulse-ep-demo` finishes cleanly, your installation is healthy;
+what it does *not* prove is that a database, the server or an import works.
+Step 2 and 3 below cover those.
 
-??? note "Sample output (abridged)"
+Add `--show` for an interactive 3D view of the result.
+
+??? note "Sample output"
 
     ```
-    Building synthetic atrium (resolution=16, sigma=6.0 mm)…
-    Mesh: 274 vertices, 544 triangles.
-    Score field: min=12.34, max=99.87, mean=68.12.
-    Ingesting into in-memory SQLite…
-    Study "synthetic-2026-05-17" imported.
-    EPMap "atrium-1" loaded: 274 vertices.
-    Total surface area: 12.34 cm²
-    Area per score interval:
-      50–60 %: 0.81 cm²
-      60–70 %: 1.46 cm²
-      70–80 %: 2.84 cm²
-      80–90 %: 3.91 cm²
-      90–100 %: 3.32 cm²
+    pulse-ep demo — synthetic atrium with a Gaussian pace-mapping field
+    ------------------------------------------------------------------------
+    mesh:           530 vertices, 1056 triangles
+    score field:    σ = 6.0 mm, origin vertex = 0
+                    min/median/max = 0.0 / 0.7 / 100.0 %
+    surface area:   99.44 cm² (total)
+    EPMap:          name='synthetic_demo', study='pulse-ep demo'
+
+    Area by score interval (mean of triangle vertices):
+      interval (%)     area (cm²)    % of total
+      [   0,   20)          96.11         96.7 %
+      [  20,   40)           1.14          1.2 %
+      [  40,   60)           0.72          0.7 %
+      [  60,   80)           1.10          1.1 %
+      [  80,   90)           0.09          0.1 %
+      [  90,   95)           0.27          0.3 %
+      [  95,  100)           0.00          0.0 %
+      [ 100,  101)           0.00          0.0 %
     ```
 
 

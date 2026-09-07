@@ -41,15 +41,24 @@ that.
 ## `pulse-ep-demo`
 
 ```bash
-pulse-ep-demo [--resolution 16] [--sigma 6.0]
+pulse-ep-demo [--resolution 24] [--sigma 6.0] [--noise 0.02] [--show]
 ```
 
-Self-contained synthetic walkthrough — builds an icosphere atrial mesh,
-injects a Gaussian score field, ingests it into an in-memory SQLite
-through the full ORM stack, and prints per-interval areas. No
-PostgreSQL required.
+Self-contained synthetic walkthrough — builds an atrium-like ellipsoid
+(half-axes 25 / 25 / 35 mm), paints a Gaussian pace-mapping score field onto
+it, wraps it as an `EPMap` and prints the mesh size, the score distribution,
+the total surface area and the area per score interval.
 
-The defaults reproduce the smoke-test configuration used in CI.
+| Flag | Default | Notes |
+| ---- | ------- | ----- |
+| `--resolution` | `24` | Theta/phi resolution of the sphere it starts from; `24` gives 530 vertices and 1056 triangles. |
+| `--sigma` | `6.0` | Width of the Gaussian score field, in millimetres. |
+| `--noise` | `0.02` | Relative standard deviation of the noise added to the scores. |
+| `--show` | off | Open an interactive 3D viewer on the result (PyVista). |
+
+**It uses no database** — not PostgreSQL, and nothing embedded either. Nothing
+is persisted and nothing is read back; it exercises the array-only public API,
+which is what makes it a first check that an installation is healthy.
 
 ## `pulse-ep-migrate`
 
