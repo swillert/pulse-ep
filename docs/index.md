@@ -103,7 +103,8 @@ client can do.
 
 ```bash
 # Run a self-contained synthetic walkthrough — no database needed
-pip install "pulse-ep[server]"
+git clone https://github.com/swillert/pulse-ep.git
+cd pulse-ep && pip install -e "."
 pulse-ep-demo
 ```
 

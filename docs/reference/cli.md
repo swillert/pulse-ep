@@ -259,7 +259,7 @@ pulse-ep-mcp [--base-url URL] [--download-dir DIR]
 ```
 
 Serves a pulse-ep deployment to an MCP client (Claude Desktop, Claude Code, …)
-over stdio, **read-only**. Needs the optional extra: `pip install "pulse-ep[mcp]"`.
+over stdio, **read-only**. Needs the optional extra: `pip install -e ".[mcp]"`.
 
 | Flag | Default | Notes |
 | ---- | ------- | ----- |

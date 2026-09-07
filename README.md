@@ -77,30 +77,57 @@ documentation (module layout, design choices, quality gate).
 
 ## Installation
 
-```bash
-# core: import, models, CLI utilities
-pip install pulse-ep
-
-# add the Flask server + 3D viewer
-pip install "pulse-ep[server]"
-
-# add the figure / report generation extras
-pip install "pulse-ep[figures]"
-
-# add the MCP server (read-only access for an AI client)
-pip install "pulse-ep[mcp]"
-
-# everything (server, figures, MCP, dev tools)
-pip install "pulse-ep[all]"
-```
+Python 3.10 or newer. PostgreSQL is optional — it is needed only to import or
+serve real study data, not to try the toolkit out.
 
 ### From source
+
+`pulse-ep` is not on PyPI yet, so this is the way to install it:
 
 ```bash
 git clone https://github.com/swillert/pulse-ep.git
 cd pulse-ep
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
+```
+
+Check that it worked — no database, no configuration:
+
+```bash
+pulse-ep-demo
+```
+
+`[all]` is everything. Install less by naming the extras you want: `[server]`
+for the REST API and the 3D viewer, `[figures]` for the report generators,
+`[mcp]` for the MCP server, `[sevenzip]` for 7-Zip CARTO archives, `[dev]` for
+the test and lint tooling, `[docs]` for the documentation site.
+
+```bash
+pip install -e ".[server,figures]"
+```
+
+### From a running database to a running server
+
+One command, rather than the fifteen this used to take. `pulse-ep-init` writes
+`.env` with a generated JWT secret, creates the waveform and drop directories,
+applies the migrations, seeds the colormaps, creates an administrator and, on
+request, a read-only account for the MCP server. It asks what it cannot work
+out, and it is safe to re-run: an existing `.env` is kept, migrations run only
+when behind, and an account that already exists is left alone with its password
+unchanged.
+
+```bash
+docker compose up -d     # PostgreSQL, if you have none
+pulse-ep-init
+pulse-ep-server          # → http://localhost:5000
+```
+
+### From PyPI
+
+Not published yet. Once it is, the same extras apply:
+
+```bash
+pip install "pulse-ep[all]"
 ```
 
 ## Configuration
@@ -110,11 +137,8 @@ pip install -e ".[all]"
 All variables share the prefix `PULSE_EP_`; see [`.env.example`](.env.example)
 for the full list.
 
-```bash
-pulse-ep-init          # writes .env, generates the secret, and sets the rest up
-```
-
-or by hand:
+[`pulse-ep-init`](#from-a-running-database-to-a-running-server) writes this
+file, with a generated secret. By hand:
 
 ```bash
 cp .env.example .env
