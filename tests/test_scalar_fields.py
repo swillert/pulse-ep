@@ -12,6 +12,8 @@ Proves the Phase-0 refactor:
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -22,11 +24,29 @@ from pulse_ep.core.scalar_field import (
     PACEMAP_SCORE,
     VOLTAGE_BIPOLAR,
     VOLTAGE_UNIPOLAR,
+    ScalarField,
 )
 from pulse_ep.examples.demo_synthetic import (
     gaussian_score_field,
     make_synthetic_atrium,
 )
+
+
+def test_missing_scalar_values_round_trip_through_strict_json():
+    field = ScalarField(
+        np.array([1.25, np.nan, np.inf, -np.inf]),
+        VOLTAGE_BIPOLAR,
+        status_mask=np.array([True, False, False, False]),
+        source="synthetic",
+    )
+    # This must also be valid for PostgreSQL JSONB, which rejects NaN tokens.
+    encoded = json.dumps(field.to_dict(), allow_nan=False)
+    payload = json.loads(encoded)
+    assert payload["values"] == [1.25, None, None, None]
+    restored = ScalarField.from_dict(payload)
+    np.testing.assert_allclose(restored.values, [1.25, np.nan, np.nan, np.nan])
+    np.testing.assert_array_equal(restored.status_mask, field.status_mask)
+    assert restored.unit == "mV" and restored.source == "synthetic"
 
 
 @pytest.fixture

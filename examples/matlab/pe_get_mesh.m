@@ -1,4 +1,4 @@
-function mesh = pe_get_mesh(baseURL, token, mapId, scalarName, distance, representation)
+function mesh = pe_get_mesh(baseURL, token, mapId, scalarName, distance, representation, varargin)
 %PE_GET_MESH  Fetch one map's mesh and per-vertex scalars.
 %
 %   Returns a struct with fields:
@@ -14,22 +14,44 @@ function mesh = pe_get_mesh(baseURL, token, mapId, scalarName, distance, represe
     if nargin < 5 || isempty(distance);   distance   = 5.0;       end
 
     if nargin < 6; representation = "display"; end
+    p = inputParser;
+    addParameter(p, 'Include', {'mesh','fields','points','markers','waveforms'});
+    parse(p, varargin{:});
+    query = {};
+    selected = ~ismember('Include', p.UsingDefaults);
+    if selected
+        if ~strcmp(representation, 'raw')
+            error('pulse_ep:InvalidSelection', 'Include requires the raw representation.');
+        end
+        include = string(p.Results.Include);
+        allowed = ["mesh","fields","points","markers","waveforms"];
+        if any(~ismember(include, allowed), 'all')
+            error('pulse_ep:InvalidSelection', 'Include accepts mesh, fields, points, markers and waveforms.');
+        end
+        query = {'include', char(strjoin(include(:)', ','))};
+    end
 
     opts = weboptions('HeaderFields', ...
            {'Authorization', char(strcat("Bearer ", token))}, ...
            'ContentType', 'json', 'Timeout', 60);
     data = webread( ...
         strcat(baseURL, "/get_mesh_data"), opts, ...
-        'map_id', mapId, 'scalar_name', scalarName, 'distance', distance, 'representation', representation);
+        'map_id', mapId, 'scalar_name', scalarName, 'distance', distance, 'representation', representation, query{:});
+
+    if selected && (~isfield(data, 'selection') || ...
+            ~isequal(sort(string(data.selection.included(:))), sort(unique(include(:)))))
+        error('pulse_ep:UnsupportedSelection', ...
+              'The server did not honor Include. Update the pulse-ep server before selective loading.');
+    end
 
     mesh.data = data; % Complete response, including all raw fields and measurements.
-    md = data.mesh_data;
-    pd = data.point_data;
+    md = local_field(data, 'mesh_data', struct());
+    pd = local_field(data, 'point_data', struct());
 
-    mesh.vertices   = local_to_matrix(md.vertices, 3);
-    mesh.faces      = int32(local_to_matrix(md.faces, 3)) + 1;       % 0→1-indexed
-    mesh.scalars    = local_to_column(md.scalar_data);
-    mesh.normalized = local_to_column(md.normalized_scalar_data);
+    mesh.vertices   = local_to_matrix(local_field(md, 'vertices', []), 3);
+    mesh.faces      = int32(local_to_matrix(local_field(md, 'faces', []), 3)) + 1; % 0→1-indexed
+    mesh.scalars    = local_to_column(local_field(md, 'scalar_data', []));
+    mesh.normalized = local_to_column(local_field(md, 'normalized_scalar_data', []));
 
     if isfield(pd, 'coordinates') && ~isempty(pd.coordinates)
         mesh.points = local_to_matrix(pd.coordinates, 3);
@@ -47,7 +69,9 @@ end
 
 function M = local_to_matrix(cellOfRows, ncols)
 %LOCAL_TO_MATRIX  Convert a cell-of-rows (from JSON) to a numeric matrix.
-    if iscell(cellOfRows)
+    if isempty(cellOfRows)
+        M = zeros(0, ncols);
+    elseif iscell(cellOfRows)
         rows = cellfun(@(r) reshape(double(r), 1, ncols), ...
                        cellOfRows, 'UniformOutput', false);
         M = vertcat(rows{:});
@@ -55,6 +79,10 @@ function M = local_to_matrix(cellOfRows, ncols)
         % If MATLAB already simplified it to a 2-D numeric array.
         M = double(cellOfRows);
     end
+end
+
+function value = local_field(s, name, fallback)
+    if isfield(s, name); value = s.(name); else; value = fallback; end
 end
 
 % -----------------------------------------------------------------------

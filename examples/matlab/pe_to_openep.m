@@ -1,4 +1,4 @@
-function userdata = pe_to_openep(baseURL, token, mapId, includePoints)
+function userdata = pe_to_openep(baseURL, token, mapId, includePoints, varargin)
 %PE_TO_OPENEP  Fetch one map as an OpenEP `userdata` structure.
 %
 %   userdata = PE_TO_OPENEP(baseURL, token, mapId) reads GET
@@ -9,9 +9,11 @@ function userdata = pe_to_openep(baseURL, token, mapId, includePoints)
 %   userdata = PE_TO_OPENEP(..., false) omits the measurement points, leaving
 %   geometry and the per-vertex quantities.
 %
-%   The point of doing this at all: pulse-ep reads EnSite X exports and OpenEP
-%   does not, so a map from either vendor can go through any OpenEP analysis
-%   once it is in this shape.
+%   Maps from either vendor can use OpenEP analyses supported by the exported
+%   quantities. Add 'IncludeSignals',true for stored point-linked signals.
+%   Select RF markers with 'AblationScope','study' or 'AblationIds',[...].
+%   'ECGChannels',{'V1','V2'} selects leads; 'SignalScaleToMV',factor applies
+%   an explicitly known calibration to amplitudes whose units are unknown.
 %
 %   The mapping from pulse-ep's declared quantities onto OpenEP's positional
 %   slots happens server-side, where tests pin it. What is left here is what
@@ -21,31 +23,88 @@ function userdata = pe_to_openep(baseURL, token, mapId, includePoints)
 %   Example:
 %       token    = pe_login("http://localhost:5000", "user", "pw");
 %       userdata = pe_to_openep("http://localhost:5000", token, 12);
-%       drawMap(userdata);                 % an OpenEP function
+%       drawMap(userdata, 'type', 'bip');   % for a map with bipolar voltage
 %
-%   READ THE NOTES. userdata.notes records everything the structure could not
-%   carry — an empty slot, a quantity OpenEP's surface has no room for, and in
-%   particular a pace-mapping score that was deliberately *not* put into the
-%   activation-time column. Those slots are NaN rather than filled, because a
-%   gap can be seen and a plausible wrong number cannot.
+%   Pace maps use negative scores in surface.act_bip(:,1), and the same
+%   convention in mapAnnot - referenceAnnot. userdata.pulse_ep records the
+%   quantity and encoding: these are percentages, not activation times.
+%   userdata.notes records missing quantities and reconstructed references.
 %
 %   See also: pe_login, pe_get_mesh, https://openep.io/api/
 
     if nargin < 4; includePoints = true; end
+    p = inputParser;
+    addParameter(p, 'IncludeSignals', false);
+    addParameter(p, 'AblationScope', 'none');
+    addParameter(p, 'AblationIds', []);
+    addParameter(p, 'ECGChannels', {});
+    addParameter(p, 'SignalScaleToMV', []);
+    parse(p, varargin{:});
+    query = {'include_points', string(double(includePoints)), ...
+             'include_signals', string(double(p.Results.IncludeSignals)), ...
+             'ablation_scope', p.Results.AblationScope};
+    if ~isempty(p.Results.AblationIds)
+        query = [query, {'ablation_ids', strjoin(string(p.Results.AblationIds), ',')}];
+    end
+    if ~isempty(p.Results.ECGChannels)
+        query = [query, {'ecg_channels', strjoin(string(p.Results.ECGChannels), ',')}];
+    end
+    if ~isempty(p.Results.SignalScaleToMV)
+        query = [query, {'signal_scale_to_mv', string(p.Results.SignalScaleToMV)}];
+    end
 
     opts = weboptions('HeaderFields', ...
            {'Authorization', char(strcat("Bearer ", token))}, ...
-           'ContentType', 'json', 'Timeout', 120);
-    raw = webread(strcat(baseURL, "/epmaps/", string(mapId), "/openep"), opts, ...
-                  'include_points', string(double(includePoints)));
+           'ContentType', 'json', 'Timeout', 300);
+    raw = webread(strcat(baseURL, "/epmaps/", string(mapId), "/openep"), opts, query{:});
 
     userdata = raw;
     userdata.surface.triRep       = local_triangulation(raw.surface.triRep);
     userdata.surface.act_bip      = local_matrix(raw.surface.act_bip);
     userdata.surface.uni_imp_frc  = local_matrix(raw.surface.uni_imp_frc);
     userdata.surface.isVertexAtRim = logical(local_matrix(raw.surface.isVertexAtRim));
+    if isfield(raw.surface, 'normals')
+        userdata.surface.normals = local_matrix(raw.surface.normals);
+    end
+    if isfield(raw.surface, 'signalMaps')
+        userdata.surface.signalMaps = local_records(raw.surface.signalMaps, 'map');
+    end
+    if isfield(raw.electric, 'signalProps')
+        userdata.electric.signalProps = local_records(raw.electric.signalProps, 'value');
+    end
 
     userdata.electric.egmX = local_matrix(raw.electric.egmX);
+    n = size(userdata.electric.egmX, 1);
+    userdata.electric.names = cellstr(string(raw.electric.names(:)));
+    if isempty(raw.electric.tags)
+        userdata.electric.tags = repmat({cell(0, 1)}, n, 1);
+    else
+        userdata.electric.tags = cell(n, 1);
+        for i = 1:n
+            tags = raw.electric.tags{i};
+            if isempty(tags)
+                userdata.electric.tags{i} = cell(0, 1);
+            else
+                userdata.electric.tags{i} = cellstr(string(tags(:)));
+            end
+        end
+    end
+    for f = ["egm", "egmUni", "egmRef", "egmRef2", "ecg", "egmUniX"]
+        if isfield(raw.electric, f)
+            if f == "ecg" && isempty(raw.electric.ecgNames)
+                % Nested empty JSON arrays cannot retain a zero third axis.
+                userdata.electric.ecg = nan(n, size(userdata.electric.egm, 2), 0);
+            else
+                userdata.electric.(f) = local_matrix(raw.electric.(f));
+            end
+        end
+    end
+    for f = ["force", "axialAngle", "lateralAngle", "time_force", "time_axial", "time_lateral"]
+        userdata.electric.force.(f) = local_matrix(raw.electric.force.(f));
+    end
+    if isfield(raw, 'rfindex')
+        userdata.rfindex.tag.X = local_matrix(raw.rfindex.tag.X);
+    end
     for f = ["egmSurfX", "barDirection"]
         if isfield(raw.electric, f)
             userdata.electric.(f) = local_matrix(raw.electric.(f));
@@ -61,6 +120,25 @@ function userdata = pe_to_openep(baseURL, token, mapId, includePoints)
     if isfield(userdata, 'notes') && ~isempty(userdata.notes)
         fprintf('pulse-ep notes on this map:\n');
         fprintf('  %s\n', string(userdata.notes));
+    end
+end
+
+function entries = local_records(raw, valueField)
+%LOCAL_RECORDS Keep OpenEP's cell-of-struct convention for zero/one/many fields.
+    if isempty(raw)
+        entries = cell(0, 1);
+    elseif isstruct(raw)
+        entries = num2cell(raw(:));
+    else
+        entries = raw(:);
+    end
+    for i = 1:numel(entries)
+        values = local_matrix(entries{i}.(valueField));
+        entries{i}.(valueField) = values(:);
+        if isfield(entries{i}, 'statusMask')
+            mask = local_matrix(entries{i}.statusMask);
+            entries{i}.statusMask = logical(mask(:));
+        end
     end
 end
 

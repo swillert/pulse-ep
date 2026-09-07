@@ -285,6 +285,10 @@ plugin**, **R and MATLAB client functions**, a **Jupyter notebook**, a Python
 waveform plot and an executable **MCP** tool workflow. The built-in web viewer
 provides another way to inspect maps and calculate interval areas.
 
+The [MATLAB toolbox](docs/guides/matlab.md) packages the client functions and
+an optional session object for login, study/map queries, selective raw data,
+waveform downloads and OpenEP access. The direct functions remain supported.
+
 Clients retrieve data through the shared service. Histograms and custom
 calculations operate on downloaded arrays; the interval-area examples call
 the same server operation. Use the raw mesh representation for full stored

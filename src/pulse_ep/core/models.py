@@ -621,7 +621,7 @@ def waveform_row(
         signal_type=waveform.signal_type,
         channels=[str(c) for c in waveform.channels],
         units=[str(u) for u in waveform.units],
-        sample_rate=waveform.sample_rate,
+        sample_rate=float(waveform.sample_rate) if waveform.sample_rate is not None else None,
         n_samples=int(waveform.data.shape[0]),
         n_channels=int(waveform.data.shape[1]),
         segment=meta.get("segment"),

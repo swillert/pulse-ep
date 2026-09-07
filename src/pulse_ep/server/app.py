@@ -316,7 +316,7 @@ def map_as_openep(map_id):
     the ``triangulation`` object. ``notes`` says what the structure could not
     carry; it is part of the answer and not a side channel.
     """
-    from pulse_ep.core.openep import to_userdata
+    from pulse_ep.core.openep_io import stored_userdata
 
     with get_db_session() as session:
         epmap_model = EPMapModel.retrieve(session, map_id)
@@ -327,44 +327,24 @@ def map_as_openep(map_id):
             "false",
             "no",
         }
-        epmap = epmap_model.to_epmap(include_points=include_points)
-        study = session.get(StudyModel, epmap_model.study_id) if epmap_model.study_id else None
-        study_name = getattr(study, "name", None)
-        force_windows = _force_windows(session, epmap_model.study_id) if include_points else []
-
-    return jsonify(
-        _jsonable(to_userdata(epmap, study_name=study_name, force_windows=force_windows))
-    )
-
-
-def _force_windows(session, study_id):
-    """The study's contact-force windows, read back out of the Parquet store.
-
-    Only those: an electrogram window is far larger and fills no field this
-    endpoint serves. A study whose signals were never imported simply has none,
-    and the export says so in its notes rather than failing.
-    """
-    from pulse_ep.core.models import WaveformModel
-
-    root = get_settings().waveform_store_dir
-    if study_id is None or not root:
-        return []
-    from pulse_ep.core.waveform import FilesystemStore
-
-    store = FilesystemStore(root)
-    windows = []
-    rows = (
-        session.query(WaveformModel)
-        .filter(WaveformModel.study_id == study_id)
-        .filter(WaveformModel.signal_type.like("contact_force%"))
-        .all()
-    )
-    for row in rows:
         try:
-            windows.append(store.read(row.data_uri))
-        except (OSError, ValueError):
-            continue  # a window whose file is gone should not fail the export
-    return windows
+            scale = request.args.get("signal_scale_to_mv")
+            ids = request.args.get("ablation_ids", "")
+            ecg = request.args.get("ecg_channels")
+            userdata = stored_userdata(
+                session,
+                epmap_model,
+                include_points=include_points,
+                include_signals=request.args.get("include_signals", "0").lower()
+                in {"1", "true", "yes"},
+                ablation_scope=request.args.get("ablation_scope", "none"),
+                ablation_ids=[int(x) for x in ids.split(",")] if ids else None,
+                signal_scale_to_mv=float(scale) if scale is not None else None,
+                ecg_channels=ecg.split(",") if ecg is not None else None,
+            )
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+    return jsonify(_jsonable(userdata))
 
 
 def _jsonable(value):
@@ -578,7 +558,12 @@ def get_mesh_data():
             if model is None:
                 return jsonify({"error": "Map not found"}), 404
             try:
-                data = export_map(session, model, request.args.get("scalar_name") or None)
+                data = export_map(
+                    session,
+                    model,
+                    request.args.get("scalar_name") or None,
+                    include=request.args.get("include"),
+                )
             except ValueError as exc:
                 return jsonify({"error": str(exc)}), 400
             return jsonify(data)

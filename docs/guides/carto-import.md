@@ -59,13 +59,14 @@ single-study replacement option. It does not remove external Parquet files.
 Populated columns such as `Bipolar`, `Unipolar` and `Paso` become named fields
 with units and source-column provenance. Unknown populated columns retain
 the vendor token and kind `unknown`; entirely missing columns are omitted.
-Values at or above the CARTO missing-data sentinel are excluded.
+Values whose absolute magnitude reaches the CARTO missing-data sentinel are excluded.
 
 The overloaded `LAT` column needs special care. The reader infers a
-pace-mapping score from an entirely negative LAT field and changes its sign;
-other LAT fields retain the activation-time interpretation. An explicit score
+pace-mapping score when all valid LAT values lie in [-100, 0], with at least
+one negative value, and changes its sign. Values outside that range retain
+the activation-time interpretation, including entirely negative times. An explicit score
 column such as `Paso` is identified separately. An activation map
-with entirely negative times can therefore be ambiguous. Check the quantity,
+whose times all lie in [-100, 0] can still be ambiguous. Check the quantity,
 sign and source provenance against the acquisition system before analysis.
 Shared field names do not validate a map's clinical interpretation.
 

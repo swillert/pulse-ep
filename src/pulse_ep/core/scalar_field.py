@@ -141,8 +141,11 @@ class ScalarField:
     def to_dict(self) -> dict:
         """JSON-serialisable form (for the ``scalar_fields`` JSONB column)."""
         mask = self.status_mask
+        values = np.asarray(self.values, dtype=float)
         return {
-            "values": np.asarray(self.values).tolist(),
+            # PostgreSQL JSONB rejects NaN/Infinity. JSON null represents a
+            # missing numeric value and is restored as NaN when loading.
+            "values": np.where(np.isfinite(values), values, None).tolist(),
             "kind": self.kind,
             "unit": self.unit,
             "status_mask": None if mask is None else np.asarray(mask).tolist(),
@@ -153,7 +156,7 @@ class ScalarField:
     def from_dict(cls, d: dict) -> ScalarField:
         mask = d.get("status_mask")
         return cls(
-            values=np.asarray(d["values"]),
+            values=np.asarray(d["values"], dtype=float),
             kind=d["kind"],
             unit=d.get("unit", ""),
             status_mask=None if mask is None else np.asarray(mask),

@@ -689,6 +689,19 @@ def iter_waveforms(study_plan, source: ImportSource):
     path shares with CARTO, where they are not.
     """
     for name in study_plan.waveforms.files:
+        if Path(name).name.casefold().startswith("wave_"):
+            from pulse_ep.core.importers.ensite_signal import iter_dxl_waveforms
+
+            candidates = [
+                m.map_name
+                for m in study_plan.maps
+                if any(Path(f).parent == Path(name).parent for f in m.points_files)
+            ]
+            map_name = candidates[0] if len(candidates) == 1 else None
+            for index, wave, point_id in iter_dxl_waveforms(source.open(name).read(), name):
+                wave.meta["map_name"] = map_name
+                yield f"{Path(name).with_suffix('')}_{index}", wave, point_id, map_name
+            continue
         yield (
             Path(name).stem,
             _reader_for(name)(source.open(name).read(), name=name),
@@ -808,9 +821,8 @@ def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPo
     ``roving x/y/z`` (labelled by ``Electrodes``) -> electrodes. Trailing
     variable "Rov Tick" columns are ignored, so parsing is done by hand.
 
-    ``adjTime (ms)`` is deliberately *not* activation time: in real exports it
-    is the annotation window offset and is often constant across every point
-    of the study. A map's activation time is the ``LAT`` channel's own column.
+    ``adjTime (ms)`` is the manual reference-time adjustment, not activation
+    time. A map's activation time is the ``LAT`` channel's own column.
     """
     text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
     lines = text.splitlines()
@@ -872,6 +884,7 @@ def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPo
         annot = num(f, "adjTime (ms)")
         if annot is not None and abs(annot) < _MAP_PP_SENTINEL:
             point.add("annotation_time", annot, ANNOTATION_TIME, "ms")
+            point.annotations["reference_adjustment_ms"] = annot
 
         # When this point was acquired, on the study clock. It is the one thing
         # that ties a point to the per-timepoint exports — contact force and
@@ -882,6 +895,28 @@ def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPo
         ref_abs = num(f, "refTime (abs)")
         if ref_abs is not None and ref_abs > 0:
             point.annotations["start_time"] = ref_abs
+            point.annotations["reference_time"] = ref_abs
+            point.annotations["time_unit"] = "s"
+        # Curtains are relative milliseconds, not sample offsets. Keep their
+        # units explicit until a waveform's sampling frequency is available.
+        for column, key in (("left curtain (ms)", "woi_from"), ("right curtain (ms)", "woi_to")):
+            value = num(f, column)
+            if value is not None and np.isfinite(value) and abs(value) < _MAP_PP_SENTINEL:
+                point.annotations[key] = value
+        point.annotations["annotation_unit"] = "ms"
+        point.annotations["source_folder"] = str(Path(name).parent)
+        for column, key in (
+            ("Freeze Grp #", "freeze_group"),
+            ("Rov trace", "bipolar_channel"),
+            ("Ref trace", "reference_channel"),
+            ("Ref2 trace", "reference_2_channel"),
+        ):
+            j = col.get(column)
+            if j is not None and j < len(f) and f[j].strip():
+                point.annotations[key] = f[j].strip()
+        tick = num(f, "Ref Tick")
+        if tick is not None and np.isfinite(tick) and tick >= 0:
+            point.annotations["reference_sample_zero_based"] = tick
 
         force = num(f, "force (g)")
         if force is not None and force >= 0:
@@ -1237,6 +1272,14 @@ class EnsiteImporter:
     def sniff(self, source: ImportSource) -> bool:
         difs = source.list(_MAP_GLOB) or _list_any(source, _ANATOMY_GLOBS)
         if not difs:
+            for name in source.list(_POINTS_GLOB):
+                try:
+                    with source.open(name) as fh:
+                        header = fh.read(4096)
+                    if b"Export Data Element: DxL" in header and b"Map type:" in header:
+                        return True
+                except OSError:
+                    continue
             return False
         try:
             with source.open(difs[0]) as fh:
@@ -1268,6 +1311,25 @@ class EnsiteImporter:
                     n_vertices=next(iter(distinct), None),
                     points_files=points_files,
                     issues=issues,
+                )
+            )
+
+        # DxL can export point tables and their waveforms without a DIF mesh.
+        # Keep a point-only map so its linked signals remain usable; geometry
+        # is absent rather than reconstructed from unrelated anatomy.
+        assigned = {f for mp in maps for f in mp.points_files}
+        point_groups = {}
+        for name in source.list(_POINTS_GLOB):
+            if name not in assigned and _is_dxl_points_table(source, name):
+                point_groups.setdefault(str(Path(name).parent), []).append(name)
+        for directory, files in sorted(point_groups.items()):
+            maps.append(
+                MapPlan(
+                    map_name=_operator_map_name(source, files) or Path(directory).name,
+                    files=[],
+                    points_files=sorted(files),
+                    n_vertices=0,
+                    issues=["Point-only map: no surface geometry; signal/point analysis only."],
                 )
             )
 
@@ -1315,6 +1377,21 @@ class EnsiteImporter:
             for mp in sp.maps:
                 if not mp.include:
                     continue
+                if not mp.files:
+                    epmap = EPMap(
+                        map_name=mp.map_name,
+                        study_name=sp.study_name,
+                        attributes={"kind": "point_map", "geometry_available": False},
+                    )
+                    if mp.include_points:
+                        epmap.measurement_points = _merge_point_sets(
+                            [
+                                parse_ensite_map_pp(source.open(pf).read(), name=pf)
+                                for pf in mp.points_files
+                            ]
+                        )
+                    study.add_epmap(epmap)
+                    continue
                 items = [(f, parse_dif(source.open(f).read())[0]) for f in mp.files]
                 try:
                     epmap = merge_dif_group(items, sp.study_name, src_tag)
@@ -1352,7 +1429,7 @@ class EnsiteImporter:
                                 attributes={"kind": "anatomy", "chamber": vol.name},
                             )
                         )
-            # plan.waveforms.include -> Phase 1.5 (WaveformStore); not yet built
+            # Optional waveform ingestion is performed by the shared persistence path.
             studies.append(study)
         return studies
 

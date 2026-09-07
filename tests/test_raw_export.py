@@ -12,7 +12,7 @@ from flask_jwt_extended import create_access_token
 
 from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.measurement import MeasurementPoint
-from pulse_ep.server.raw_export import json_safe, raw_mesh
+from pulse_ep.server.raw_export import export_map, json_safe, raw_components, raw_mesh
 
 
 def test_raw_export_preserves_all_arrays_and_point_metadata():
@@ -61,6 +61,59 @@ def test_anatomy_only_export_and_invalid_field():
     assert data["mesh_data"]["scalar_fields"] == {}
     with pytest.raises(ValueError):
         raw_mesh(ep, "not-present")
+
+
+def test_component_selection_limits_response_without_changing_retained_values():
+    ep = EPMap("map", "study", vertices=np.eye(3), triangles=np.array([[0, 1, 2]]))
+    ep.register_scalar("bipolar", np.array([1, np.nan, 2]), "voltage_bipolar")
+    ep.measurement_points = [MeasurementPoint(np.zeros(3))]
+    full = raw_mesh(ep)
+    selected = raw_mesh(ep, include="mesh,fields")
+    assert selected["mesh_data"] == full["mesh_data"]
+    assert "point_data" not in selected and "selection" not in full
+    assert selected["selection"]["included"] == ["mesh", "fields"]
+    mesh = raw_mesh(ep, include="mesh")
+    assert mesh["mesh_data"]["vertices"] == full["mesh_data"]["vertices"]
+    assert "scalar_fields" not in mesh["mesh_data"]
+    metadata = raw_mesh(ep, include="")
+    assert "mesh_data" not in metadata and "point_data" not in metadata
+    assert metadata["selection"]["included"] == []
+    assert metadata["map"] == full["map"]
+
+
+def test_invalid_components_or_scalar_without_fields_fail_explicitly():
+    with pytest.raises(ValueError, match="unknown raw components"):
+        raw_components("mesh,signals")
+    with pytest.raises(ValueError, match="requires the fields"):
+        raw_mesh(EPMap("map", "study"), "bipolar", include="mesh")
+
+
+def test_mesh_selection_avoids_loading_point_marker_and_signal_relations(monkeypatch):
+    from pulse_ep.core.models import EPMapAttributes
+    from pulse_ep.server import raw_export
+
+    calls = []
+
+    def convert(*, include_points):
+        calls.append(include_points)
+        return EPMap("map", "study", vertices=np.eye(3), triangles=np.array([[0, 1, 2]]))
+
+    class AttributeQuery:
+        def filter_by(self, **kwargs):
+            return self
+
+        def first(self):
+            return None
+
+    def query(kind):
+        assert kind is EPMapAttributes, "excluded relationship was queried"
+        return AttributeQuery()
+
+    model = SimpleNamespace(id=1, study_id=2, to_epmap=convert, study={"id": 2})
+    monkeypatch.setattr(raw_export, "row_data", lambda row: row)
+    result = export_map(SimpleNamespace(query=query), model, include="mesh")
+    assert calls == [False]
+    assert not {"point_data", "placed_points", "waveforms"} & set(result)
 
 
 def test_legacy_zero_coordinates_survive_database_conversion():

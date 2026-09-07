@@ -138,6 +138,7 @@ nav:
       - Masking and interpolation: guides/interpolation.md
       - The web viewer: guides/web-viewer.md
       - The MCP server: guides/mcp.md
+      - MATLAB toolbox: guides/matlab.md
       - OpenEP export: guides/openep.md
       - Docker deployment: guides/docker-deployment.md
       - Managing users: guides/managing-users.md

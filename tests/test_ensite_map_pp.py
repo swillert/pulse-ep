@@ -42,10 +42,10 @@ def test_maps_columns_to_measurements():
 
 
 def test_adjtime_is_annotation_not_activation():
-    """``adjTime`` is the annotation window offset — real exports hold one
-    constant value for every point — so it must not pose as activation time."""
+    """A manual reference-time adjustment must not pose as activation time."""
     p0 = parse_ensite_map_pp(_MAP_PP)[0]
     assert p0.get("annotation_time") == 8.0
+    assert p0.annotations["reference_adjustment_ms"] == 8.0
     assert "activation_time" not in p0.measurements
 
 

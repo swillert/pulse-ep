@@ -49,22 +49,22 @@ CARTO_PRIMARY_COLUMN = "LAT"
 def classify_primary_scalar(values: np.ndarray) -> tuple[str, np.ndarray]:
     """Decode CARTO's overloaded primary scalar slot.
 
-    Rule (matching the existing ``tag_maps.data_is_pacemapping`` heuristic):
-    export sentinels (``>= CARTO_SENTINEL``) are masked to ``NaN``; a field
-    whose valid values are *entirely negative* is a pace-mapping correlation
-    stored with negative sign — it is flipped to a positive ``0..100 %`` scale
-    and labelled :data:`PACEMAP_SCORE`. Any other field (positive, or mixed
-    sign as a signed activation map would be) is :data:`ACTIVATION_TIME`.
+    Export sentinels (absolute value ``>= CARTO_SENTINEL``) are masked to
+    ``NaN``. Non-positive values within ``[-100, 0]``, with at least one
+    negative value, suggest a pace-mapping correlation; these are flipped to
+    ``0..100 %`` and labelled :data:`PACEMAP_SCORE`. Values outside that
+    range remain :data:`ACTIVATION_TIME`, even when entirely negative.
+    Negative activation times within the percentage range remain ambiguous.
 
     :returns: ``(kind, conditioned_values)`` ready for
         :meth:`EPMap.register_scalar`.
     """
     v = np.asarray(values, dtype=float).copy()
-    v[v >= CARTO_SENTINEL] = np.nan
+    v[np.abs(v) >= CARTO_SENTINEL] = np.nan
 
     finite = v[~np.isnan(v)]
-    if finite.size and np.nanmax(finite) < 0:
-        # entirely-negative → pace-mapping stored with negative sign
+    if finite.size and -100 <= finite.min() < 0 and finite.max() <= 0:
+        # Negative percentage-compatible values suggest pace mapping.
         return PACEMAP_SCORE, -v
     return ACTIVATION_TIME, v
 
@@ -72,7 +72,7 @@ def classify_primary_scalar(values: np.ndarray) -> tuple[str, np.ndarray]:
 def _mask_sentinels(values: np.ndarray) -> np.ndarray:
     """A copy with CARTO's "no valid datum" markers replaced by ``NaN``."""
     v = np.asarray(values, dtype=float).copy()
-    v[v >= CARTO_SENTINEL] = np.nan
+    v[np.abs(v) >= CARTO_SENTINEL] = np.nan
     return v
 
 
@@ -236,7 +236,7 @@ def decode_point_annotations(
 
     ``primary_kind`` is the mesh's verdict (:func:`point_primary_kind`); with
     ``None`` the points decide for themselves by the mesh's own rule — all
-    valid values negative means a pace map. On a pace map a value is a score
+    non-positive values within [-100, 0] suggest a pace map. On a pace map a value is a score
     only if its magnitude is a percentage: a point annotated in another mode
     (-196, 30) is reported as missing rather than as a score.
 
@@ -254,8 +254,7 @@ def decode_point_annotations(
 
     kind = primary_kind
     if kind is None:
-        valid = [v for v in raw if v is not None]
-        kind = PACEMAP_SCORE if valid and max(valid) < 0 else ACTIVATION_TIME
+        kind, _ = classify_primary_scalar(np.asarray(raw, dtype=float))
     if kind != PACEMAP_SCORE:
         return ACTIVATION_TIME, raw
 
@@ -531,6 +530,10 @@ def _waveform_plan(source: ImportSource, map_names: list[str]) -> WaveformPlan:
     mine = [f for f in files if Path(f).name.startswith(prefixes)] if prefixes else []
     if not mine:
         mine = files
+    forces = source.list("*_ContactForce.txt")
+    force_prefixes = tuple(f"{name}_P" for name in map_names)
+    mine += [f for f in forces if not force_prefixes or Path(f).name.startswith(force_prefixes)]
+    mine = sorted(set(mine))
     return WaveformPlan(
         files=mine,
         estimated_bytes=sum(source.size(name) for name in mine),

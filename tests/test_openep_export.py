@@ -14,6 +14,7 @@ from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.measurement import MeasurementPoint
 from pulse_ep.core.openep import to_userdata, write_userdata
 from pulse_ep.core.scalar_field import (
+    ACTIVATION_TIME,
     PACEMAP_SCORE,
     VOLTAGE_BIPOLAR,
     VOLTAGE_UNIPOLAR,
@@ -53,23 +54,19 @@ def test_quantities_land_in_the_slots_that_mean_them():
     np.testing.assert_allclose(act_bip[:, 1], [0.1, 0.2, 0.3, 0.4])
 
 
-def test_a_pace_map_does_not_pretend_to_be_an_activation_map():
-    """The decision the whole exporter turns on.
-
-    CARTO stores an activation time and a pace-match score in one slot, and
-    pulse-ep learned to tell them apart. Writing the score into act_bip(:,1)
-    would tell OpenEP this is an activation map, and every isochrone and
-    conduction-velocity function downstream would agree — silently, and
-    wrongly. The slot stays NaN and the note says why.
-    """
+def test_pace_scores_use_negative_activation_values_with_explicit_metadata():
     epmap = _map(voltage_bipolar=[0.1, 0.2, 0.3, 0.4])
-    epmap.register_scalar(PACEMAP_SCORE, np.array([90.0, 80, 70, 60]), kind=PACEMAP_SCORE)
-
+    scores = np.array([90.0, -80, 0, np.nan])
+    epmap.register_scalar(PACEMAP_SCORE, scores.copy(), kind=PACEMAP_SCORE)
     u = to_userdata(epmap)
-    assert np.isnan(u["surface"]["act_bip"][:, 0]).all()
-    # …and the voltage that *is* there is untouched.
+    np.testing.assert_allclose(u["surface"]["act_bip"][:, 0], [-90, -80, 0, np.nan])
     np.testing.assert_allclose(u["surface"]["act_bip"][:, 1], [0.1, 0.2, 0.3, 0.4])
-    assert any(PACEMAP_SCORE in n for n in u["notes"])
+    np.testing.assert_allclose(epmap.get_scalar(PACEMAP_SCORE), scores)
+    assert u["pulse_ep"]["surface_activation_kind"] == PACEMAP_SCORE
+    assert u["pulse_ep"]["surface_activation_encoding"] == "negative_score"
+    assert u["pulse_ep"]["surface_activation_unit"] == "%"
+    assert any("negative score (%)" in n for n in u["notes"])
+    assert not any("not representable" in n and PACEMAP_SCORE in n for n in u["notes"])
 
 
 def test_a_missing_quantity_is_a_gap_with_a_reason():
@@ -79,12 +76,205 @@ def test_a_missing_quantity_is_a_gap_with_a_reason():
     assert any("no voltage_unipolar" in n for n in u["notes"])
 
 
-def test_quantities_openep_has_no_room_for_are_named_not_dropped():
-    """OpenEP's surface has four slots; a pulse-ep map may carry a dozen."""
+def test_pace_point_annotations_encode_scores_and_leave_unscored_beats_missing():
+    epmap = _map(pacemap_score=[90, 80, 70, 60])
+    scored = MeasurementPoint(
+        position=np.array([0.5, 0.5, 0]),
+        annotations={"reference": 1250, "map": 1160, "woi_from": -200, "woi_to": 50},
+    )
+    scored.add("pacemap_score", 90, PACEMAP_SCORE)
+    # A reference beat may have no derived score; surface semantics must
+    # still prevent its sentinel from masquerading as a valid score.
+    reference = MeasurementPoint(
+        position=np.array([0.5, 0.5, 0]), annotations={"reference": 1250, "map": -8750}
+    )
+    epmap.measurement_points = [scored, reference]
+    u = to_userdata(epmap)
+    annotations = u["electric"]["annotations"]
+    np.testing.assert_allclose(
+        annotations["mapAnnot"] - annotations["referenceAnnot"], [-90, np.nan]
+    )
+    np.testing.assert_array_equal(annotations["referenceAnnot"], [1250, 1250])
+    np.testing.assert_array_equal(annotations["woi"][0], [-200, 50])
+    assert scored.annotations["map"] == 1160  # source data is unchanged
+    assert any("2 pace-mapping points" in note for note in u["notes"])
+
+
+def test_point_semantics_control_annotations_on_a_mixed_map():
+    from pulse_ep.core.scalar_field import ACTIVATION_TIME
+
+    epmap = _map(activation_time=[1, 2, 3, 4], pacemap_score=[90, 80, 70, 60])
+    points = []
+    for kind, value in ((PACEMAP_SCORE, 90), (ACTIVATION_TIME, -90)):
+        point = MeasurementPoint(
+            position=np.array([0.5, 0.5, 0]), annotations={"reference": 1250, "map": 1160}
+        )
+        point.add(kind, value, kind)
+        points.append(point)
+    epmap.measurement_points = points
+    annotations = to_userdata(epmap)["electric"]["annotations"]
+    assert annotations["mapAnnot"][0] - annotations["referenceAnnot"][0] == -90
+    assert annotations["mapAnnot"][1] - annotations["referenceAnnot"][1] == -90
+
+
+def test_real_lat_keeps_precedence_and_sign_on_a_mixed_surface():
+    epmap = _map(activation_time=[-10, 0, 10, 20], pacemap_score=[90, 80, 70, 60])
+    u = to_userdata(epmap)
+    np.testing.assert_allclose(u["surface"]["act_bip"][:, 0], [-10, 0, 10, 20])
+    assert u["pulse_ep"]["surface_activation_kind"] == "activation_time"
+    assert u["pulse_ep"]["surface_activation_encoding"] == "identity"
+    assert u["pulse_ep"]["surface_activation_unit"] == "ms"
+
+
+def test_a_point_score_without_raw_annotations_gets_a_declared_encoding_origin():
+    epmap = _map(pacemap_score=[90, 80, 70, 60])
+    point = MeasurementPoint(position=np.array([0.5, 0.5, 0]))
+    point.add(PACEMAP_SCORE, 87.5, PACEMAP_SCORE)
+    epmap.measurement_points = [point]
+    u = to_userdata(epmap)
+    annotations = u["electric"]["annotations"]
+    np.testing.assert_allclose(annotations["referenceAnnot"], [0])
+    np.testing.assert_allclose(annotations["mapAnnot"], [-87.5])
+    assert np.isnan(annotations["woi"]).all()
+    assert u["pulse_ep"]["point_activation_kinds"] == [PACEMAP_SCORE]
+    assert any("zero reference solely to encode the score" in n for n in u["notes"])
+    assert point.annotations == {}
+
+
+def test_additional_quantities_are_available_as_openep_signal_maps():
     epmap = _map(voltage_bipolar=[1, 2, 3, 4])
     epmap.register_scalar("cfe_mean", np.array([5.0, 6, 7, 8]), kind="cfe_mean")
-    notes = to_userdata(epmap)["notes"]
-    assert any("not representable" in n and "cfe_mean" in n for n in notes)
+    u = to_userdata(epmap)
+    assert any("signalMaps" in n and "cfe_mean" in n for n in u["notes"])
+    fields = {f["name"]: f for f in u["surface"]["signalMaps"]}
+    np.testing.assert_array_equal(fields["cfe_mean"]["map"], [5, 6, 7, 8])
+    assert fields["cfe_mean"]["unit"] == "ms"
+
+
+def test_named_fields_keep_duplicate_kinds_original_scores_and_validity():
+    epmap = _map(pacemap_score=[90, 80, 70, 60])
+    epmap.register_scalar(
+        "micro custom",
+        np.array([0.1, np.nan, 0.3, 0.4]),
+        kind=VOLTAGE_BIPOLAR,
+        unit="mV",
+        source="vendor:channel",
+        status_mask=np.array([True, False, True, False]),
+    )
+    epmap.register_scalar("second_bipole", np.array([1, 2, 3, 4]), kind=VOLTAGE_BIPOLAR)
+    u = to_userdata(epmap)
+    fields = {f["name"]: f for f in u["surface"]["signalMaps"]}
+    assert set(fields) == set(epmap.scalar_fields)
+    np.testing.assert_array_equal(fields["pacemap_score"]["map"], [90, 80, 70, 60])
+    np.testing.assert_array_equal(u["surface"]["act_bip"][:, 0], [-90, -80, -70, -60])
+    np.testing.assert_allclose(fields["micro custom"]["map"], [0.1, np.nan, 0.3, 0.4])
+    assert fields["micro custom"]["source"] == "vendor:channel"
+    np.testing.assert_array_equal(fields["micro custom"]["statusMask"], [True, False, True, False])
+    np.testing.assert_array_equal(fields["second_bipole"]["map"], [1, 2, 3, 4])
+
+
+def test_signal_properties_align_sparse_values_and_keep_different_units_apart():
+    points = [MeasurementPoint(position=np.array([i, 0, 0])) for i in range(3)]
+    points[0].add("cfe", 12.0, "cfe_mean", "ms")
+    points[1].add("cfe", 0.02, "cfe_mean", "s")
+    points[2].add("other", 3.0, "unknown", "count")
+    epmap = _map()
+    epmap.measurement_points = points
+    props = to_userdata(epmap)["electric"]["signalProps"]
+    assert len(props) == 3
+    by_key = {(f["fieldName"], f["unit"]): f for f in props}
+    np.testing.assert_allclose(by_key["cfe", "ms"]["value"], [12, np.nan, np.nan])
+    np.testing.assert_allclose(by_key["cfe", "s"]["value"], [np.nan, 0.02, np.nan])
+    assert by_key["cfe", "ms"]["name"] == ["cfe", "", ""]
+    assert by_key["other", "count"]["propSettings"] == ""
+
+
+def test_standard_slots_convert_declared_units_and_preserve_named_originals():
+    m = _map()
+    m.register_scalar(
+        "lat_seconds", np.array([0.01, 0.02, 0.03, 0.04]), kind=ACTIVATION_TIME, unit="s"
+    )
+    m.register_scalar(
+        "volts",
+        np.array([0.001, 0.002, 0.003, 0.004]),
+        kind=VOLTAGE_BIPOLAR,
+        unit="V",
+        status_mask=np.array([True, False, True, True]),
+    )
+    p = MeasurementPoint(position=np.zeros(3), annotations={"annotation_unit": "ms"})
+    p.add("lat_seconds", 0.01, ACTIVATION_TIME, "s")
+    p.add("microvolts", 2000, VOLTAGE_BIPOLAR, "uV")
+    m.measurement_points = [p]
+    u = to_userdata(m)
+    np.testing.assert_allclose(u["surface"]["act_bip"][:, 0], [10, 20, 30, 40])
+    np.testing.assert_allclose(u["surface"]["act_bip"][:, 1], [1, np.nan, 3, 4])
+    assert u["electric"]["voltages"]["bipolar"][0] == 2
+    assert u["pulse_ep"]["lat_ms"][0] == 10
+    assert u["electric"]["annotations"]["mapAnnot"][0] == 10
+    fields = {f["name"]: f for f in u["surface"]["signalMaps"]}
+    assert fields["lat_seconds"]["unit"] == "s"
+    np.testing.assert_allclose(fields["volts"]["map"], [0.001, 0.002, 0.003, 0.004])
+
+
+def test_unsupported_standard_units_are_not_mislabelled():
+    m = _map()
+    m.register_scalar("unknown_voltage", np.ones(4), kind=VOLTAGE_BIPOLAR, unit="counts")
+    p = MeasurementPoint(position=np.zeros(3))
+    p.add("unknown_voltage", 20, VOLTAGE_BIPOLAR, "counts")
+    m.measurement_points = [p]
+    u = to_userdata(m)
+    assert np.isnan(u["surface"]["act_bip"][:, 1]).all()
+    assert np.isnan(u["electric"]["voltages"]["bipolar"]).all()
+    assert any("unit" in note and "counts" in note for note in u["notes"])
+
+
+def test_empty_properties_and_geometry_metadata_are_explicit():
+    u = to_userdata(_map(), system_name="ensite")
+    assert u["systemName"] == "ensitex"
+    assert u["surface"]["signalMaps"] == []
+    assert u["electric"]["signalProps"] == []
+    np.testing.assert_array_equal(u["surface"]["normals"], np.tile([0, 0, 1], (4, 1)))
+
+
+def test_malformed_named_fields_are_reported_instead_of_misaligned():
+    epmap = _map(cfe_mean=[1, 2])
+    u = to_userdata(epmap)
+    assert u["surface"]["signalMaps"] == []
+    assert any("2 values for 4 vertices" in note for note in u["notes"])
+
+
+def test_extensible_fields_survive_mat_export(tmp_path):
+    from scipy.io import loadmat
+
+    epmap = _map(cfe_mean=[1, np.nan, 3, 4])
+    point = MeasurementPoint(position=np.array([0, 0, 0]))
+    point.add("fractionation", 2.5, "fractionation")
+    epmap.measurement_points = [point]
+    path = tmp_path / "extended.mat"
+    write_userdata(epmap, path, system_name="ensite")
+    u = loadmat(path, simplify_cells=True)["userdata"]
+    assert u["systemName"] == "ensitex"
+    np.testing.assert_allclose(u["surface"]["signalMaps"]["map"], [1, np.nan, 3, 4])
+    assert u["electric"]["signalProps"]["value"] == 2.5
+
+
+def test_mat_point_names_and_tags_have_one_cell_per_point(tmp_path):
+    from scipy.io import loadmat
+
+    epmap = _map()
+    epmap.measurement_points = [
+        MeasurementPoint(position=np.array([0, 0, 0]), source_id="point-123", tags=[]),
+        MeasurementPoint(position=np.array([1, 0, 0]), source_id="point-456", tags=["Scar", "Tag"]),
+    ]
+    path = tmp_path / "points.mat"
+    write_userdata(epmap, path)
+    userdata = loadmat(path, struct_as_record=False)["userdata"][0, 0]
+    electric = userdata.electric[0, 0]
+    # Native MATLAB triangulation rejects integer connectivity matrices.
+    assert userdata.surface[0, 0].triRep[0, 0].Triangulation.dtype == np.float64
+    assert electric.names.shape == electric.tags.shape == (2, 1)
+    assert electric.voltages[0, 0].bipolar.shape == (2, 1)
+    assert electric.names[0, 0].item() == "point-123"
 
 
 def test_measurement_points_become_the_electric_structure():
@@ -204,8 +394,8 @@ def test_force_is_found_for_a_point_the_window_covers():
     assert e["force"]["force"][0] == pytest.approx(11.0)
     assert e["force"]["axialAngle"][0] == pytest.approx(61.0)
     assert e["force"]["lateralAngle"][0] == pytest.approx(21.0)
-    # The course comes back on the study clock, not relative to the window.
-    np.testing.assert_allclose(e["force"]["time_force"][0][:, 0], [1000.0, 1000.02, 1000.04])
+    # OpenEP force courses use milliseconds relative to the point's origin.
+    np.testing.assert_allclose(e["force"]["time_force"][0][:, 0], [-20, 0, 20])
 
 
 def test_a_point_no_window_covers_is_nan_and_counted():
@@ -225,7 +415,7 @@ def test_the_derived_course_is_declared_as_derived():
     epmap = _map()
     epmap.measurement_points = [_point_at(1000.02)]
     notes = to_userdata(epmap, force_windows=[_force_window(1000.0)])["notes"]
-    assert any("slice of a per-segment window" in n for n in notes)
+    assert any("matched per-segment recording" in n for n in notes)
 
 
 def test_without_windows_the_slots_exist_but_are_empty():

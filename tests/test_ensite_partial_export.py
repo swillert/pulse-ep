@@ -102,3 +102,25 @@ def test_a_normal_export_carries_no_such_issue():
     )
     plan = EnsiteImporter().prepare(source)
     assert not [i for i in plan.issues if "no geometry" in i.lower()]
+
+
+def test_real_point_table_without_geometry_is_a_reviewable_point_map():
+    body = (
+        b"Export Data Element: DxL\nMap name:,Point test\nMap type:,LAT_bi\n"
+        b"Data starts in row,5\n"
+        b"(Point #),surface x,surface y,surface z,LAT,LAT valid,refTime (abs),left curtain (ms),right curtain (ms),Ref Tick\n"
+        b"7,1,2,3,4,1,1000,-20,40,100\nEOF\n"
+    )
+    source = _MemorySource({"Contact_Mapping/Map_LAT_bi.csv": body})
+    importer = EnsiteImporter()
+    assert importer.sniff(source)
+    plan = importer.prepare(source)
+    assert len(plan.studies[0].maps) == 1
+    assert plan.studies[0].maps[0].files == []
+    study = importer.commit(plan, source)[0]
+    epmap = study.epmaps[0]
+    assert epmap.vertices is None
+    point = epmap.measurement_points[0]
+    assert point.get("activation_time") == 4
+    assert point.annotations["woi_from"] == -20
+    assert point.annotations["reference_sample_zero_based"] == 100

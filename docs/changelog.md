@@ -4,12 +4,103 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.6.0] — 2026-09-08
+
+### Added
+
+- An installable MATLAB toolbox and optional `pulseep.Client` session wrapper
+  around the existing functions: login, study/map tables, selective raw data,
+  point pages, waveform metadata/download, interval areas and OpenEP export.
+  Tokens are transient; existing direct function calls remain supported.
+- Raw `include=mesh,fields,points,markers,waveforms` selects response components
+  on the server. Omission retains the full export; an empty selection returns
+  metadata only. Unselected point, marker and waveform relations are not loaded.
+- Optional OpenEP signal export (`include_signals=1`, CLI `--include-signals`,
+  MATLAB `IncludeSignals`): bipolar and paired unipolar electrograms,
+  reference signals and available ECG leads are aligned by recorded point and
+  channel identities. Missing samples remain NaN, units and sample counts
+  accompany the arrays, and mixed sampling rates require separate exports.
+  Unknown amplitude units remain unknown unless an explicit calibration is
+  supplied. A MATLAB signal example uses the native OpenEP accessor.
+- EnSite DxL row-wise `Wave_rov`, `Wave_uni_*` and `Wave_refs*` import, with
+  per-point or freeze-group links. Point tables without a DIF mesh can now
+  form a point-only map. Reference ticks, relative curtains and manual
+  reference adjustments are retained for sample-rate-aware annotation export.
+- CARTO per-point `ContactForce.txt` import and OpenEP force courses. REST and
+  CLI share waveform selection, including stored contact-force windows.
+- Explicit OpenEP RF marker selection by study or placed-point database IDs.
+  Available tag parameters enter `rfindex`; original attributes are retained.
+  PFA sites and generic markers are excluded from RF fields. Manual RF and
+  grid histories are not inferred from summary tags.
+- `pe_openep_conduction_velocity` calls OpenEP with physical LAT in ms,
+  accounts for reference offsets and sample rates, respects known windows of
+  interest, and rejects duplicate/degenerate point locations and pace scores.
+
+### Fixed
+
+- CARTO contact force is matched within the selected map, including when
+  older waveform records are stored at study level. Repeated point numbers
+  in another map can no longer supply the wrong force recording.
+- ECG windows must share the primary signal's start, rate and length. DxL
+  ECG leads are matched independently; isolated second-unipolar/reference
+  recordings are retained. Invalid calibration factors are rejected even
+  when no signals are available.
+- OpenEP standard scalar/point values now convert compatible declared units
+  and omit unsupported units with notes. Standard surface columns apply the
+  validity mask; named containers retain the original data and units.
+- `pe_openep_ablation_area` handles OpenEP's failures for zero, one or two RF
+  markers and empty coverage without changing the exported marker data.
+- Source distributions now include the MATLAB/R/ParaView/Python examples,
+  documentation, deployment files and synthetic reproduction fixtures.
+- CARTO signal exports without a declared gain no longer label raw counts as
+  mV. Waveform sample rates are normalized to Python floats for PostgreSQL.
+- Malformed interior CARTO signal rows now fail explicitly so that subsequent
+  samples cannot shift relative to their annotations. A truncated final row
+  is omitted and reported in the waveform metadata and OpenEP notes.
+- OpenEP force courses now use numeric point × sample × 2 arrays and relative
+  milliseconds; the former EnSite output contained absolute epoch seconds.
+- Additional scalar fields with missing/non-finite values now serialize as
+  JSON null in PostgreSQL JSONB and reload as numeric NaN. Previously a NaN
+  in such a field could cause the study transaction to fail.
+- OpenEP `.mat` exports use cell arrays for point names/tags and column
+  vectors for numeric measurements, so native OpenEP counts points rather
+  than characters and receives the expected array shapes. Connectivity is
+  written as double precision for MATLAB's `triangulation` constructor.
+- The MATLAB REST client normalizes mixed empty/nonempty per-point tag lists
+  to the same nested cell representation as MAT-file exports.
+- CARTO LAT fields outside [-100, 0] now retain activation-time semantics
+  even when entirely negative. The previous sign-only heuristic could produce
+  alleged pace scores above 100%. Both signs of the missing-data sentinel
+  are excluded. This applies to newly imported maps; existing stored studies
+  are not relabelled automatically.
+
+### Changed
+
+- OpenEP exports retain all named vertex fields in `surface.signalMaps`
+  and point measurements in `electric.signalProps`, including additional
+  quantities and multiple fields of the same kind. Units, kinds, missing
+  values, and surface provenance/validity masks accompany the values.
+  Original positive pace scores remain accessible alongside the negative
+  compatibility encoding. Stored surface normals and the study vendor are
+  also exported. The MATLAB REST client normalizes the additional containers.
+- OpenEP pace-map export now follows CARTO's negative-score convention:
+  `surface.act_bip(:,1)` and the point annotation difference carry
+  `-abs(pacemap_score)`. Missing scores remain NaN; real activation-time
+  fields retain their values. `userdata.pulse_ep` identifies the quantity,
+  units and encoding, while notes describe any reconstructed reference origin.
+  Original database values and raw REST annotations are unchanged.
+- The MATLAB OpenEP demo now executes OpenEP surface-area, mean-voltage and
+  low-voltage-area analyses and verifies the areas independently. It displays
+  pace maps with a correctly labelled score colour bar. Documentation describes
+  the required data, display mask, toolbox dependencies and analysis limits.
+
 ## [0.5.0] — 2026-09-07
 
 An imported map can be handed to [OpenEP](https://openep.io) as its own
-`userdata` structure. OpenEP parses CARTO and Precision itself; what it does
-not parse is EnSite X, and pulse-ep does — so a map from either vendor now
-runs through any OpenEP analysis.
+`userdata` structure. This provides database-backed access for maps from
+CARTO and EnSite X to OpenEP analyses supported by the exported quantities.
 
 ### Added
 
@@ -22,7 +113,7 @@ runs through any OpenEP analysis.
   MATLAB, so the part that decides anything should not live there. What is left
   for MATLAB is what JSON and `.mat` cannot express — matrices arrive as nested
   arrays, and `surface.triRep` has to become a `triangulation` object.
-- Geometry, the rim flags, the four surface quantities OpenEP has slots for,
+- Geometry, the rim flags, the five surface quantities OpenEP has slots for,
   and the measurement points with their positions, tags, voltages, electrode
   names and annotation components. Those last line up without interpretation:
   both sides record where a beat sits in the window recorded for it.
@@ -39,15 +130,8 @@ runs through any OpenEP analysis.
 
 ### Notes on what it cannot do
 
-- **A pace map's score is not written into the activation-time slot.** CARTO
-  stores both in one place and pulse-ep learned to tell them apart — the point
-  of the declared `kind`. `act_bip(:,1)` is positional, so a score written
-  there would tell OpenEP the map is an activation map and every isochrone and
-  conduction-velocity function downstream would agree, silently and wrongly.
-  The column stays NaN and `userdata.notes` says why: a gap can be seen, a
-  plausible wrong number cannot. pulse-ep has semantics and OpenEP has
-  positions, so this direction can only lose meaning — what it can do is
-  refuse to invent any.
+- In 0.5.0, the surface activation-time column is left NaN for pace maps.
+  Version 0.6.0 replaces this with negative-score encoding.
 - Electrograms and ablation data are left out. The first would dwarf
   everything else, which is why importing them is opt-in too; the second would
   mean deciding which of a study's VisiTag sites belong to which map, and the
