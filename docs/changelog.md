@@ -4,6 +4,30 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] — 2026-09-07
+
+### Fixed
+
+- Geometry-only EnSite X anatomy meshes now render in the web viewer without
+  requiring or inventing scalar values. The viewer uses a neutral surface
+  colour and preserves the map name. Raw geometry export is unchanged.
+- Interval-area requests for maps without scalar fields, or for unavailable
+  fields, return a descriptive client error instead of an internal server error.
+- Removed obsolete dashboard sidebar initialization that referenced elements
+  from an earlier layout; the current template already handles its resizer.
+
+### Documentation
+
+- Standardized all author affiliations in the software citation metadata.
+
+### Validation
+
+- 445 tests pass, including four regressions for geometry-only display and
+  scalar validation. Real CARTO and EnSite X imports were checked against
+  PostgreSQL, covering 23 maps, 5,240 measurement points and signal downloads.
+  All 23 maps pass raw and display API checks after the fixes; a real Chrome
+  session verifies anatomy rendering without JavaScript errors.
+
 ## [0.4.3] — 2026-09-07
 
 What a fresh installation found. The 0.4.2 audit read the documentation

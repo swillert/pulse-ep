@@ -790,6 +790,8 @@ def calculate_areas_for_intervals_endpoint():
         )
     except TypeError:
         return jsonify({"error": "Intervals should be pairs of min and max values."}), 400
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     # Convert areas to JSON-compatible format, replacing NaN with None
     areas = [None if np.isnan(area) else area for area in areas]
