@@ -172,8 +172,16 @@ mirror_to_github:
     - git remote add github "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/${GITHUB_USER}/pulse-ep.git"
     - git fetch origin --tags
     - |
-      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
-        git push github "HEAD:refs/heads/main" --force
+      if [ -n "$CI_COMMIT_BRANCH" ]; then
+        # Push what origin/main points at *now*, not this pipeline's HEAD, and
+        # never with --force. Jobs are not ordered: with one runner an older
+        # pipeline can reach this job after a newer one has already mirrored.
+        # Forcing its own HEAD then rewinds the public branch — on 2026-09-07
+        # pipeline #510 (1c1bc08) undid #512 (7660bee) that way, and the two
+        # commits were missing from GitHub until the next push. Without
+        # --force a stale push is refused instead of destroying history.
+        git fetch origin main
+        git push github "FETCH_HEAD:refs/heads/main"
       fi
     - git push github --tags
   rules:
