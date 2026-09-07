@@ -96,3 +96,59 @@ def test_unknown_channel_keeps_its_vendor_name():
     assert p0.get("Whatever") == 7.5
     assert p0.measurements["Whatever"].kind == "unknown"
     assert "voltage_bipolar" not in p0.measurements
+
+
+def _cfe_export(polarity: str, value: float) -> str:
+    """A CFEmean DxL export — same point set, only the polarity differs."""
+    header = _HDR.replace("P-P,P-P valid", "CFEmean,CFEmean valid")
+    row = (
+        "HDGX A1-A2,A1 A2,99 100,1,37,..,..,49.8,-208.3,391.6,42.0,-215.2,392.0,"
+        f"-0.7,-0.7,0.0,1,0,0,{value},1,1781787673.5,8,20,319,3.2,10000,\n"
+    )
+    return (
+        "Export Data Element: DxL\n"
+        "Map name:,Test Map\n"
+        f"Map type:,CFEmean_{polarity}\n"
+        "# mapping pts:,1\n"
+        "Data starts in row,6\n"
+        f"{header}\n" + row
+    )
+
+
+def test_a_unipolar_channel_does_not_overwrite_its_bipolar_namesake():
+    """Both are ``cfe_mean``; only ``PP`` carries polarity in its *kind*.
+
+    A map's channels merge by point id, so one name for both meant the file
+    parsed last won and the other measurement vanished without a word.
+    """
+    bi = parse_ensite_map_pp(_cfe_export("bi", 0.25))[0]
+    uni = parse_ensite_map_pp(_cfe_export("uni", 0.75))[0]
+
+    assert bi.get("cfe_mean") == 0.25
+    assert bi.measurements["cfe_mean"].kind == "cfe_mean"
+    # The bipolar name is unsuffixed: renaming it would rename the field in
+    # every study already imported.
+    assert "cfe_mean_uni" not in bi.measurements
+
+    assert uni.get("cfe_mean_uni") == 0.75
+    assert uni.measurements["cfe_mean_uni"].kind == "cfe_mean"
+    assert "cfe_mean" not in uni.measurements
+
+
+def test_voltage_keeps_polarity_in_the_kind_and_is_not_suffixed():
+    """``PP`` is the exception: its polarity *is* the quantity."""
+    from pulse_ep.core.importers.ensite import _dxl_measurement_name, _dxl_quantity
+
+    for map_type, expected in (("PP_bi", "voltage_bipolar"), ("PP_uni", "voltage_unipolar")):
+        kind = _dxl_quantity(map_type)
+        assert kind == expected
+        assert _dxl_measurement_name(map_type, kind, "P-P") == expected
+
+
+def test_polarity_is_decoded_in_one_place_only():
+    """`split_polarity` is the single decoder — the DxL header follows it too."""
+    from pulse_ep.core.importers.ensite import _dxl_quantity, split_polarity
+
+    # The tolerant suffix pattern that filenames get, applied to `Map type:`.
+    assert split_polarity("CFEmean_bpolar") == ("CFEmean", "bipolar")
+    assert _dxl_quantity("PP_bpolar") == "voltage_bipolar"
