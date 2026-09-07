@@ -185,6 +185,27 @@ Creates a synthetic ellipsoid (530 vertices, 1,056 triangles at the default
 resolution), a Gaussian score field and an `EPMap`, then prints its summary
 and interval areas. No database is used. `--show` opens a PyVista window.
 
+## `pulse-ep-export-openep`
+
+```bash
+pulse-ep-export-openep --map-id 12 [-o map12.mat] [--no-points]
+```
+
+Writes one stored map as an [OpenEP](https://openep.io) `userdata` MATLAB
+file, so a map from either vendor can go through OpenEP's analyses — it parses
+CARTO and Precision itself but not EnSite X.
+
+| Flag | Default | Notes |
+| ---- | ------- | ----- |
+| `--map-id` | — | Required. The `epmaps.id` of the map to export. |
+| `-o`, `--output` | `map<id>.mat` | Where to write it. |
+| `--no-points` | off | Geometry and per-vertex scalars only, without the measurement points. |
+
+Prints what the structure could not carry — an empty slot, a quantity OpenEP
+has no room for, and in particular a pace-mapping score that is deliberately
+*not* put in the activation-time column. The same lines are in
+`userdata.notes`. See the [OpenEP guide](../guides/openep.md).
+
 ## `pulse-ep-mcp`
 
 ```bash
