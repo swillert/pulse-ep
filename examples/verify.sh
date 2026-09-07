@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check a pulse-ep installation against the two shipped synthetic exports.
 #
-# Reads one CARTO 3 and one EnSiteX export from tests/fixtures/synthetic/,
+# Reads one CARTO 3 and one EnSite X export from tests/fixtures/synthetic/,
 # decodes each one, and prints what came out. No database, no server and no
 # patient data are involved — see tests/fixtures/synthetic/README.md for what
 # a green run does and does not establish.
@@ -38,7 +38,7 @@ for vendor in ("carto", "ensite"):
         importer = detect_vendor(source)
         if importer is None:
             raise RuntimeError("no importer recognised this export")
-        print(f"  vendor erkannt: {importer.name}")
+        print(f"  vendor detected: {importer.name}")
 
         for study in commit_plan(importer, prepare_plan(importer, source), source):
             for epmap in study.epmaps:
@@ -46,20 +46,20 @@ for vendor in ("carto", "ensite"):
                 epmap.precompute_areas()
                 print(
                     f"  map {epmap.map_name}: "
-                    f"{len(epmap.vertices)} Vertices, {len(epmap.triangles)} Dreiecke, "
-                    f"{len(epmap.measurement_points)} Messpunkte"
+                    f"{len(epmap.vertices)} vertices, {len(epmap.triangles)} triangles, "
+                    f"{len(epmap.measurement_points)} measurement points"
                 )
-                print(f"    Felder: {', '.join(sorted(epmap.scalar_fields)) or '—'}")
-                print(f"    Fläche: {epmap.area_of_surface():.3f} cm²")
+                print(f"    fields: {', '.join(sorted(epmap.scalar_fields)) or '—'}")
+                print(f"    surface area: {epmap.area_of_surface():.3f} cm²")
     except Exception as exc:
         failures.append(f"{vendor}: {exc}")
-        print(f"  FEHLER: {exc}")
+        print(f"  FAILED: {exc}")
 
 print()
 if failures:
-    print("FEHLGESCHLAGEN:")
+    print("FAILED:")
     for f in failures:
         print(f"  {f}")
     sys.exit(1)
-print("Beide Exporte wurden vollständig gelesen.")
+print("Both exports were read in full.")
 PY

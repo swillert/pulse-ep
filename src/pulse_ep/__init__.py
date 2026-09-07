@@ -1,4 +1,4 @@
-"""pulse-ep — open-source platform for CARTO electroanatomical mapping data.
+"""pulse-ep — open-source platform for multivendor electroanatomical mapping data.
 
 Quick-access re-exports of the most commonly used items::
 
@@ -19,7 +19,7 @@ For deeper access, use :mod:`pulse_ep.core` directly.
 
 from __future__ import annotations
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 from pulse_ep.core.database import get_db_session
 from pulse_ep.core.epmap import EPMap

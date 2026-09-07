@@ -1,83 +1,82 @@
-# Synthetische Exporte (CARTO 3 / EnSiteX)
+# Synthetic exports (CARTO 3 / EnSite X)
 
-Zwei vollständige Beispiel-Exporte, je einer pro Hersteller, mit denen sich
-pulse-ep ohne Patientendaten prüfen lässt.
+Two complete example exports, one per vendor, for checking pulse-ep without
+patient data.
 
 ```
-carto/synthetic_study/    <Karte>.mesh, Study.xml, <Karte>_Points_Export.xml
-                          + 64 Punkt-Exporte + je eine Elektroden-Positionsdatei
+carto/synthetic_study/    <map>.mesh, Study.xml, <map>_Points_Export.xml
+                          + 64 point exports + one electrode position file each
 ensite/synthetic_study/   Contact_Mapping_Model.xml (SJM_DIF_5.0)
                           + Contact_Mapping/Map_PP_bi.csv
 ```
 
-## Was sie belegen — und was nicht
+## What they establish — and what they do not
 
-**Sie belegen:** dass pulse-ep beide Dateilayouts vollständig liest — Mesh,
-Skalarfelder, Messpunkte, Elektrodengeometrie — und dass das Ergebnis bis in
-die Auswertung trägt. Beide Exporte enthalten **dieselbe** synthetische
-Oberfläche; dass beide Leser dieselbe Fläche herausbekommen, vergleicht die
-zwei Dekodierpfade gegeneinander.
+**They establish** that pulse-ep reads both file layouts in full — mesh,
+scalar fields, measurement points, electrode geometry — and that the result
+carries through to analysis. Both exports contain **the same** synthetic
+surface, so the two decode paths are compared against one another by checking
+that both readers arrive at the same area.
 
-**Sie belegen nicht**, dass die Feldbedeutungen klinisch korrekt sind. Ob die
-Spalte, die wir `voltage_bipolar` nennen, im Gerät wirklich die bipolare
-Spannung ist, kann kein selbst erzeugter Datensatz zeigen — dafür braucht es
-echte Exporte. Diese Zuordnung wurde an echten Studien beider Hersteller
-geprüft; das ist hier nicht reproduzierbar.
+**They do not establish** that the field meanings are clinically correct.
+Whether the column we call `voltage_bipolar` really is the bipolar voltage in
+the device cannot be shown by any self-generated dataset — that needs real
+exports. The mapping was checked against real studies from both vendors; that
+check is not reproducible here.
 
-Kurz: **Format ja, Semantik nein.**
+In short: **format yes, semantics no.**
 
-## Warum sie aus echten Exporten abgeleitet sind
+## Why they are derived from real exports
 
-Die Dateien sind nicht frei erfunden. `tools/make_synthetic_fixtures.py` liest
-einen echten Export, übernimmt dessen *Struktur* — Abschnittsköpfe, Kommentar-
-zeilen, Spaltensätze, Zahlenformate — und füllt sie mit erzeugtem Inhalt. Der
-Unterschied ist nicht kosmetisch: ein von Hand nachgebauter
-`[VerticesColorsSection]`-Kopf hatte eine Kommentarzeile zu wenig und drei
-statt dreizehn Spalten. Der Leser verlor dadurch genau eine Zeile — ein Fehler,
-der gegen ein frei erfundenes Fixture unsichtbar geblieben wäre.
+The files are not invented. `tools/make_synthetic_fixtures.py` reads a real
+export, takes over its *structure* — section headers, comment lines, column
+sets, number formats — and fills it with generated content. The difference is
+not cosmetic: a hand-rebuilt `[VerticesColorsSection]` header had one comment
+line too few and three columns instead of thirteen. The reader lost exactly one
+row to that — a defect that would have stayed invisible against an invented
+fixture.
 
-Die übernommenen Kopfzeilen sind Formatdokumentation, keine Studiendaten.
-Kommentare, die auf die Quellstudie verweisen, entfernt der Generator; die
-gespeicherte Kameramatrix wird auf die Identität zurückgesetzt.
+The header lines taken over are format documentation, not study data. The
+generator removes comments referring to the source study, and resets the stored
+camera matrix to the identity.
 
-### Dateinamen
+### File names
 
-Die Namen sind Teil des Formats, deshalb stimmen sie mit den echten überein:
-`Contact_Mapping_Model.xml`, `Contact_Mapping/Map_PP_bi.csv`, `<Karte>.mesh`,
-`<Karte>_Points_Export.xml`, `<Karte>_P<id>_Point_Export.xml`,
-`<Karte>_<Konnektor>_Eleclectrode_Positions_OnAnnotation_<t>.txt`. Der
-Kartenname trägt Leerzeichen und Bindestriche wie im Original
-(`1-1-1-Synthetic Left Atrium`) — ein Name ohne Leerzeichen würde einen Pfad
-prüfen, den es in echten Exporten nicht gibt.
+The names are part of the format, so they match the real ones:
+`Contact_Mapping_Model.xml`, `Contact_Mapping/Map_PP_bi.csv`, `<map>.mesh`,
+`<map>_Points_Export.xml`, `<map>_P<id>_Point_Export.xml`,
+`<map>_<connector>_Eleclectrode_Positions_OnAnnotation_<t>.txt`. The map name
+carries spaces and hyphens as in the original (`1-1-1-Synthetic Left Atrium`) —
+a name without spaces would exercise a path that real exports do not have.
 
-**Eine Abweichung, bewusst:** der CARTO-Studienkatalog heißt im Original nach
-Patient und Untersuchungszeitpunkt. Dieser Name kann nicht mitgeliefert
-werden, das Fixture nennt ihn `Study.xml`. Die Erkennung liest den Inhalt
-(`<Study`), nicht den Namen, deshalb ist die Abweichung folgenlos — aber das
-Fixture prüft die Katalogbenennung damit nicht.
+**One deliberate deviation:** the CARTO study catalogue is named after the
+patient and the time of the procedure in the original. That name cannot ship,
+so the fixture calls it `Study.xml`. Detection reads the content (`<Study`) and
+not the name, so the deviation has no effect — but the fixture does not
+exercise catalogue naming either.
 
-## Dabei gefunden
+## Found along the way
 
-Beim Erzeugen und Prüfen dieser Fixtures kamen echte Fehler heraus:
+Generating and checking these fixtures turned up real defects:
 
-- Der `core`-Importpfad lieferte für CARTO **gar keine** Messpunkte. Die
-  Koordinaten stehen im Studienkatalog, nicht im Punkt-Export, und nur die CLI
-  trug sie nach (`fill_positions`).
-- Die CARTO-Erkennung reichte jedes Punkt-XML als Studienkatalog weiter.
+- The `core` import path returned **no** measurement points at all for CARTO.
+  The coordinates live in the study catalogue, not in the point export, and
+  only the CLI filled them in afterwards (`fill_positions`).
+- CARTO detection passed every point XML on as a study catalogue.
 
-## Benutzung
-
-```bash
-examples/verify.sh                      # gegen eine Installation prüfen
-pytest tests/test_synthetic_fixtures.py # dasselbe als Test, läuft in der CI
-```
-
-Neu erzeugen (braucht echte Exporte, die nicht Teil des Repositoriums sind):
+## Usage
 
 ```bash
-python tools/make_synthetic_fixtures.py --ensite <export.zip> --carto <verzeichnis>
+examples/verify.sh                      # check against an installation
+pytest tests/test_synthetic_fixtures.py # the same as a test, runs in CI
 ```
 
-Der Generator räumt nur die Herstellerunterverzeichnisse auf — diese Datei
-bleibt liegen. Sie war schon einmal einem `rm -rf` auf das Elternverzeichnis
-zum Opfer gefallen, bevor sie überhaupt eingecheckt war.
+Regenerate (needs real exports, which are not part of this repository):
+
+```bash
+python tools/make_synthetic_fixtures.py --ensite <export.zip> --carto <directory>
+```
+
+The generator only clears the per-vendor subdirectories — this file stays. It
+once fell victim to an `rm -rf` on the parent directory before it had ever been
+checked in.

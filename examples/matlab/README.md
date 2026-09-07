@@ -2,10 +2,12 @@
 
 Files in this directory:
 
-- [`pulse_ep_client.m`](pulse_ep_client.m) — REST client built on
-  MATLAB's built-in `webread` / `webwrite` (no toolbox required).
-  Exports five functions: `pe_login`, `pe_list_studies`,
-  `pe_list_maps`, `pe_get_mesh`, `pe_areas_per_interval`.
+- Separate client functions: [`pe_login.m`](pe_login.m),
+  [`pe_list_studies.m`](pe_list_studies.m), [`pe_list_maps.m`](pe_list_maps.m),
+  [`pe_map_scalars.m`](pe_map_scalars.m), [`pe_get_mesh.m`](pe_get_mesh.m),
+  [`pe_areas_per_interval.m`](pe_areas_per_interval.m) and
+  [`pe_download_waveform.m`](pe_download_waveform.m). They use MATLAB's built-in
+  HTTP functions and require no additional toolbox.
 - [`pulse_ep_demo.m`](pulse_ep_demo.m) — End-to-end demo: lists
   studies, picks the first map, renders the mesh with `trisurf`,
   and shows a histogram of the per-vertex scalar field.
@@ -18,8 +20,8 @@ Files in this directory:
 
 These demos are the MATLAB-side contribution to the **cross-language
 reproducibility statement** of the software paper: the same scalar
-histogram and the same area-per-interval table that R, Python and the
-web viewer compute, from the same REST payload, in MATLAB.
+histogram from downloaded values and the shared server interval-area
+calculation, displayed as a MATLAB table.
 
 ## Requirements
 
@@ -36,15 +38,15 @@ cd examples/matlab
 pulse_ep_demo
 ```
 
-If you prefer to hardcode credentials for a one-off run, edit the
-`baseURL`, `username`, `password` lines at the top of `pulse_ep_demo.m`.
+Configure credentials through environment variables or `setenv` in a private
+MATLAB session. Keep credentials out of example files.
 
 ## Notes
 
 - MATLAB array indexing is 1-based — `pe_get_mesh` returns triangle
   indices already converted from the 0-based JSON payload.
-- `NaN` scalars (vertices outside the catheter interpolation radius)
-  are passed through to MATLAB unchanged; `trisurf` colors them grey.
+- JSON null scalar entries are converted to MATLAB `NaN`. Missing values
+  remain missing; rendering depends on the selected plotting settings.
 
 ## Scope of the reproducibility claim
 

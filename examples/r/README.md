@@ -2,7 +2,7 @@
 
 Files in this directory:
 
-- [`pulse_ep_client.R`](pulse_ep_client.R) — a ~80-line REST client
+- [`pulse_ep_client.R`](pulse_ep_client.R) — a REST client
   (login, list studies, list maps, fetch mesh) built on `httr2`.
 - [`pulse_ep_demo.R`](pulse_ep_demo.R) — fetch a map, render the
   triangle mesh with `rgl`, plot the per-vertex scalar histogram with
@@ -16,8 +16,8 @@ Files in this directory:
 
 These two demos are the R-side contribution to the **cross-language
 reproducibility statement** of the software paper: identical platform
-reductions (scalar histogram + area-per-interval table) computed in R
-from the same REST payload Python, MATLAB and the web viewer consume.
+inputs for a locally computed histogram and a server-computed interval-area
+table, using the same API as Python, MATLAB and the web viewer.
 A clinical co-author who works in R should reproduce the same numbers
 without a Python install.
 
@@ -27,8 +27,8 @@ without a Python install.
 install.packages(c("httr2", "jsonlite", "rgl", "ggplot2", "tibble"))
 ```
 
-(`rgl` is optional — comment out the 3D plot block in
-`pulse_ep_demo.R` if you do not want OpenGL.)
+The supplied rendering demo loads `rgl`. The area-only example does not
+need an OpenGL window. Optional Parquet reading uses the `arrow` package.
 
 ## Run
 

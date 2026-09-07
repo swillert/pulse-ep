@@ -20,7 +20,7 @@ import fnmatch
 import shutil
 import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import BinaryIO, Protocol, runtime_checkable
 
 
@@ -41,6 +41,26 @@ class ImportSource(Protocol):
     def materialize(self, members: list[str] | None = None) -> Path:
         """Ensure the (selected) members exist as a local directory tree."""
         ...
+
+
+def _reject_unsafe_member(name: str, root: Path) -> Path:
+    """Return the destination for ``name``, or raise if it escapes ``root``.
+
+    An archive member may only land under the directory it is unpacked into.
+    Rejected: absolute paths, Windows drive letters, ``..`` segments, and any
+    name that resolves outside ``root`` — which is what catches a symlink
+    already present in an explicitly supplied destination.
+    """
+    relative = Path(name.replace("\\", "/"))
+    target = (root / relative).resolve()
+    if (
+        relative.is_absolute()
+        or PureWindowsPath(name).drive
+        or ".." in relative.parts
+        or not target.is_relative_to(root)
+    ):
+        raise ValueError(f"Unsafe ZIP member path: {name!r}")
+    return target
 
 
 def _visible(name: str) -> bool:
@@ -100,8 +120,11 @@ class ZipSource:
         multi-GB archive from being fully unpacked.
         """
         out = Path(dest) if dest else Path(tempfile.mkdtemp(prefix="pulse_ep_import_"))
+        root = out.resolve()
+        targets = []
         for name in members if members is not None else self.list():
-            target = out / name
+            targets.append((name, _reject_unsafe_member(name, root)))
+        for name, target in targets:
             target.parent.mkdir(parents=True, exist_ok=True)
             with self._zf.open(name) as src, open(target, "wb") as fh:
                 shutil.copyfileobj(src, fh)
@@ -169,11 +192,28 @@ class SevenZipSource:
             names = [n for n in names if fnmatch.fnmatch(n, pattern)]
         return sorted(names)
 
+    def _member_path(self, name: str) -> Path:
+        """Where ``name`` landed under the extraction root.
+
+        py7zr drops the anchor when it extracts, so an archive that records
+        ``/var/tmp/export/Study.xml`` writes ``<root>/var/tmp/export/Study.xml``
+        — and CARTO archives do carry such entries. Joining the raw name would
+        instead resolve to ``/var/tmp/export/Study.xml`` itself, outside the
+        root: ``Path("/a") / "/b"`` is ``/b``.
+        """
+        root = self._root().resolve()
+        relative = PurePosixPath(name.replace("\\", "/"))
+        stripped = Path(*[part for part in relative.parts if part not in ("/", "..")])
+        target = (root / stripped).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(f"Unsafe 7-Zip member path: {name!r}")
+        return target
+
     def open(self, name: str) -> BinaryIO:
-        return open(self._root() / name, "rb")
+        return open(self._member_path(name), "rb")
 
     def size(self, name: str) -> int:
-        return (self._root() / name).stat().st_size
+        return self._member_path(name).stat().st_size
 
     def materialize(self, members: list[str] | None = None) -> Path:
         return self._root()

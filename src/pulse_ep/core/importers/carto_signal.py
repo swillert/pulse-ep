@@ -8,7 +8,7 @@ stored as raw integers with one gain factor in the header.
 These were never imported — the note in ``point_importer`` said "too large for
 DB storage", which was true of the relational DB and irrelevant to the
 :class:`~pulse_ep.core.waveform.WaveformStore` that has existed since. They
-are opt-in for the same reason EnSiteX waveforms are: a real export carries
+are opt-in for the same reason EnSite X waveforms are: a real export carries
 one such file per point and they dwarf everything else in it.
 
 The point XML says which channels a point was *annotated* on

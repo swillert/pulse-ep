@@ -139,7 +139,7 @@ pages:
 # and for the Zenodo-on-GitHub release / DOI workflow.
 # ---------------------------------------------------------------------
 #
-# Force-pushes all branches and tags to the GitHub mirror on every
+# Mirrors main and tags to GitHub on every
 # push to `main` and on every tag. Authentication uses two protected,
 # masked CI variables that must be set in GitLab → Settings → CI/CD:
 #
@@ -171,8 +171,11 @@ mirror_to_github:
     - git remote remove github 2>/dev/null || true
     - git remote add github "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/${GITHUB_USER}/pulse-ep.git"
     - git fetch origin --tags
-    - git push github "HEAD:refs/heads/main" --force
-    - git push github --tags --force
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "main" ]; then
+        git push github "HEAD:refs/heads/main" --force
+      fi
+    - git push github --tags
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_TAG'

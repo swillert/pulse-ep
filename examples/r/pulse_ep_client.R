@@ -135,7 +135,7 @@ pe_get_mesh <- function(token, map_id, scalar_name = NULL,
     # An empty JSON array arrives as an empty *list*, not NULL, so a
     # !is.null() guard lets it through and matrix() then fails on the NULL
     # that unlist() returns. A map may legitimately have no acquisition
-    # points: an EnSiteX mesh carrying only per-vertex fields has none.
+    # points: an EnSite X mesh carrying only per-vertex fields has none.
     points         = if (length(pd$coordinates) > 0)
                        if (is.matrix(pd$coordinates)) pd$coordinates else matrix(unlist(pd$coordinates), ncol = 3, byrow = TRUE)
                      else matrix(numeric(), ncol = 3),

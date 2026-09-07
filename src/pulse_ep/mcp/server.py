@@ -26,6 +26,7 @@ import argparse
 import os
 import sys
 
+from pulse_ep.core.config import TRUE_VALUES
 from pulse_ep.mcp.anonymize import anonymiser_from_env
 from pulse_ep.mcp.client import MCPDisabled, PulseEpError, client_from_env
 from pulse_ep.mcp.tools import (
@@ -40,7 +41,7 @@ Read-only access to a pulse-ep electroanatomical mapping database.
 
 Start at list_studies, then list_maps, then map_summary — a map's quantities
 are vendor-neutral names (activation_time, voltage_bipolar, pacemap_score, …)
-that mean the same thing for CARTO and EnSiteX studies.
+that mean the same thing for CARTO and EnSite X studies.
 
 Everything stored is reachable. Summarising tools (map_summary, read_points,
 read_waveform) answer questions directly; fetch_map, fetch_points and
@@ -160,12 +161,13 @@ def build_server(tools: Tools, anonymized: bool):
     return mcp
 
 
-#: Values that switch the server on. Everything else — an unset variable, an
-#: empty string, a typo — leaves it off. It fails *closed*, like the
-#: anonymiser and for a stronger reason: this switch is what lets study data
+#: The strings that switch the server on — the set the server-side
+#: ``Settings.mcp_enabled`` uses, imported rather than repeated so the two
+#: cannot drift. Everything else leaves it off: this fails *closed*, like the
+#: anonymiser and for a stronger reason: the switch is what lets study data
 #: reach a language model, so the direction a mistake falls in must be the one
 #: that sends nothing.
-_ON = {"1", "true", "yes", "on"}
+_ON = TRUE_VALUES
 
 
 def is_enabled(env, override: bool | None = None) -> bool:

@@ -7,14 +7,11 @@ directory of the repository; this page is the documentation index.
 
 ## Why these examples exist
 
-These examples form the **cross-language reproducibility statement of
-the software paper**: from one CARTO study, served by one REST endpoint,
-four independent toolchains compute identical platform-level reductions
-— the per-vertex scalar histogram and the per-interval surface-area
-breakdown (`/calculate_areas_for_intervals`). If a clinical co-author
-in MATLAB and a stats co-author in R get the same numbers as the
-Python toolkit and the bundled web viewer, the platform itself is
-faithful — independent of any one stack.
+These examples connect the same stored maps to established analysis tools.
+Histograms are computed locally from downloaded values, while the interval-area
+examples request the shared server operation. Full raw arrays also support
+independent calculations; the publication supplement executes and records
+separate geometry checks in R and MATLAB.
 
 ## Catalogue
 
@@ -24,9 +21,9 @@ faithful — independent of any one stack.
 
     ---
 
-    Load a CARTO map directly into ParaView via the REST API
-    (Programmable Source), or use the CLI exporter to write a `.vtu`
-    file without a running server.
+    Load either vendor through the native source plugin or Programmable
+    Source. Raw mode exposes the surface, every field and a separate point
+    output. A VTU exporter uses direct database access.
 
     [:octicons-arrow-right-24: View on GitHub](https://github.com/swillert/pulse-ep/tree/main/examples/paraview)
 
@@ -62,21 +59,18 @@ faithful — independent of any one stack.
 
 </div>
 
+## Python and MCP examples
+
+[`examples/python`](https://github.com/swillert/pulse-ep/tree/main/examples/python)
+contains a REST waveform plot and a separate MCP stdio analysis. Follow the
+[MCP guide](../guides/mcp.md) for explicit opt-in and client configuration.
+
 ## Common prerequisites
 
-All client examples (everything except `paraview/export_to_vtk.py`) talk
-to a running pulse-ep server.
-
-```bash
-# A. local install
-pulse-ep-server                       # http://127.0.0.1:5000
-
-# B. Docker stack
-docker compose --profile server up -d --build
-
-# Bootstrap an admin user once
-pulse-ep-create-user --username admin --role admin
-```
+The REST clients require a running, configured service with imported studies
+and a user account. See the [Quickstart](../getting-started/quickstart.md).
+A `readonly` account is sufficient for retrieval and calculations. The VTU
+exporter uses direct PostgreSQL access instead.
 
 Then export three environment variables in the shell that runs the
 examples:
@@ -99,7 +93,7 @@ curl -s "$PULSE_EP_BASE_URL/list_studies" -H "Authorization: Bearer $TOKEN"
 
 ## Endpoints exercised by the examples
 
-The four endpoints every example touches:
+Common endpoints used across these examples:
 
 | Method | Path                                            | Purpose |
 | ------ | ----------------------------------------------- | ------- |

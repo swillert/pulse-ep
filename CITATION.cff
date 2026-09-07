@@ -3,15 +3,17 @@ message: "If you use pulse-ep in your research, please cite it as below."
 title: "pulse-ep: An open-source platform for programmatic access to multivendor electroanatomical mapping data"
 abstract: >-
   pulse-ep is a Python package and web platform that parses CARTO 3
-  (Biosense Webster) and EnSiteX (Abbott) electroanatomical-mapping exports
+  (Biosense Webster) and EnSite X (Abbott) electroanatomical-mapping exports
   into a relational PostgreSQL database and exposes the data via a
   JWT-authenticated REST API, a browser-based 3D viewer (Three.js / WebGL),
-  and a Python toolkit for custom analyses. Values from either system are
+  native ParaView and R/MATLAB clients, and a Python toolkit for custom analyses.
+  An optional MCP server connects AI assistants and is disabled by default.
+  Values from either system are
   stored under a single vendor-neutral vocabulary, so one query spans both.
   It enables quantitative research on triangulated cardiac surface meshes —
   including geodesic distance computation, surface-area integration over
   scalar intervals, map-to-map delta fields, and reference-catheter geometry
-  analysis — that are not available in the clinical mapping systems.
+  analysis in external research workflows.
 authors:
   - family-names: Willert
     given-names: Sven
@@ -23,7 +25,7 @@ authors:
   - family-names: Lian
     given-names: Evgeny
     affiliation: "University Hospital Schleswig-Holstein, Kiel, Germany"
-version: 0.4.1
+version: 0.4.2
 date-released: "2026-09-07"
 license: MIT
 repository-code: "https://github.com/swillert/pulse-ep"
@@ -33,12 +35,6 @@ identifiers:
   - description: "Concept DOI — resolves to the latest pulse-ep release"
     type: doi
     value: "10.5281/zenodo.20263542"
-  - description: "DOI for release v0.2.0"
-    type: doi
-    value: "10.5281/zenodo.22435908"
-  - description: "DOI for release v0.1.0-softwarex"
-    type: doi
-    value: "10.5281/zenodo.20263543"
 keywords:
   - electrophysiology
   - electroanatomical-mapping

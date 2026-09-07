@@ -47,7 +47,7 @@ from pulse_ep.core.scalar_field import (
     VOLTAGE_UNIPOLAR,
 )
 
-#: EnSiteX DxL ``Map type:`` channel token -> quantity. ``pp`` is absent
+#: EnSite X DxL ``Map type:`` channel token -> quantity. ``pp`` is absent
 #: because its kind depends on the polarity suffix (see :data:`ENSITE_POLARITY`).
 ENSITE_DXL_CHANNELS: Mapping[str, str] = {
     "lat": ACTIVATION_TIME,
@@ -64,7 +64,7 @@ ENSITE_DXL_CHANNELS: Mapping[str, str] = {
 #: as unknown instead of quietly inheriting the voltage reading.
 ENSITE_POLARITY_CHANNELS: frozenset[str] = frozenset({"pp"})
 
-#: EnSiteX polarity suffix -> the voltage quantity it denotes. ``omni`` is the
+#: EnSite X polarity suffix -> the voltage quantity it denotes. ``omni`` is the
 #: omnipolar P-P amplitude, recorded as bipolar.
 ENSITE_POLARITY: Mapping[str, str] = {
     "bi": VOLTAGE_BIPOLAR,

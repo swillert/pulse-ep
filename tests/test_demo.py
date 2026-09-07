@@ -68,9 +68,24 @@ def test_epmap_can_wrap_synthetic_data() -> None:
     assert epmap.act_bip.shape == (len(vertices), 2)
 
 
-def test_main_exits_zero(capsys) -> None:
+def test_main_exits_zero(capsys, monkeypatch) -> None:
+    from pulse_ep.examples import demo_synthetic
+
+    maps = []
+
+    def capture_map(**kwargs):
+        epmap = EPMap(**kwargs)
+        maps.append(epmap)
+        return epmap
+
+    monkeypatch.setattr(demo_synthetic, "EPMap", capture_map)
     rc = main(["--resolution", "12", "--sigma", "6.0"])
     assert rc == 0
     captured = capsys.readouterr().out
     assert "synthetic atrium" in captured
     assert "Area by score interval" in captured
+    # mm², like every imported map and like the unit /get_mesh_data declares.
+    # The same surface is ~97 cm², so a cm² value here would be ~100x smaller.
+    assert 9000 < maps[0].triangle_areas.sum() < 11000
+    field = maps[0].scalar_fields["pacemap_score"]
+    assert field.kind == "pacemap_score" and field.unit == "%"

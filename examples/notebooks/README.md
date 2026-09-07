@@ -8,13 +8,12 @@ per-vertex scalar distribution with matplotlib.
 ## Requirements
 
 ```bash
-pip install jupyterlab requests "pyvista[jupyter]" matplotlib pandas
+pip install jupyterlab nbconvert ipykernel requests pyvista matplotlib pandas
 ```
 
-PyVista's notebook backend uses Trame — hence the `[jupyter]` extra above,
-without which the first plotting cell raises an ImportError. In JupyterLab everything renders
-inline. On a headless server use the static `panel`/`server` backends or
-fall back to matplotlib.
+The supplied notebook uses `pl.show(jupyter_backend="static")` for an inline
+image. Rendering requires a working VTK off-screen backend. For an interactive
+view, additionally install `"pyvista[jupyter]"` and select the `trame` backend.
 
 ## Run
 
@@ -38,15 +37,15 @@ jupyter nbconvert --to notebook --execute \
 2. Authentication: exchange username/password for a JWT.
 3. Catalogue: list studies and maps as `pandas` DataFrames.
 4. Mesh: fetch `/get_mesh_data` and build a PyVista `PolyData`.
-5. Visualisation: interactive 3D render + scalar histogram.
+5. Visualisation: inline 3D rendering and scalar histogram.
 6. Area-per-interval breakdown via `/calculate_areas_for_intervals`,
    the same reduction the bundled web viewer and the clinical Excel
    reports show — computed here as a `pandas` DataFrame.
 
 Together with the R and MATLAB demos this notebook contributes to the
 **cross-language reproducibility statement of the software paper**:
-the same scalar histogram and the same area-per-interval table from
-the same REST payload, in four independent stacks.
+a histogram computed from downloaded values and the common server
+interval-area response presented as a local table.
 
 ## Scope of the reproducibility claim
 

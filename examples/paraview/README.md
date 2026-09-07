@@ -14,8 +14,7 @@ Three ways in, in the order you probably want them:
    for archiving or for sending a map to someone with no server access,
    wrong for browsing, since every change means exporting again.
 
-Tested against ParaView 6.1.1 on macOS, and 5.11/5.12 on Linux and macOS for
-options 2 and 3.
+The publication verification uses ParaView 6.1.1 on macOS.
 
 ## 1. The plugin
 
@@ -35,15 +34,16 @@ set *MapID*, press **Apply**.
 | `ServerURL` | empty: `$PULSE_EP_BASE_URL` |
 | `Username` | empty: `$PULSE_EP_USERNAME` |
 | `MapID` | see `GET /list_epmaps_in_study/<study_id>` |
-| `ScalarName` | empty: the map's **primary** quantity, resolved by the server — `activation_time` on a CARTO map, `voltage_bipolar` on an EnSiteX one |
-| `Distance` | interpolation radius around catheter points, mm |
+| `ScalarName` | empty: the map's **primary** quantity, resolved by the server — depending on the fields present, for example `activation_time` or `voltage_bipolar` |
+| `Distance` | Measurement-distance threshold in display mode, mm |
+| `Representation` | `display` (default) or `raw`; raw preserves all stored geometry and fields |
 
 The **password is never a property**: it is read from `$PULSE_EP_PASSWORD`
 only. ParaView writes property values into state files and Python traces, and
 a password does not belong in either.
 
-Vertices with no measurement arrive as NaN and show in ParaView's NaN colour
-(yellow by default) rather than being coloured as if they were zero.
+Missing scalar entries arrive as NaN and use the selected colour transfer
+function's NaN colour.
 
 From `pvpython`, the proxy is `PulseEPMapSource` and the convenience function
 is `pulseepMap` — ParaView derives that name from the menu label:
@@ -70,7 +70,7 @@ src.UpdatePipeline()
    `DISTANCE` near the top, then press **Apply**.
 
 The result is a `vtkPolyData` with one point-data array
-(`SCALAR_NAME`) plus an additional `point_normalized` array. Pick
+(the resolved scalar name) plus an additional `point_normalized` array. Pick
 *Coloring → SCALAR_NAME* in the *Properties* panel to see the field.
 
 ## 3. CLI file export
@@ -90,16 +90,15 @@ running HTTP server needed.
 
 ## Note
 
-The `distance` parameter to `/get_mesh_data` controls how far around
-measurement points the per-vertex interpolation happens; ParaView
-receives `NaN` outside that radius (which ParaView colors as the
-background). Default is `5.0` mm.
+In display mode, `distance` controls masking around measurement positions;
+it does not select a new interpolation algorithm. Raw mode ignores it.
+The default is 5 mm.
 
 ## Which quantity is plotted
 
 Leave `SCALAR_NAME` (or `--scalar-name`) unset and the map's own **primary
 quantity** is used — a CARTO map is usually about `activation_time`, an
-EnSiteX one about `voltage_bipolar`. The exporter prints the name it chose,
+EnSite X one about `voltage_bipolar`. The exporter prints the name it chose,
 and `/get_mesh_data` echoes it as `scalar_name`.
 
 To see what a map offers:
@@ -108,7 +107,7 @@ To see what a map offers:
 curl -s "$PULSE_EP_BASE_URL/epmaps/<id>/scalars" -H "Authorization: Bearer $TOKEN"
 ```
 
-The old default was `act`, a CARTO-only name that no EnSiteX map answers to.
+The old default was `act`, a CARTO-only name that no EnSite X map answers to.
 It still resolves for CARTO studies, but no longer works as a default.
 
 ## Full analysis data

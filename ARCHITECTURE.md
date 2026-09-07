@@ -7,13 +7,14 @@ should land here first, then in the relevant module.
 
 `pulse-ep` is a programmatic hub for electroanatomical mapping data. It
 parses the proprietary exports of **CARTO 3** (Biosense Webster) and
-**EnSiteX** (Abbott), persists them in a relational PostgreSQL database
-under one vendor-neutral vocabulary, and exposes the data through three
+**EnSite X** (Abbott), persists them in a relational PostgreSQL database
+under one vendor-neutral vocabulary, and exposes the data through four
 independent surfaces:
 
 - a JWT-authenticated REST API (Flask),
-- a browser-based interactive 3D viewer (Three.js / WebGL), and
-- a Python toolkit (`pulse_ep.core`) for custom analyses.
+- a browser-based interactive 3D viewer (Three.js / WebGL),
+- a Python toolkit (`pulse_ep.core`) for custom analyses, and
+- an optional, read-only MCP server for AI clients, disabled by default.
 
 ## 2 Package layout
 
@@ -72,8 +73,8 @@ never re-derived downstream. Two layers, deliberately kept apart:
 
 A field is then **named by what it is**: `voltage_bipolar`,
 `activation_time`. A name lookup and a kind lookup become the same
-question, so one query spans a CARTO map and an EnSiteX map. (They used
-to diverge: CARTO wrote `act` / `vol`, EnSiteX wrote `voltage_bipolar` —
+question, so one query spans a CARTO map and an EnSite X map. (They used
+to diverge: CARTO wrote `act` / `vol`, EnSite X wrote `voltage_bipolar` —
 the same quantity under two names, findable by neither. The old names
 still resolve, through the lexicon, for studies imported before this.)
 
@@ -89,7 +90,7 @@ Two rules keep the vocabulary honest:
   the unfamiliar is how whole channels go missing.
 
 Value-based decoding — CARTO's sign convention for its overloaded primary
-slot, EnSiteX's export sentinels — inspects data rather than names and
+slot, EnSite X's export sentinels — inspects data rather than names and
 stays in the vendor importer, not the lexicon.
 
 ## 5 Cross-cutting design choices
@@ -107,11 +108,11 @@ stays in the vendor importer, not the lexicon.
   `config.ini` (for backwards compatibility) → field defaults.
   Secrets (`SecretStr`) never appear in `repr()`.
 - **Optional extras as functional capabilities.** `pulse-ep` (core
-  data + CLI) installs slim; `pulse-ep[server]` adds Flask / JWT /
+  data + CLI) includes NumPy, SciPy, PyVista/VTK and the database drivers; `pulse-ep[server]` adds Flask / JWT /
   gunicorn; `pulse-ep[figures]` adds reportlab / openpyxl /
   simplekml; `pulse-ep[mcp]` adds the MCP SDK; `pulse-ep[dev]` adds the
-  test and lint tooling. Heavyweight, optional dependencies stay out of
-  the core install, and the package imports without any of them.
+  test and lint tooling. The core installation includes its numerical and visualisation dependencies;
+  server, reporting and MCP capabilities require their respective extras.
 - **REST first.** The bundled web viewer, the `examples/` clients and
   the MCP server are all clients of the same endpoints. There is no
   privileged "internal" API; every reader can be substituted.
@@ -127,7 +128,7 @@ stays in the vendor importer, not the lexicon.
   database id, and the switch is the operator's alone: no tool can lift
   it. AI access itself is **opt-in**: `PULSE_EP_MCP_ENABLED=1` at both
   ends, refused while unset and on any value that is not recognised, so
-  a typo cannot enable it. Both switches fail towards sending nothing,
+  a typo cannot enable it. The access switch defaults to off and the redaction switch defaults to on,
   because what an operator must decide before turning this on — which
   rules govern the data, and whether anonymised study names are enough —
   is not a question the software can answer for them.
@@ -168,9 +169,9 @@ stays in the vendor importer, not the lexicon.
   needs a particular shape — a folded surface, a mesh with a reordered
   colour section — builds it inline. Nothing reads an external export, and
   downstream code stays data-agnostic. The suite needs no live database:
-  the ORM's PostgreSQL types (`JSONB`, `ARRAY`) cannot be created on
-  SQLite, so persistence tests exercise the (de)serialisation converters
-  directly and route tests use Flask's test client.
+  persistence tests exercise the ORM-to-domain conversion functions
+  directly, and route tests use Flask's test client. PostgreSQL round-trip
+  checks are part of the paper's separate integration protocol.
 - **`data/`, `drop/` and archive files are gitignored.** The GitHub
   mirror force-pushes every `main` commit to a public repository, so
   anything committed there is published irreversibly.

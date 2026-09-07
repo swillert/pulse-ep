@@ -21,7 +21,7 @@ class ColormapWidget {
      * Fill the datatype selector from the quantities a map actually carries.
      *
      * The options used to be a hardcoded ACT / VOL pair — CARTO's field names —
-     * so an EnSiteX map offered nothing it could answer to. The server reports
+     * so an EnSite X map offered nothing it could answer to. The server reports
      * the map's own fields, and the selection falls back to the map's primary
      * quantity whenever the current one is not among them.
      */

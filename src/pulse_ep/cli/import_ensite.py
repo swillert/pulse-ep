@@ -1,4 +1,4 @@
-"""Import an Abbott EnSiteX export into the pulse-ep database.
+"""Import an Abbott EnSite X export into the pulse-ep database.
 
 Runs the prepare -> commit -> persist pipeline for an export folder or ZIP:
 
@@ -46,12 +46,20 @@ def _delete_study(session, study_model) -> None:
     from pulse_ep.core.models import (
         EPMapAttributes,
         EPMapModel,
+        EPMapPoint,
         MeasurementPointModel,
         PlacedPointModel,
+        WaveformModel,
     )
 
     map_ids = [e.id for e in session.query(EPMapModel).filter_by(study_id=study_model.id).all()]
+    session.query(WaveformModel).filter_by(study_id=study_model.id).delete(
+        synchronize_session=False
+    )
     if map_ids:
+        session.query(EPMapPoint).filter(EPMapPoint.map_id.in_(map_ids)).delete(
+            synchronize_session=False
+        )
         session.query(MeasurementPointModel).filter(
             MeasurementPointModel.map_id.in_(map_ids)
         ).delete(synchronize_session=False)
@@ -78,6 +86,9 @@ def import_ensite(
     from pulse_ep.core.database import get_db_session
     from pulse_ep.core.models import StudyModel, ingest_waveforms, persist_study
     from pulse_ep.core.waveform import FilesystemStore
+
+    if waveforms and not store_dir:
+        raise ValueError("--waveforms requires --store-dir for Parquet signal storage")
 
     source = source_for(path)
     importer = EnsiteImporter()
@@ -123,7 +134,7 @@ def import_ensite(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="pulse-ep-import-ensite", description="Import an Abbott EnSiteX export."
+        prog="pulse-ep-import-ensite", description="Import an Abbott EnSite X export."
     )
     p.add_argument("--input", "-i", required=True, help="Path to an export folder or ZIP.")
     p.add_argument("--clear", action="store_true", help="Reimport if the study already exists.")
@@ -134,7 +145,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if args.waveforms and not args.store_dir:
+        parser.error("--waveforms requires --store-dir")
     import_ensite(
         args.input,
         clear=args.clear,

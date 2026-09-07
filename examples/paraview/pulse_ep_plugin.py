@@ -114,7 +114,7 @@ def fetch_polydata(
     query = {"map_id": str(map_id), "distance": str(distance), "representation": representation}
     # Omitting scalar_name lets the server resolve the map's own primary
     # quantity, which differs by vendor — activation_time for CARTO,
-    # voltage_bipolar for EnSiteX. Never guess a field name here.
+    # voltage_bipolar for EnSite X. Never guess a field name here.
     if scalar_name:
         query["scalar_name"] = scalar_name
     mesh = _get(base_url, "/get_mesh_data?" + urllib.parse.urlencode(query), token)
@@ -205,7 +205,7 @@ class PulseEPMapSource(VTKPythonAlgorithmBase):
     @smdomain.xml(
         "<Documentation>Quantity to load. Empty asks the server for this "
         "map's primary one — activation_time on a CARTO map, "
-        "voltage_bipolar on an EnSiteX one. List them with "
+        "voltage_bipolar on an EnSite X one. List them with "
         "GET /epmaps/&lt;id&gt;/scalars.</Documentation>"
     )
     def SetScalarName(self, value):

@@ -26,8 +26,8 @@ from pulse_ep.core.study import Study
 
 Base = declarative_base()
 
-# Portable JSON: JSONB on PostgreSQL (indexable), plain JSON elsewhere
-# (e.g. SQLite in tests) so the same models create on both backends.
+# JSON-valued columns use indexable JSONB in PostgreSQL. The schema as a
+# whole requires PostgreSQL because geometry also uses native ARRAY columns.
 PortableJSON = JSON().with_variant(JSONB, "postgresql")
 
 
@@ -73,7 +73,7 @@ class StudyModel(Base):
         """(id, name, vendor) per study.
 
         The vendor belongs in the listing: on a multivendor platform a client
-        that cannot tell a CARTO study from an EnSiteX one has to fetch every
+        that cannot tell a CARTO study from an EnSite X one has to fetch every
         study to find out.
         """
         studies = session.query(cls).with_entities(cls.id, cls.name, cls.vendor).all()
@@ -87,7 +87,7 @@ class StudyModel(Base):
         # ``number_of_points`` is the vendor's own count and is null for
         # importers that do not report one, so count the measurement points
         # actually stored: without it a client cannot tell which maps carry
-        # points, and every EnSiteX map looked empty.
+        # points, and every EnSite X map looked empty.
         n_points = (
             session.query(
                 MeasurementPointModel.map_id,
@@ -177,7 +177,7 @@ class EPMapModel(Base):
         cascade="all, delete-orphan",
     )
     #: The vendor-neutral successor to ``points``. Without this relationship
-    #: the table was written but never read back, so an EnSiteX map arrived in
+    #: the table was written but never read back, so an EnSite X map arrived in
     #: memory with no acquisition points despite having thousands in the
     #: database.
     measurement_points = relationship(
@@ -550,7 +550,7 @@ class WaveformModel(Base):
     )
     map_id = Column(Integer, ForeignKey("epmaps.id", ondelete="CASCADE"), nullable=True, index=True)
     #: the vendor point id this window was acquired at, where signals are
-    #: per-point (CARTO). ``None`` for per-segment exports (EnSiteX). Not a
+    #: per-point (CARTO). ``None`` for per-segment exports (EnSite X). Not a
     #: foreign key: the waveform is stored with the export, which may be
     #: ingested without the map its points belong to.
     point_source_id = Column(String, nullable=True, index=True)

@@ -2,7 +2,7 @@
 
 A ``VendorImporter`` turns an :class:`ImportSource` into vendor-neutral
 :class:`~pulse_ep.core.study.Study` objects. ``sniff`` lets one command
-auto-detect the vendor (CARTO vs EnSiteX) without the caller knowing it.
+auto-detect the vendor (CARTO vs EnSite X) without the caller knowing it.
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def waveform_iterator(vendor: str | None):
     """The ``iter_waveforms(study_plan, source)`` of a vendor's importer.
 
     Signal files are the one part of an export with no vendor-neutral shape at
-    all — EnSiteX writes a handful of long multi-channel CSVs, CARTO one short
+    all — EnSite X writes a handful of long multi-channel CSVs, CARTO one short
     fixed-window file per acquired point — so the ingest path dispatches here
     rather than hard-coding one vendor's parser as the meaning of "waveform".
 

@@ -46,6 +46,14 @@ def _env_file_path() -> str:
     return os.environ.get("PULSE_EP_ENV_FILE", ".env")
 
 
+#: The only strings that mean "on". Everything else — an unset variable, an
+#: empty string, a typo — is off. Shared with :mod:`pulse_ep.mcp.server` and
+#: ``pulse-ep-init`` so the three cannot drift: for ``mcp_enabled`` the
+#: direction a mistake falls in decides whether study data reaches a language
+#: model, and that must be the direction that sends nothing.
+TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
 class Settings(BaseSettings):
     """Validated application settings for pulse-ep.
 
@@ -148,11 +156,11 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
-    @field_validator("debug", mode="before")
+    @field_validator("debug", "mcp_enabled", mode="before")
     @classmethod
     def _coerce_bool(cls, v: object) -> object:
         if isinstance(v, str):
-            return v.strip().lower() in {"1", "true", "yes", "on"}
+            return v.strip().lower() in TRUE_VALUES
         return v
 
     # ------------------------------------------------------------------

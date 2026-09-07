@@ -3,7 +3,7 @@
 A full run against both vendors showed the listings could not answer two
 questions a multivendor client has to ask: which vendor is this study from,
 and does this map have any points? The vendor was simply absent, and
-``number_of_points`` is the vendor's own count — null for every EnSiteX map,
+``number_of_points`` is the vendor's own count — null for every EnSite X map,
 which made maps carrying thousands of measurement points look empty.
 """
 
@@ -44,7 +44,7 @@ def test_study_listing_tolerates_a_missing_vendor():
 
 
 def test_map_listing_reports_stored_points_separately():
-    # an EnSiteX map: no vendor count, but 3306 points actually stored
+    # an EnSite X map: no vendor count, but 3306 points actually stored
     rows = [(7, "Contact_Mapping_Model", None, 3306), (8, "Anatomy: Left", None, 0)]
     out = _serialise_maps(rows, study_id=1)
     assert out[0]["number_of_points"] is None

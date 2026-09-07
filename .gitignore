@@ -49,6 +49,9 @@ pg-logs/
 decay_profiles/
 decay_profiles_heat/
 reports/
+waveforms/
+site/
+public/
 validation_full/
 /tmp/
 
@@ -59,8 +62,8 @@ validation_full/
 config.local.ini
 
 # Data paths (never commit patient-identifiable data)
-# The GitHub mirror force-pushes every commit on main to a public repo,
-# so anything committed here is published irreversibly.
+# CI mirrors every commit on main to the public GitHub repository, so
+# anything committed here is published irreversibly.
 data/
 drop/
 # Clinical exports as they arrive from the lab. A 208 GB tree of these

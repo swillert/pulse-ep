@@ -9,8 +9,8 @@ field on ``map_a``'s geometry. The correspondence metric is configurable:
 - ``"geodesic"``  — the nearest source *along ``map_a``'s surface*: ``map_b``'s
   values are placed on their nearest ``map_a`` vertices and a multi-source
   Dijkstra over ``map_a``'s mesh assigns each vertex the geodesically-nearest
-  one. This avoids matching across a wall/fold that is close in space but far
-  along the tissue.
+  one. Propagation follows the surface, but the initial Euclidean projection
+  must still be checked near folds and between unregistered maps.
 
 Comparison is an *operation*, not stored state; results can be kept as a
 derived map (``kind = voltage_delta``) or a report.
@@ -55,11 +55,14 @@ class ComparisonResult:
 def _mesh_graph(vertices: np.ndarray, triangles: np.ndarray):
     """Sparse, symmetric edge graph with euclidean edge lengths as weights."""
     edges = np.vstack([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
+    edges = np.unique(np.sort(edges, axis=1), axis=0)
     i, j = edges[:, 0], edges[:, 1]
     weights = np.linalg.norm(vertices[i] - vertices[j], axis=1)
     n = len(vertices)
-    g = coo_matrix((weights, (i, j)), shape=(n, n))
-    return (g + g.T).tocsr()
+    return coo_matrix(
+        (np.concatenate([weights, weights]), (np.concatenate([i, j]), np.concatenate([j, i]))),
+        shape=(n, n),
+    ).tocsr()
 
 
 def _euclidean(a_verts, b_verts, b_vals):

@@ -1,7 +1,7 @@
 """add waveforms.point_source_id
 
 CARTO exports one signal window per acquired point, so a stored waveform has
-a point it belongs to. EnSiteX exports per segment and leaves it NULL.
+a point it belongs to. EnSite X exports per segment and leaves it NULL.
 
 Revision ID: b4f1a7c2d9e3
 Revises: 0c2994f1da5b
