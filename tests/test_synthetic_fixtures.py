@@ -38,7 +38,10 @@ EXPECTED = {
         "map_name": "1-1-1-Synthetic Left Atrium",
         "vertices": 962,
         "triangles": 1920,
-        "fields": {"activation_time", "voltage_bipolar"},
+        # every colour column the mesh declares *and* fills — the reader takes
+        # them by name now, so Unipolar arrives as its own field instead of
+        # only inside the legacy uni_imp_frc array
+        "fields": {"activation_time", "voltage_bipolar", "voltage_unipolar"},
         "points": 64,
         "measurements": {"activation_time", "voltage_bipolar", "voltage_unipolar"},
     },

@@ -35,11 +35,14 @@ from pulse_ep.core.scalar_field import (
     CONTACT_FORCE,
     CORRELATION,
     FRACTIONATION,
+    IMPEDANCE,
     MAP_SCORE,
+    PACEMAP_SCORE,
     PEAK_FREQUENCY,
     SNR,
     UNKNOWN,
     VOLTAGE_BIPOLAR,
+    VOLTAGE_BIPOLAR_MICRO,
     VOLTAGE_PEAK_NEGATIVE,
     VOLTAGE_UNIPOLAR,
 )
@@ -89,6 +92,33 @@ ENSITE_POINT_COLUMNS: Mapping[str, str] = {
 CARTO_LEGACY_NAMES: Mapping[str, tuple[str, ...]] = {
     "act": (ACTIVATION_TIME, "pacemap_score"),
     "vol": (VOLTAGE_BIPOLAR,),
+}
+
+#: CARTO ``.mesh`` ``[VerticesColorsSection]`` column name -> quantity.
+#:
+#: The file names its own columns; before this table they were read by
+#: position, which silently dropped ``Paso`` (the PASO pace-match score) and
+#: ``µBi``, and would have mislabelled every column of an export that ordered
+#: them differently.
+#:
+#: Columns deliberately absent: ``A1`` / ``A2`` / ``A2-A1`` / ``SCI`` / ``ICL``
+#: / ``ACL``. They are real CARTO quantities but their exact semantics are not
+#: established here, and a guessed kind mislabels a clinical measurement
+#: silently — they import under their raw vendor token instead (see
+#: :func:`~pulse_ep.core.scalar_field.field_name`).
+#:
+#: ``µ`` is the MICRO SIGN in the export but casefolds to GREEK SMALL LETTER
+#: MU, so both spellings are keys — :func:`resolve` casefolds before lookup.
+CARTO_MESH_COLORS: Mapping[str, str] = {
+    "unipolar": VOLTAGE_UNIPOLAR,
+    "bipolar": VOLTAGE_BIPOLAR,
+    "lat": ACTIVATION_TIME,
+    "impedance": IMPEDANCE,
+    "force": CONTACT_FORCE,
+    "paso": PACEMAP_SCORE,
+    "μbi": VOLTAGE_BIPOLAR_MICRO,  # µBi, casefolded
+    "µbi": VOLTAGE_BIPOLAR_MICRO,  # µBi, as written
+    "ubi": VOLTAGE_BIPOLAR_MICRO,
 }
 
 

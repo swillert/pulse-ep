@@ -1,4 +1,5 @@
 import io
+from dataclasses import dataclass, field
 
 import chardet
 import numpy as np
@@ -20,7 +21,93 @@ def _section_lines(data, start_index):
     return lines
 
 
-def read_carto_mesh_file(filename):
+def _section_body(data, section_name):
+    """``(declared column names, index of the first data row)`` for a section.
+
+    A CARTO section is a header, a run of ``;`` comment lines and then
+    ``idx = v v v`` rows. The **last comment line names the columns** — the
+    only place in the file that says what its numbers mean. Reading it is
+    what separates ``Force`` from ``Paso`` when a future export reorders them.
+
+    Comment lines are recognised by their leading ``;``, not by the absence of
+    an ``=``: the colours section opens with ``; Color Value= -10000 …``.
+    """
+    start = find_section_index(data, section_name)
+    names: list[str] = []
+    i = start
+    while i < len(data):
+        stripped = data[i].strip()
+        if stripped.startswith(";"):
+            names = stripped.lstrip("; ").split()
+        elif "=" in stripped:
+            break
+        i += 1
+    return names, i
+
+
+def _named_columns(values, names, kind_of_section):
+    """Zip a value matrix with its declared column names.
+
+    A file whose header does not describe every column falls back to
+    positional ``<section>_<n>`` names rather than mislabelling: a wrong name
+    on a clinical quantity is worse than no name.
+    """
+    if len(names) != values.shape[1]:
+        if names:
+            print(
+                f"{kind_of_section}: {len(names)} declared names for "
+                f"{values.shape[1]} columns — falling back to positional names"
+            )
+        names = [f"{kind_of_section}_{i}" for i in range(values.shape[1])]
+    return dict(zip(names, values.T, strict=True))
+
+
+@dataclass
+class CartoMesh:
+    """A parsed CARTO ``.mesh`` file: geometry plus its *named* per-vertex data.
+
+    ``colors`` and ``attributes`` are keyed by the names the file declares
+    (``Unipolar``, ``LAT``, ``Force``, ``Paso``, ``SCAR`` …). The column set
+    differs between CARTO versions and map types, so reading them positionally
+    both loses columns (``Paso``, ``µBi``, the whole attributes section) and
+    risks reading one quantity out of another's slot.
+
+    The legacy ``act_bip`` / ``uni_imp_frc`` arrays are still assembled — now
+    by name, with the historical column positions as the fallback.
+    """
+
+    triangles: np.ndarray
+    vertices: np.ndarray
+    triangle_areas: np.ndarray
+    is_vertex_at_edge: np.ndarray
+    act_bip: np.ndarray
+    normals: np.ndarray
+    uni_imp_frc: np.ndarray | None
+    #: per-vertex scalar columns of ``[VerticesColorsSection]``, by name
+    colors: dict[str, np.ndarray] = field(default_factory=dict)
+    #: per-vertex flags of ``[VerticesAttributesSection]`` (EML / SCAR …)
+    attributes: dict[str, np.ndarray] = field(default_factory=dict)
+
+    def as_tuple(self):
+        """The historical 7-tuple of :func:`read_carto_mesh_file`."""
+        return (
+            self.triangles,
+            self.vertices,
+            self.triangle_areas,
+            self.is_vertex_at_edge,
+            self.act_bip,
+            self.normals,
+            self.uni_imp_frc,
+        )
+
+
+#: Legacy column positions, used only when the file declares no usable names.
+_LEGACY_ACT_BIP = (2, 1)  # LAT, Bipolar
+_LEGACY_UNI_IMP_FRC = (0, 3, 10)  # Unipolar, Impedance, Force
+
+
+def parse_carto_mesh(filename) -> CartoMesh:
+    """Read a CARTO ``.mesh`` file into a :class:`CartoMesh`."""
     # Detect file encoding, fall back to latin-1 (handles µ and other medical symbols)
     with open(filename, "rb") as f:
         raw = f.read(10000)
@@ -37,10 +124,9 @@ def read_carto_mesh_file(filename):
     if "#TriangulatedMeshVersion2.0" not in data[0]:
         raise ValueError("Expected file format: #TriangulatedMeshVersion2.0")
 
-    # Find the vertices and triangles sections
-    vertices_index = find_section_index(data, "[VerticesSection]") + 2
-    triangles_index = find_section_index(data, "[TrianglesSection]") + 2
-    vertex_colors_index = find_section_index(data, "[VerticesColorsSection]") + 3
+    _, vertices_index = _section_body(data, "[VerticesSection]")
+    _, triangles_index = _section_body(data, "[TrianglesSection]")
+    color_names, vertex_colors_index = _section_body(data, "[VerticesColorsSection]")
 
     # Vertices — stop at first non-'=' line (section boundary), then batch-parse
     v_lines = _section_lines(data, vertices_index)
@@ -67,7 +153,20 @@ def read_carto_mesh_file(filename):
         raise ValueError("No vertex colors found.")
     vertex_colors = np.loadtxt(io.StringIO("\n".join(c_lines)))
     vertex_colors[vertex_colors == -10000] = np.nan
-    print(f"Colors found: {len(vertex_colors)}")
+    print(f"Colors found: {len(vertex_colors)} x {vertex_colors.shape[1]} ({color_names})")
+
+    # Per-vertex flags (EML / extEML / SCAR). Optional: older exports and
+    # anatomy-only meshes have no such section, which is not an error.
+    attribute_values, attribute_names = None, []
+    try:
+        attribute_names, attributes_index = _section_body(data, "[VerticesAttributesSection]")
+        a_lines = _section_lines(data, attributes_index)
+        if a_lines:
+            attribute_values = np.loadtxt(io.StringIO("\n".join(a_lines)))
+            if attribute_values.ndim == 1:
+                attribute_values = attribute_values[:, None]
+    except ValueError:
+        pass
 
     # Cleanup: drop vertices not referenced by any active triangle
     referenced_vertices = np.unique(triangles)  # already sorted
@@ -95,31 +194,54 @@ def read_carto_mesh_file(filename):
     # Vertex normals (trimesh built-in, no networkx needed)
     normals = calculate_vertex_normals(mesh)
 
-    act_bip = np.column_stack((filtered_vertex_colors[:, 2], filtered_vertex_colors[:, 1]))
+    colors = _named_columns(filtered_vertex_colors, color_names, "color")
 
-    if filtered_vertex_colors.shape[1] >= 11:
-        uni_imp_frc = np.column_stack(
-            (
-                filtered_vertex_colors[:, 0],
-                filtered_vertex_colors[:, 3],
-                filtered_vertex_colors[:, 10],
-            )
+    attributes: dict[str, np.ndarray] = {}
+    if attribute_values is not None and len(attribute_values) >= len(vertices):
+        attributes = _named_columns(
+            attribute_values[referenced_vertices], attribute_names, "attribute"
         )
-    else:
+
+    act_bip = _legacy_stack(colors, filtered_vertex_colors, ("LAT", "Bipolar"), _LEGACY_ACT_BIP)
+    uni_imp_frc = _legacy_stack(
+        colors, filtered_vertex_colors, ("Unipolar", "Impedance", "Force"), _LEGACY_UNI_IMP_FRC
+    )
+    if uni_imp_frc is None:
         print("Vertex colors does not have enough columns to extract the desired data.")
-        uni_imp_frc = None
 
     triangle_areas = calculate_triangle_areas(filtered_vertices, filtered_triangles)
 
-    return (
-        filtered_triangles,
-        filtered_vertices,
-        triangle_areas,
-        is_vertex_at_edge,
-        act_bip,
-        normals,
-        uni_imp_frc,
+    return CartoMesh(
+        triangles=filtered_triangles,
+        vertices=filtered_vertices,
+        triangle_areas=triangle_areas,
+        is_vertex_at_edge=is_vertex_at_edge,
+        act_bip=act_bip,
+        normals=normals,
+        uni_imp_frc=uni_imp_frc,
+        colors=colors,
+        attributes=attributes,
     )
+
+
+def _legacy_stack(colors, values, names, positions):
+    """Assemble a legacy column stack by name, falling back to position.
+
+    The legacy arrays are still read directly by the figure and tagging code,
+    so they keep their historical column order — but they are now filled from
+    the columns the file *names*, not from the ones that happened to sit there
+    in the exports this parser was written against.
+    """
+    if all(name in colors for name in names):
+        return np.column_stack([colors[name] for name in names])
+    if values.shape[1] > max(positions):
+        return np.column_stack([values[:, p] for p in positions])
+    return None
+
+
+def read_carto_mesh_file(filename):
+    """Legacy 7-tuple reader — see :func:`parse_carto_mesh` for named columns."""
+    return parse_carto_mesh(filename).as_tuple()
 
 
 def calculate_triangle_areas(vertices, triangles):

@@ -21,6 +21,10 @@ ACTIVATION_TIME = "activation_time"
 PACEMAP_SCORE = "pacemap_score"
 VOLTAGE_BIPOLAR = "voltage_bipolar"
 VOLTAGE_UNIPOLAR = "voltage_unipolar"
+#: bipolar amplitude measured between neighbouring *micro*-electrodes (CARTO
+#: "µBi" on OCTARAY / QDOT catheters) — a different quantity from the
+#: electrode-pair bipolar voltage, and recorded alongside it.
+VOLTAGE_BIPOLAR_MICRO = "voltage_bipolar_micro"
 # per-point measurement quantities (shared vocabulary with per-vertex fields)
 CONTACT_FORCE = "contact_force"
 CORRELATION = "correlation"
@@ -63,6 +67,7 @@ KIND_SPECS: dict[str, KindSpec] = {
     PACEMAP_SCORE: KindSpec(unit="%", relative_comparison=True),
     VOLTAGE_BIPOLAR: KindSpec(unit="mV"),
     VOLTAGE_UNIPOLAR: KindSpec(unit="mV"),
+    VOLTAGE_BIPOLAR_MICRO: KindSpec(unit="mV"),
     CONTACT_FORCE: KindSpec(unit="g"),
     CORRELATION: KindSpec(unit="", relative_comparison=True),
     SNR: KindSpec(unit=""),
