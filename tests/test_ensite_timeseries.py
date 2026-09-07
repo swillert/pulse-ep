@@ -97,12 +97,10 @@ def test_the_four_magnetic_variants_stay_apart():
     assert "raw_magnetic_location" in seen
 
 
-def test_electrograms_keep_the_names_they_are_stored_under():
+def test_electrograms_keep_the_names_they_are_stored_under(ensite_waveform_csv):
     """Renaming them would orphan every waveform already in a database."""
-    from tests.test_ensite_waveforms import _WF
-
     assert parse_ensite_waveforms(
-        _WF, name="EP_Catheter_Bipolar_Waveforms_Filtered"
+        ensite_waveform_csv, name="EP_Catheter_Bipolar_Waveforms_Filtered"
     ).signal_type == ("egm_bipolar")
 
 
@@ -132,7 +130,7 @@ def test_every_family_reaches_the_one_reader():
     assert _reader_for("x/EP_Catheter_Bipolar_Waveforms.csv") is parse_ensite_waveforms
 
 
-def test_the_trailing_eof_marker_is_not_a_sample():
+def test_the_trailing_eof_marker_is_not_a_sample(ensite_waveform_csv):
     """Every one of these exports ends with a literal ``EOF`` line.
 
     The CSV reader turns it into a row carrying a timestamp and nothing else.
@@ -146,6 +144,4 @@ def test_the_trailing_eof_marker_is_not_a_sample():
     assert with_eof.data.shape == plain.data.shape == (2, 13)
     assert not np.isnan(with_eof.data).any()
 
-    from tests.test_ensite_waveforms import _WF
-
-    assert parse_ensite_waveforms(_WF + "EOF\n").data.shape[0] == 3
+    assert parse_ensite_waveforms(ensite_waveform_csv + "EOF\n").data.shape[0] == 3
