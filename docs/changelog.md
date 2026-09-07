@@ -4,6 +4,58 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-09-07
+
+An imported map can be handed to [OpenEP](https://openep.io) as its own
+`userdata` structure. OpenEP parses CARTO and Precision itself; what it does
+not parse is EnSite X, and pulse-ep does — so a map from either vendor now
+runs through any OpenEP analysis.
+
+### Added
+
+- **`GET /epmaps/<id>/openep`** serves the structure, and
+  `examples/matlab/pe_to_openep.m` reads it. MATLAB is a client of this API
+  like the viewer and the other example scripts — no database credential, no
+  file handed over out of band. **`pulse-ep-export-openep`** writes the same
+  structure to a `.mat` for a bulk export on the machine holding the database.
+  Both go through one mapping, in Python, where tests pin it: no CI runs
+  MATLAB, so the part that decides anything should not live there. What is left
+  for MATLAB is what JSON and `.mat` cannot express — matrices arrive as nested
+  arrays, and `surface.triRep` has to become a `triangulation` object.
+- Geometry, the rim flags, the four surface quantities OpenEP has slots for,
+  and the measurement points with their positions, tags, voltages, electrode
+  names and annotation components. Those last line up without interpretation:
+  both sides record where a beat sits in the window recorded for it.
+
+- **Contact force per point.** OpenEP wants a value at the annotation and the
+  course around it; CARTO writes exactly that, one file per acquired point,
+  while EnSite X writes per *segment*. The bridge is the clock, so two absolute
+  times that were being dropped are kept now: `refTime (abs)` becomes a point's
+  `annotations["start_time"]`, and `t_secs`/`t_usecs` become a window's
+  `meta["start_time"]`. The export then finds the window covering each point.
+  A point no window covers is NaN and counted in the notes, and where the
+  course is a slice of a segment window rather than a per-point recording, the
+  notes say that too.
+
+### Notes on what it cannot do
+
+- **A pace map's score is not written into the activation-time slot.** CARTO
+  stores both in one place and pulse-ep learned to tell them apart — the point
+  of the declared `kind`. `act_bip(:,1)` is positional, so a score written
+  there would tell OpenEP the map is an activation map and every isochrone and
+  conduction-velocity function downstream would agree, silently and wrongly.
+  The column stays NaN and `userdata.notes` says why: a gap can be seen, a
+  plausible wrong number cannot. pulse-ep has semantics and OpenEP has
+  positions, so this direction can only lose meaning — what it can do is
+  refuse to invent any.
+- Electrograms and ablation data are left out. The first would dwarf
+  everything else, which is why importing them is opt-in too; the second would
+  mean deciding which of a study's VisiTag sites belong to which map, and the
+  exports do not say.
+- Format knowledge is from `importcarto_mem.m` in openep-core (Apache-2.0).
+  No code is taken from it, and none from openep-py, which is GPL-3.0 and so
+  cannot be reused here.
+
 ## [0.4.5] — 2026-09-07
 
 The files an EnSite X export has always carried and pulse-ep never read. Five

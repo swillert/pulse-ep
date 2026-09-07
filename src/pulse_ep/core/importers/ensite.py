@@ -490,6 +490,26 @@ def parse_dws_table(
     return meta, df
 
 
+def _dws_start_time(df) -> float | None:
+    """The first sample's time on the study clock, from ``t_secs``/``t_usecs``.
+
+    The matrix carries ``t_ref`` relative to its own first sample, which says
+    nothing about *when* the window was recorded. The absolute pair is right
+    beside it in every one of these files and was being dropped — and it is
+    what ties a per-segment window to the points acquired inside it.
+    """
+    if df.empty or "t_secs" not in df.columns or "t_usecs" not in df.columns:
+        return None
+    try:
+        secs = float(df["t_secs"].iloc[0])
+        usecs = float(df["t_usecs"].iloc[0])
+    except (TypeError, ValueError):
+        return None
+    if not (np.isfinite(secs) and np.isfinite(usecs)):
+        return None
+    return secs + usecs / 1e6
+
+
 def _dws_time(df) -> tuple[np.ndarray | None, float | None]:
     """``t_ref`` as the time axis, and the rate implied by its spacing."""
     time = df["t_ref"].to_numpy(dtype=float) if "t_ref" in df.columns else None
@@ -533,6 +553,7 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
             "segment": meta.get("Export from Segment"),
             "study_guid": meta.get("Export from Study"),
             "software_version": meta.get("Exported from Software Version"),
+            "start_time": _dws_start_time(df),
             "filters": filters,
         },
     )
@@ -638,6 +659,7 @@ def parse_ensite_timeseries(data: bytes | str, name: str = "") -> Waveform:
             "software_version": meta.get("Exported from Software Version"),
             "export_data_element": element,
             "export_file_version": meta.get("Export File Version"),
+            "start_time": _dws_start_time(df),
             "channels": parse_channel_map(data),
         },
     )
@@ -850,6 +872,16 @@ def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPo
         annot = num(f, "adjTime (ms)")
         if annot is not None and abs(annot) < _MAP_PP_SENTINEL:
             point.add("annotation_time", annot, ANNOTATION_TIME, "ms")
+
+        # When this point was acquired, on the study clock. It is the one thing
+        # that ties a point to the per-timepoint exports — contact force and
+        # electrode locations come per *segment*, so without an absolute time
+        # nothing can say which window covers which point. CARTO records the
+        # same thing under the same key; the difference is that a CARTO window
+        # belongs to a point outright and an EnSite X one has to be found.
+        ref_abs = num(f, "refTime (abs)")
+        if ref_abs is not None and ref_abs > 0:
+            point.annotations["start_time"] = ref_abs
 
         force = num(f, "force (g)")
         if force is not None and force >= 0:
