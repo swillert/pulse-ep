@@ -9,14 +9,19 @@ mapping data** from multiple vendors.
 
 `pulse-ep` parses **CARTO 3** (Biosense Webster / Johnson & Johnson) and
 **EnSiteX** (Abbott / St. Jude) export archives into a relational
-PostgreSQL database and exposes the data through three independent
+PostgreSQL database and exposes the data through four independent
 surfaces:
 
 - a **JWT-authenticated REST API** (Flask),
-- a **browser-based interactive 3D viewer** (Three.js / WebGL), and
+- a **browser-based interactive 3D viewer** (Three.js / WebGL),
 - a **Python toolkit** (`pulse_ep.core`) for custom analyses — geodesic
   distances, surface-area integration, per-point catheter geometry, and
-  per-vertex scalar fields.
+  per-vertex scalar fields, and
+- an **MCP server** (`pulse-ep-mcp`) giving an AI client read-only access,
+  with study identity anonymised by default and switchable off entirely.
+
+Each is a client of the same REST endpoints; none has a privileged path
+into the database.
 
 ## Why?
 

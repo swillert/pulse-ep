@@ -50,7 +50,7 @@ for vendor in ("carto", "ensite"):
                     f"{len(epmap.measurement_points)} Messpunkte"
                 )
                 print(f"    Felder: {', '.join(sorted(epmap.scalar_fields)) or '—'}")
-                print(f"    Fläche: {epmap.area_of_surface() / 100:.3f} cm²")
+                print(f"    Fläche: {epmap.area_of_surface():.3f} cm²")
     except Exception as exc:
         failures.append(f"{vendor}: {exc}")
         print(f"  FEHLER: {exc}")

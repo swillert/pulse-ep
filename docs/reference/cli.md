@@ -1,6 +1,6 @@
 # Command-line tools
 
-pulse-ep installs eight console scripts. They are the primary
+pulse-ep installs a set of console scripts. They are the primary
 admin / scripted-ops surface; everything they do is also accessible
 through the [Python API](python-api.md).
 
@@ -14,6 +14,7 @@ through the [Python API](python-api.md).
 | [`pulse-ep-create-user`](#pulse-ep-create-user)                  | Create a user.                                  |
 | [`pulse-ep-check-mesh`](#pulse-ep-check-mesh)                    | Mesh quality / topology check.                  |
 | [`pulse-ep-extract-meshes`](#pulse-ep-extract-meshes)            | Dump meshes as NPZ for offline analysis.        |
+| [`pulse-ep-mcp`](#pulse-ep-mcp)                                  | MCP server: read-only access for an AI client.  |
 
 All scripts accept `--help` for full flag listings. Where a flag is
 omitted below it is either obvious from the name or covered in the
@@ -70,6 +71,7 @@ checkout, where `alembic.ini` exists.
 
 ```bash
 pulse-ep-import-carto -i <DIR> [--map-filter REGEX] [--dry-run] [--progress]
+                      [--waveforms --store-dir DIR]
 ```
 
 Import CARTO studies from a directory tree, discovering study XML files
@@ -83,6 +85,8 @@ within it.
 | `--map-filter`  | `.*`    | Case-insensitive regex over map names.                           |
 | `--dry-run`     | off     | Discover and parse, write nothing.                               |
 | `--progress`    | off     | Compact one-line progress display.                               |
+| `--waveforms`   | off     | Also import the per-point ECG windows. One 2.5 s window of every channel per acquired point — gigabytes on a real study. |
+| `--store-dir`   |         | Where to write Parquet waveforms. Required together with `--waveforms`. |
 | `--clear`       | off     | ⚠️ **Drops and recreates every table** before importing — this is not "reimport this study", it empties the database. |
 
 !!! warning "`--clear` means something different here than in `pulse-ep-import-ensite`"
@@ -210,6 +214,31 @@ pulse-ep-extract-meshes --study "AF-2024-01" --output /tmp/extracted/
 # /tmp/extracted/AF-2024-01_LA-pacemap-002.npz
 # …
 ```
+
+## `pulse-ep-mcp`
+
+```bash
+pulse-ep-mcp [--base-url URL] [--download-dir DIR]
+             [--anonymize | --no-anonymize] [--enabled | --disabled] [--check]
+```
+
+Serves a pulse-ep deployment to an MCP client (Claude Desktop, Claude Code, …)
+over stdio, **read-only**. Needs the optional extra: `pip install "pulse-ep[mcp]"`.
+
+| Flag | Default | Notes |
+| ---- | ------- | ----- |
+| `--base-url` | `PULSE_EP_MCP_BASE_URL`, else `http://localhost:5000` | The pulse-ep server it is a client of. |
+| `--anonymize` | on | Study names become `study/<id>`; paths and free-text fields are redacted. |
+| `--no-anonymize` | | Send real study names — they carry case numbers and initials. Warns on stderr. |
+| `--download-dir` | `PULSE_EP_MCP_DOWNLOAD_DIR`, else a temp folder | Where `fetch_map` / `fetch_points` / `fetch_waveform` write bulk data. |
+| `--disabled` | | Do not serve. Prints why and exits 0 — switched off on purpose is not a crash. Same as `PULSE_EP_MCP_ENABLED=0`. |
+| `--check` | off | Connect, log in, print what the model would see, exit. Exit 2 on a configuration problem, **3** when the deployment refuses MCP access. |
+
+Credentials come from `PULSE_EP_MCP_TOKEN`, or `PULSE_EP_MCP_USERNAME` +
+`PULSE_EP_MCP_PASSWORD`. There is no tool that changes the anonymisation mode:
+it is the operator's decision, taken at startup.
+
+See the [MCP guide](../guides/mcp.md) for the tool list and client setup.
 
 ## Common patterns
 

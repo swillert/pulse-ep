@@ -17,9 +17,10 @@ For pulse-ep the relevant artefacts are:
 | ------------------- | ----------------- | -------------------------------------------------------- |
 | `Study_*.xml`       | XML               | Patient/study metadata, list of EP maps.                 |
 | `Map_*.xml`         | XML               | Per-map metadata, list of points, colormap references.   |
-| `*.mesh`            | text mesh         | Triangulated chamber surface (vertices + triangles).     |
+| `*.mesh`            | text mesh         | Triangulated chamber surface (vertices + triangles + per-vertex columns). |
 | `*.car`             | tabular           | Per-point coordinates and reference electrode positions. |
 | `*Eleclectrode_Positions*.txt` | tabular | Reference catheter geometry per point.                   |
+| `*_ECG_Export_*.txt` | tabular          | One 2.5 s signal window per acquired point — **opt-in**, see [Signals](#signals-the-per-point-ecg-windows). |
 
 pulse-ep does not require you to know the format details — the importer
 parses everything and writes structured records into the relational
@@ -196,6 +197,121 @@ pip install "pulse-ep[sevenzip]"
 Without it, a 7-Zip export raises a message naming the missing package rather
 than failing obscurely.
 
+## What the mesh carries
+
+A `.mesh` file names its own per-vertex columns in the
+`[VerticesColorsSection]` header. Every column that holds data is imported
+under the quantity it names:
+
+| Column | Imported as |
+| ------ | ----------- |
+| `Unipolar` / `Bipolar` | `voltage_unipolar` / `voltage_bipolar` |
+| `LAT` | `activation_time` — or `pacemap_score`, when the slot holds an entirely negative pace-match correlation (CARTO overloads it) |
+| `Paso` | `pacemap_score` |
+| `Impedance` / `Force` | `impedance` / `contact_force` |
+| `µBi` | `voltage_bipolar_micro` — micro-electrode bipolar amplitude, a different quantity from the electrode-pair one |
+| `A1`, `A2`, `A2-A1`, `SCI`, `ICL`, `ACL` | kept under their raw CARTO names: they are real quantities whose exact semantics are not established here, and a guessed label on a clinical measurement is worse than an unfamiliar one |
+| `EML`, `ExtEML`, `SCAR` (`[VerticesAttributesSection]`) | kept under their raw names, and only where something is actually marked |
+
+Most exports fill only three or four of the thirteen colour columns; the
+empty ones are not registered, so a map advertises the quantities it really
+measured.
+
+!!! note "Column *names*, not positions"
+
+    Until 0.2.4 the reader took columns by position, which dropped `Paso`,
+    `µBi` and the whole attributes section, and would have mis-assigned every
+    quantity in an export that ordered them differently.
+
+## What a point carries
+
+Every acquired point (`<map>_Points_Export.xml` + `<map>_P<n>_Point_Export.xml`)
+becomes a vendor-neutral measurement point with its position from the study
+catalogue, `voltage_unipolar` / `voltage_bipolar`, its catheter electrodes,
+and the quantity CARTO stores as the annotation difference
+`Map_Annotation - Reference_Annotation`:
+
+| The map's `LAT` slot holds | The point's annotation difference is imported as |
+| -------------------------- | ------------------------------------------------- |
+| an activation time | `activation_time` (ms) |
+| a pace-match score (`pacemap_score`) | `pacemap_score` (%) — the **per-site score the operator saw**, stored with the same negative sign as the mesh; `-10000` (the reference beat itself, which is never scored) and values that are no percentage (a point annotated in another mode) are omitted |
+
+The points follow the mesh's verdict on what the slot holds, so a map and its
+points never disagree. This is the measurement the interpolated per-vertex
+field is built from; sampling the vertex field at a point's position returns
+the vendor's interpolation, not the point's own score (in one reference study
+21 % of the points differed by more than two points, up to fifty).
+
+!!! warning "An export that writes the scores without the sign"
+
+    One study wrote its pace-match scores as positive values (54 … 96). Such
+    a map cannot be told from an activation map by the data alone; it is
+    imported as one, and its points carry `activation_time`. Mark it with the
+    `pacemap` attribute (see [Tagging pace-maps](#tagging-pace-maps)) and
+    read the points' values as scores.
+
+Beside that value the point keeps the **components it was derived from**, as
+`annotations`:
+
+```json
+{"start_time": 13500280, "reference": 2000, "map": 1904,
+ "woi_from": -170, "woi_to": 129}
+```
+
+The first sample of the recorded window on the study clock, the reference and
+mapping annotations as offsets into it, and the window of interest. They are
+what tells a reader where in a 2.5 s signal window to look — a stored waveform
+records the same facts under the same names, so a point and its window agree
+by construction. Until now they survived only in the CARTO-shaped legacy table
+`ep_map_points`, which only `pulse-ep-import-carto` writes; a study imported
+through the drop directory had them nowhere.
+
+Points also carry their **tags** — `Location Only` on the reference beat of a
+pace map, `Scar`, `His`, or a study's own labels — as names resolved through
+the study's `TagsTable`, in `MeasurementPoint.tags` /
+`measurement_points.tags`.
+
+## Signals: the per-point ECG windows
+
+CARTO writes one `*_ECG_Export_<timestamp>.txt` per acquired point: 2500
+samples at 1 kHz of every recorded channel — surface leads, coronary sinus,
+mapping electrodes and the derived bipoles — as raw counts with a single gain
+factor in the header.
+
+```bash
+pulse-ep-import-carto -i /data/carto-export \
+    --waveforms --store-dir /var/pulse/waveforms
+```
+
+They are **opt-in**, and for a good reason: a study with a few thousand
+points carries several gigabytes of them, more than the rest of the export
+together. As Parquet in the waveform store they compress about twentyfold.
+
+Samples are converted to millivolts on import (the header's gain is applied,
+so a stored waveform is in a physical unit), timestamped on the study clock so
+windows from different points share one axis, and each window keeps what makes
+it readable rather than 78 anonymous traces:
+
+- the points it was acquired at (`waveforms.point_source_id`, one row per
+  point),
+- which channels each of those points was annotated on —
+  `UnipolarMappingChannel`, `BipolarMappingChannel`, `ReferenceChannel` from
+  the point XML,
+- the annotations themselves (reference, map, window of interest).
+
+!!! note "A window belongs to several points"
+
+    A multi-electrode catheter acquires many points from one 2.5 s recording,
+    and each of them references the same file. In the export this was
+    developed against, **1934 points share 699 windows** — 84 % of points in
+    groups of up to ten. The samples are therefore stored once per window and
+    every point taken from it gets its own row pointing at that copy, so
+    "the signal at point 37" resolves for all of them.
+
+Through the [import queue](../reference/rest-api.md) the same files appear in
+the plan as a waveform selection a reviewer can switch on, exactly like
+EnSiteX signals.
+
 ## Ablation sites (VisiTag)
 
 !!! warning "Unverified — confirm before relying on it"
@@ -236,6 +352,9 @@ The study catalogue contains a `TagsTable` — the *definitions* of the tag
 types available in that study (`ABL`/Ablation, `HIS`/His, `PS`/Pacing Site,
 …), with ids and colours. These are a palette, not placements: actual tag
 placements appear inside a point's `<Tags>` element, which is empty in an
-untagged study. `Anatomical_Tag` entries are region outlines
-(`Perimiter`/`LINE_LOOP`), a different concept from placed points. Neither is
-imported yet.
+untagged study. Placements are imported as the names of the tags on each
+measurement point (`MeasurementPoint.tags`, see
+[What a point carries](#what-a-point-carries)); ids the table does not define
+are kept as their number. `Anatomical_Tag` entries are region outlines
+(`Perimiter`/`LINE_LOOP`), a different concept from placed points, and are
+not imported yet.

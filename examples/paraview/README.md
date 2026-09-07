@@ -110,3 +110,12 @@ curl -s "$PULSE_EP_BASE_URL/epmaps/<id>/scalars" -H "Authorization: Bearer $TOKE
 
 The old default was `act`, a CARTO-only name that no EnSiteX map answers to.
 It still resolves for CARTO studies, but no longer works as a default.
+
+## Full analysis data
+
+The API now supports `representation=raw`, including every stored field,
+measurement, electrode position, marker, provenance and waveform download links.
+R and MATLAB retain the complete response in `data`; ParaView exposes raw
+surface fields and a second acquisition-point output. See the
+[API contract](../../docs/reference/rest-api.md#complete-analysis-export) for
+units, missing values and the distinction between stored and vendor-original data.

@@ -1,4 +1,4 @@
-function mesh = pe_get_mesh(baseURL, token, mapId, scalarName, distance)
+function mesh = pe_get_mesh(baseURL, token, mapId, scalarName, distance, representation)
 %PE_GET_MESH  Fetch one map's mesh and per-vertex scalars.
 %
 %   Returns a struct with fields:
@@ -13,13 +13,16 @@ function mesh = pe_get_mesh(baseURL, token, mapId, scalarName, distance)
     if nargin < 4; scalarName = "";    end
     if nargin < 5 || isempty(distance);   distance   = 5.0;       end
 
+    if nargin < 6; representation = "display"; end
+
     opts = weboptions('HeaderFields', ...
            {'Authorization', char(strcat("Bearer ", token))}, ...
            'ContentType', 'json', 'Timeout', 60);
     data = webread( ...
         strcat(baseURL, "/get_mesh_data"), opts, ...
-        'map_id', mapId, 'scalar_name', scalarName, 'distance', distance);
+        'map_id', mapId, 'scalar_name', scalarName, 'distance', distance, 'representation', representation);
 
+    mesh.data = data; % Complete response, including all raw fields and measurements.
     md = data.mesh_data;
     pd = data.point_data;
 
@@ -64,4 +67,8 @@ function v = local_to_column(values)
     else
         v = double(values(:));
     end
+end
+
+function v = local_or_nan(x)
+    if isempty(x); v = NaN; else; v = double(x); end
 end

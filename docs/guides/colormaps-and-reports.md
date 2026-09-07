@@ -131,3 +131,17 @@ saved Excel reports contain, computed independently in each toolchain.
 - [REST API → Colormaps](../reference/rest-api.md#colormaps)
 - [REST API → Reports](../reference/rest-api.md#reports)
 - [Data model: `ColormapModel`, `ReportModel`](../reference/data-model.md)
+
+## Fixed bipolar-voltage scale
+
+`pulse-ep-populate-colormaps` also supplies `viridis_0_3_mV`. Select it
+with `voltage_bipolar` in the web viewer for an absolute 0–3 mV scale.
+It uses the same nine Viridis control points as the publication's ParaView
+view, rounded to 8-bit sRGB. Values below zero use the first colour; values
+above 3 mV use the last colour. Missing values remain grey. Relative
+normalisation is disabled and endpoint clipping is enabled.
+
+The mesh converts sRGB colormap values to Three.js linear vertex colours
+before rendering, so its colours agree with the legend. Geometry processing,
+missing values and lighting in other applications may still change how
+individual surface regions appear.

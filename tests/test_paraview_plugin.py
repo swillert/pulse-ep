@@ -71,6 +71,7 @@ def test_exposes_the_documented_properties(tree):
         "SetMapID",
         "SetScalarName",
         "SetDistance",
+        "SetRepresentation",
     }
 
 

@@ -338,6 +338,67 @@ differ per vendor and per map type.
 endpoints use when no `scalar_name` is given. `404` if the map does not
 exist.
 
+## Points of a map
+
+### `GET /epmaps/<map_id>/points`
+
+The acquisition points behind a map, with `measurements` flattened to
+`{name: value}` and the units stated once for the page.
+
+```json
+{
+  "map_id": 12, "count": 66, "offset": 0, "returned": 66,
+  "units": {"pacemap_score": "%", "voltage_bipolar": "mV"},
+  "points": [
+    {"point_index": 0, "source_id": "1",
+     "position": [-30.996, -14.1332, 104.711],
+     "measurements": {"pacemap_score": 96.0, "voltage_bipolar": 196.605},
+     "annotations": {"start_time": 13500280, "reference": 2000, "map": 1904,
+                     "woi_from": -170, "woi_to": 129},
+     "tags": []}
+  ]
+}
+```
+
+`annotations` says where this point's beat sits in the signal recorded for it
+— the components its `activation_time` / `pacemap_score` was derived from, and
+what tells a client where to look in a downloaded window. A stored waveform
+records the same facts under the same names.
+
+`limit` (default 500, `0` = every point) and `offset` page the set. The whole
+point set was previously only reachable through
+`/get_mesh_data?representation=raw`, which returns the mesh alongside — tens of
+thousands of vertices to read a few hundred measurements. `404` if the map
+does not exist.
+
+## Signals of a map
+
+### `GET /epmaps/<map_id>/waveforms`
+
+Which signal windows were recorded, without their samples. Listing them was
+previously only possible through `/get_mesh_data?representation=raw`, which
+drags a whole mesh along to answer "which signals are there".
+
+```json
+{
+  "map_id": 12,
+  "count": 66,
+  "waveforms": [
+    {"id": 1, "study_id": 3, "map_id": 12, "point_source_id": "1",
+     "signal_type": "ecg", "sample_rate": 1000.0,
+     "n_samples": 2500, "n_channels": 78,
+     "channels": ["M1", "CS1-CS2", "…"],
+     "download_url": "/waveforms/1/download"}
+  ]
+}
+```
+
+Rows include the map's own signals and the study-level ones that belong to no
+single map. CARTO records one window per acquisition and a multi-electrode
+catheter takes several points from it, so **rows can share a `download_url`**:
+each row is one point's view of the same stored window. `404` if the map does
+not exist.
+
 ## Map comparison
 
 ### `POST /api/compare`
@@ -422,3 +483,59 @@ explicit deprecation notice in the [Changelog](../changelog.md).
 - [Data model](data-model.md) — the database schema the API exposes.
 - [Configuration](../getting-started/configuration.md) — `PULSE_EP_*`
   variables that affect HTTP behaviour (CORS, JWT, bcrypt rounds).
+
+### Complete analysis export
+
+`GET /get_mesh_data?map_id=ID&representation=raw` (Bearer authentication)
+returns schema version `1.0`. The default `representation=display` preserves
+the existing repaired, simplified and distance-masked display response.
+Raw mode ignores `distance` and does not repair, simplify, project, normalise
+or mask the stored data. `scalar_name` selects the convenience `scalar_data`
+array; **all** named fields remain available in `mesh_data.scalar_fields`.
+
+Raw means **stored importer-conditioned data**, not a byte-for-byte vendor
+archive: decoding and sentinel handling already performed during import
+cannot be undone by this endpoint. Coordinates are in mm, triangle areas
+in mm², faces are zero-based, and IEEE non-finite values become JSON `null`
+without dropping array positions. Normalised arrays are empty in raw mode.
+
+The response includes:
+
+- `mesh_data`: original vertices/faces, all named scalar values with kind,
+  unit, status mask and source, normals, edge flags, stored triangle areas
+  (possibly absent), and legacy scalar arrays.
+- `point_data`: unprojected acquisition coordinates, open per-point
+  measurements with units, electrodes, source IDs/order, and legacy CARTO
+  rows including annotations and connector geometry.
+- `map`, `study`: identifiers, map attributes and stored study provenance.
+- `placed_points`: study-level markers with types and attributes.
+- `waveforms`: metadata and authenticated `download_url` for each stored
+  map waveform and each study-level waveform. Study-level signals are not
+  silently assigned to an individual acquisition point.
+
+`GET /waveforms/ID/download` downloads the original stored Parquet file.
+It includes channel/timing metadata and requires `PULSE_EP_WAVEFORM_STORE_DIR`
+to point to the same store used at import. Missing files return 404; an
+unconfigured store returns 503. Signals not imported are not recoverable
+through this API. All endpoints use the existing server authentication model.
+
+R: `pe_get_mesh(token, id, representation="raw")`; MATLAB:
+`pe_get_mesh(baseURL, token, id, "", 5, "raw")`. Both return the complete
+response in `mesh$data` / `mesh.data`, with convenience one-based `faces`
+for native computations. The nested response retains zero-based faces.
+`pe_download_waveform` writes a Parquet file for Arrow/R or MATLAB parquetread.
+
+ParaView: set **Representation** to `raw`. Output port 0 contains the original
+surface and all named fields/validity arrays in double precision; port 1
+contains acquisition points with their measured fields. Full metadata,
+electrode geometry and signal links remain available as JSON in the
+`pulse_ep_export_json` FieldData array on both outputs. `display` remains
+the default. Signal samples are downloaded separately rather than replicated
+inside every mesh response.
+
+### Interval boundary convention
+
+Adjacent area intervals are left-closed and right-open (`[lo, hi)`), except
+that the largest upper endpoint in a request is included. Thus a shared
+boundary belongs to its upper bin exactly once. Intentionally overlapping
+intervals remain independent queries. Areas use whole-triangle means.

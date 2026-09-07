@@ -47,3 +47,12 @@ Together with the R and MATLAB demos this notebook contributes to the
 **cross-language reproducibility statement of the software paper**:
 the same scalar histogram and the same area-per-interval table from
 the same REST payload, in four independent stacks.
+
+## Scope of the reproducibility claim
+
+Histograms are calculated in the client from the returned mesh values.
+The interval-area examples call the shared server calculation; they do
+not independently reimplement surface integration. The default mesh payload uses the repaired/simplified display representation.
+Select `representation=raw` to obtain the original stored geometry and every
+field for independent computations. The API documentation describes metadata,
+measurement points and authenticated waveform downloads.
