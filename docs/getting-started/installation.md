@@ -14,7 +14,7 @@ matches your role.
 
 If you only want to try out `pulse-ep`, you do **not** need PostgreSQL — the
 [synthetic walkthrough](quickstart.md#1-synthetic-walkthrough-no-db-needed)
-runs entirely on in-memory SQLite.
+runs entirely in memory and never opens a database connection.
 
 ## From PyPI
 

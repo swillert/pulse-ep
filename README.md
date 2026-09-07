@@ -139,8 +139,11 @@ single source of truth covers both local development and the Docker stack.
 pulse-ep-demo
 ```
 
-Builds a synthetic atrial mesh with a Gaussian score field, ingests it
-into an in-memory SQLite, and prints the per-interval area breakdown.
+Builds an atrium-like ellipsoid, paints a Gaussian pace-mapping score field
+onto it, wraps it as an `EPMap` — the same domain object the importers
+produce — and prints the mesh size, the score distribution, the total surface
+area and the area per score interval. It touches no database of any kind,
+which is what makes it the first thing worth running after installing.
 
 ### 2. Vendor exports without patient data
 
