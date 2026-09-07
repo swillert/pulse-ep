@@ -544,7 +544,14 @@ class EPMap:
             max_val = intervals[i + 1]
             # area = self.area_of_range(min_val, max_val, scalar_name=scalar_name)
             area = (
-                self.area_of_range(min_val, max_val, scalar_name=scalar_name) / total_surface * 100
+                self.area_of_range(
+                    min_val,
+                    max_val,
+                    scalar_name=scalar_name,
+                    include_upper=i == len(intervals) - 2,
+                )
+                / total_surface
+                * 100
             )
             areas.append(area)
 
