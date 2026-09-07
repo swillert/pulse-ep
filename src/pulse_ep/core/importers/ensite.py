@@ -284,6 +284,102 @@ def merge_dif_group(items: list[tuple[str, DifVolume]], study_name: str, source:
 _TIME_COLS = {"t_dws", "t_secs", "t_usecs", "t_ref"}
 
 
+#: Respiration phase as the point cloud spells it -> the code stored in its
+#: place. The column is text and a :class:`~pulse_ep.core.waveform.Waveform`
+#: holds numbers, so it is encoded rather than dropped: which phase a point was
+#: collected in is what makes two positions of the same wall differ.
+POINT_CLOUD_RESPIRATION_CODES: dict[str, float] = {
+    "UNKNOWN": 0.0,
+    "EXPIRATION": 1.0,
+    "INSPIRATION": 2.0,
+}
+
+
+def _wallclock_seconds(values) -> np.ndarray:
+    """``HH:MM:SS.mmm`` -> seconds from the first sample.
+
+    The point cloud timestamps on the wall clock while the rest of the family
+    carries ``t_ref`` — "timepoint relative to first timepoint in seconds", in
+    the export's own words. Converting here gives every stored window the same
+    time axis.
+    """
+    parsed = pd.to_timedelta(pd.Series(values).astype(str).str.strip(), errors="coerce")
+    seconds = parsed.dt.total_seconds().to_numpy(dtype=float)
+    if seconds.size and np.isfinite(seconds).any():
+        seconds = seconds - np.nanmin(seconds)
+    return seconds
+
+
+def parse_ensite_point_cloud(data: bytes | str, name: str = "") -> Waveform:
+    """Parse an EnSite X ``Model_Point_Cloud.csv``.
+
+    Every position the mapping catheter's electrodes reported while the
+    anatomical model was being collected — on a real export 198 186 of them
+    over two hours ten, in bursts of simultaneous samples because a
+    multi-electrode catheter contributes several per frame. It is the one
+    export in this family that spans the whole study rather than a segment,
+    which is why its ``Export from Segment`` reads ``N/A``.
+
+    It answers what no other file can: **how densely a chamber was actually
+    sampled**, and therefore where a map rests on measurements and where on
+    interpolation. The distance from these points to the fitted surface is a
+    measure of the model's own quality.
+
+    Two coordinate frames are stored side by side. ``trn_*`` is registered to
+    the model — on the reference export a median 8.5 mm from the nearest vertex
+    of the mapping mesh — while ``raw_*`` is the tracking frame before
+    registration, some 360 mm away. Keeping both means the registration itself
+    is recoverable from the pairs; it is recorded nowhere else in the export.
+    """
+    meta, df = parse_dws_table(data, marker="Time,", time_cols={"Time"})
+    time = _wallclock_seconds(df["Time"]) if "Time" in df.columns else None
+
+    channels: list[str] = []
+    columns: list[np.ndarray] = []
+    units: list[str] = []
+    for column in df.columns:
+        if column == "Time":
+            continue
+        if column == "respiration_phase":
+            phase = df[column].astype(str).str.strip().str.upper()
+            columns.append(phase.map(POINT_CLOUD_RESPIRATION_CODES).to_numpy(dtype=float))
+        else:
+            columns.append(df[column].to_numpy(dtype=float))
+        channels.append(str(column))
+        units.append(_point_cloud_unit(str(column)))
+
+    return Waveform(
+        data=np.column_stack(columns) if columns else np.empty((len(df), 0)),
+        channels=channels,
+        units=units,
+        sample_rate=None,  # bursts of simultaneous samples, not a fixed rate
+        signal_type=_signal_type(meta.get("Export Data Element", "") or name),
+        time=time,
+        meta={
+            "segment": meta.get("Export from Segment"),
+            "study_guid": meta.get("Export from Study"),
+            "software_version": meta.get("Exported from Software Version"),
+            "export_data_element": meta.get("Export Data Element"),
+            "export_file_version": meta.get("Export File Version"),
+            "field_scaling": meta.get("Field Scaling"),
+            "dif_fusion": meta.get("DIF Fusion"),
+            "respiration_phase_codes": POINT_CLOUD_RESPIRATION_CODES,
+        },
+    )
+
+
+def _point_cloud_unit(column: str) -> str:
+    """``trn_*`` is in the model's frame; ``raw_*`` is not, and says no scale.
+
+    The transformed coordinates share the frame the mesh vertices are declared
+    in, so millimetres is a fact about them. The raw ones are the tracking
+    space before registration — the preamble notes ``Field Scaling: off`` and
+    states no unit — so calling them millimetres because the numbers look
+    similar would be the guess this field exists to prevent.
+    """
+    return "mm" if column.strip().lower().startswith("trn_") else UNKNOWN_UNIT
+
+
 #: File-name markers of the per-timepoint family, all read by one parser.
 _TIMESERIES_ELEMENTS = (
     "contact_force",
@@ -291,6 +387,9 @@ _TIMESERIES_ELEMENTS = (
     "contact_index",
     "magnetic_location",
 )
+
+#: Read separately: its header is ``Time,`` and it spans the whole study.
+_POINT_CLOUD_ELEMENT = "model_point_cloud"
 
 
 def _signal_type(name: str) -> str:
@@ -311,12 +410,16 @@ def _signal_type(name: str) -> str:
         return "egm_bipolar"
     if "ecg" in n:
         return "ecg"
-    if any(k in n for k in _TIMESERIES_ELEMENTS):
+    if _POINT_CLOUD_ELEMENT in n or any(k in n for k in _TIMESERIES_ELEMENTS):
         return re.sub(r"[^a-z0-9]+", "_", n).strip("_")
     return ""
 
 
-def parse_dws_table(data: bytes | str) -> tuple[dict, pd.DataFrame]:
+def parse_dws_table(
+    data: bytes | str,
+    marker: str = "t_dws,",
+    time_cols: set[str] | None = None,
+) -> tuple[dict, pd.DataFrame]:
     """Split an EnSite X per-timepoint export into ``(preamble, samples)``.
 
     Every one of them is built the same way: a metadata preamble of
@@ -328,14 +431,19 @@ def parse_dws_table(data: bytes | str) -> tuple[dict, pd.DataFrame]:
     taking the first comma-separated row — in
     ``Respiration_Compensated_Magnetic_Location`` the electrode table sits at
     line 149 and the glossary at 94, while the samples do not start until 234.
+
+    ``marker`` and ``time_cols`` differ for the model point cloud: it is the
+    one export in this family with its own header (``Time,``) and a single
+    wall-clock time column instead of the four ``t_*`` ones.
     """
+    time_cols = _TIME_COLS if time_cols is None else time_cols
     text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
     lines = text.splitlines()
 
     meta: dict = {}
     header_idx = None
     for i, line in enumerate(lines):
-        if line.startswith("t_dws,"):
+        if line.startswith(marker):
             header_idx = i
             break
         s = line.strip()
@@ -343,7 +451,7 @@ def parse_dws_table(data: bytes | str) -> tuple[dict, pd.DataFrame]:
             key, val = s.split(":", 1)
             meta[key.strip()] = val.strip()
     if header_idx is None:
-        raise ValueError("no sample-matrix header (t_dws,...) found")
+        raise ValueError(f"no sample-matrix header ({marker}...) found")
 
     df = pd.read_csv(io.StringIO("\n".join(lines[header_idx:])))
     df = df.loc[:, [c for c in df.columns if not str(c).startswith("Unnamed")]]
@@ -352,7 +460,7 @@ def parse_dws_table(data: bytes | str) -> tuple[dict, pd.DataFrame]:
     # reader turns into a row with a timestamp column and nothing else. Dropped
     # here rather than in each reader: it is a property of the format, and a
     # caller that missed it would store one all-NaN sample per window.
-    values = [c for c in df.columns if c not in _TIME_COLS]
+    values = [c for c in df.columns if c not in time_cols]
     if values:
         df = df[~df[values].isna().all(axis=1)]
     return meta, df
@@ -520,6 +628,8 @@ def _reader_for(name: str):
     reader drops the ``_ds``/``_ps`` flag columns of each channel triplet.
     """
     stem = Path(name).name.casefold()
+    if _POINT_CLOUD_ELEMENT in stem:
+        return parse_ensite_point_cloud
     if any(k in stem for k in _TIMESERIES_ELEMENTS):
         return parse_ensite_timeseries
     return parse_ensite_waveforms
@@ -921,6 +1031,7 @@ _WAVEFORM_GLOBS = (
     "*Electrode_Locations*.csv",
     "*Contact_Index*.csv",
     "*Magnetic_Location*.csv",
+    "*Model_Point_Cloud*.csv",
 )
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
 
