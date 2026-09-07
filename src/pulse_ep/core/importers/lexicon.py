@@ -59,6 +59,34 @@ ENSITE_DXL_CHANNELS: Mapping[str, str] = {
     "pneg": VOLTAGE_PEAK_NEGATIVE,
 }
 
+#: Unit of each EnSite X contact-force channel, by its column name with any
+#: ``_<n>`` sensor suffix removed.
+#:
+#: **The export declares no units.** Its preamble carries the software version,
+#: the segment and a data-status-bit legend, but nothing about what the numbers
+#: are — checked against a real 6.0.0 export. These come from the vendor's
+#: documented convention instead, which is why they live in the lexicon with
+#: the rest of the vendor knowledge: one place to correct if a system reports
+#: differently. A column that is not listed is imported as ``unknown`` rather
+#: than given a plausible-looking unit — an ammeter reading in amps and one in
+#: milliamps look identical in a CSV.
+ENSITE_FORCE_UNITS: Mapping[str, str] = {
+    "totalforce": "g",
+    "meantotalforce": "g",
+    "lateralforce": "g",
+    "axialforce": "g",
+    "forcetimeintegral": "g*s",
+    "alphaangle": "deg",
+    "thetaangle": "deg",
+    "cavitydistance1": "mm",
+    "cavitydistance2": "mm",
+    "cavitydistance3": "mm",
+    "thermocouple1temp": "degC",
+    "thermocouple2temp": "degC",
+    "thermistortemp": "degC",
+    "ablduration": "s",
+}
+
 #: The DxL channels whose quantity is decided by the polarity suffix rather
 #: than the channel token. Explicit, so that an *unknown* channel is reported
 #: as unknown instead of quietly inheriting the voltage reading.

@@ -28,6 +28,7 @@ from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.importers.base import register_importer
 from pulse_ep.core.importers.lexicon import (
     ENSITE_DXL_CHANNELS,
+    ENSITE_FORCE_UNITS,
     ENSITE_POINT_COLUMNS,
     ENSITE_POLARITY,
     ENSITE_POLARITY_CHANNELS,
@@ -285,6 +286,13 @@ _TIME_COLS = {"t_dws", "t_secs", "t_usecs", "t_ref"}
 
 def _signal_type(name: str) -> str:
     n = name.lower()
+    if "contact_force" in n or "contactforce" in n:
+        # The three processing stages are separate windows, so the type has to
+        # tell them apart: a listing of "contact_force" three times is useless.
+        for stage in ("raw", "filtered", "computed"):
+            if stage in n:
+                return f"contact_force_{stage}"
+        return "contact_force"
     if "unipolar" in n:
         return "egm_unipolar"
     if "bipolar" in n:
@@ -294,12 +302,18 @@ def _signal_type(name: str) -> str:
     return ""
 
 
-def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
-    """Parse an EnSite ``EP_Catheter_*_Waveforms`` / ``ECG_*`` CSV.
+def parse_dws_table(data: bytes | str) -> tuple[dict, pd.DataFrame]:
+    """Split an EnSite X per-timepoint export into ``(preamble, samples)``.
 
-    The file has a preamble (filters, segment, study) then a header row
-    starting ``t_dws,...`` and a sample matrix. Each channel is a triplet
-    ``X`` / ``X_ds`` / ``X_ps``; only the base ``X`` column is the signal.
+    Every one of them is built the same way: a metadata preamble of
+    ``Key: value`` lines, optional legend blocks (data status bits, the
+    ``channel,catheter name,electrode name`` table, a column glossary), then a
+    header row starting ``t_dws,`` and the sample matrix under it.
+
+    The header is found by that marker and never by counting lines or by
+    taking the first comma-separated row — in
+    ``Respiration_Compensated_Magnetic_Location`` the electrode table sits at
+    line 149 and the glossary at 94, while the samples do not start until 234.
     """
     text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
     lines = text.splitlines()
@@ -315,10 +329,32 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
             key, val = s.split(":", 1)
             meta[key.strip()] = val.strip()
     if header_idx is None:
-        raise ValueError("no waveform data header (t_dws,...) found")
+        raise ValueError("no sample-matrix header (t_dws,...) found")
 
     df = pd.read_csv(io.StringIO("\n".join(lines[header_idx:])))
     df = df.loc[:, [c for c in df.columns if not str(c).startswith("Unnamed")]]
+    return meta, df
+
+
+def _dws_time(df) -> tuple[np.ndarray | None, float | None]:
+    """``t_ref`` as the time axis, and the rate implied by its spacing."""
+    time = df["t_ref"].to_numpy(dtype=float) if "t_ref" in df.columns else None
+    sample_rate = None
+    if time is not None and time.size > 1:
+        steps = np.diff(time)
+        steps = steps[steps > 0]
+        if steps.size:
+            sample_rate = float(round(1.0 / float(np.median(steps))))
+    return time, sample_rate
+
+
+def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
+    """Parse an EnSite ``EP_Catheter_*_Waveforms`` / ``ECG_*`` CSV.
+
+    Each channel is a triplet ``X`` / ``X_ds`` / ``X_ps``; only the base ``X``
+    column is the signal. See :func:`parse_dws_table` for the file's shape.
+    """
+    meta, df = parse_dws_table(data)
 
     signal_cols = [
         c for c in df.columns if c not in _TIME_COLS and not str(c).endswith(("_ds", "_ps"))
@@ -327,13 +363,7 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
     df = df[~df[signal_cols].isna().all(axis=1)]
     signal = df[signal_cols].to_numpy(dtype=float)
 
-    time = df["t_ref"].to_numpy(dtype=float) if "t_ref" in df.columns else None
-    sample_rate = None
-    if time is not None and time.size > 1:
-        steps = np.diff(time)
-        steps = steps[steps > 0]
-        if steps.size:
-            sample_rate = float(round(1.0 / float(np.median(steps))))
+    time, sample_rate = _dws_time(df)
 
     filters = {k: meta[k] for k in ("Highpass", "Lowpass", "Notch") if k in meta}
     return Waveform(
@@ -356,6 +386,73 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
     )
 
 
+#: A contact-force column's sensor suffix: ``totalForce_0`` -> ``totalforce``.
+_FORCE_SENSOR_SUFFIX = re.compile(r"_\d+$")
+
+
+def force_channel_unit(column: str) -> str:
+    """The unit of one contact-force column, or ``unknown``.
+
+    ``Contact_Force_Computed`` indexes its columns per sensor (``totalForce_0``,
+    ``totalForce_1``); ``_Raw`` and ``_Filtered`` carry one sensor and no
+    suffix. Both resolve against the same table.
+    """
+    base = _FORCE_SENSOR_SUFFIX.sub("", column.strip()).casefold()
+    return ENSITE_FORCE_UNITS.get(base, UNKNOWN_UNIT)
+
+
+def parse_ensite_contact_force(data: bytes | str, name: str = "") -> Waveform:
+    """Parse an EnSite X ``Contact_Force_{Raw,Filtered,Computed}.csv``.
+
+    One window of the catheter's force sensor(s) on the study clock — the same
+    ``t_dws`` shape as the waveform exports, so it goes into the same Parquet
+    store (see :func:`parse_dws_table`).
+
+    Every non-time column is kept, including the status and message columns:
+    the legend that explains their bits is in the file's own preamble, and
+    dropping them would discard the only record of why a sample is unreliable.
+    Units come per channel from :data:`ENSITE_FORCE_UNITS` — one file mixes
+    grams, degrees, millimetres and degrees Celsius, which is why a unit for
+    the whole waveform would be wrong for most of its columns.
+
+    All three processing stages are imported. Which one an analysis should use
+    is the researcher's decision, not the importer's, and together they are a
+    few tens of kilobytes.
+    """
+    meta, df = parse_dws_table(data)
+    channels = [c for c in df.columns if c not in _TIME_COLS]
+    time, sample_rate = _dws_time(df)
+    return Waveform(
+        data=df[channels].to_numpy(dtype=float) if channels else np.empty((len(df), 0)),
+        channels=[str(c) for c in channels],
+        units=[force_channel_unit(str(c)) for c in channels],
+        sample_rate=sample_rate,
+        signal_type=_signal_type(name or meta.get("Export Data Element", "")),
+        time=time,
+        meta={
+            "segment": meta.get("Export from Segment"),
+            "study_guid": meta.get("Export from Study"),
+            "software_version": meta.get("Exported from Software Version"),
+            "export_data_element": meta.get("Export Data Element"),
+            "export_file_version": meta.get("Export File Version"),
+        },
+    )
+
+
+def _reader_for(name: str):
+    """The parser for one per-timepoint export, chosen by its file name.
+
+    Both read the same ``t_dws`` matrix; they differ in which columns are
+    signal and where the units come from. Contact force keeps every column
+    including the status ones and takes units from the lexicon; the waveform
+    reader drops the ``_ds``/``_ps`` flag columns of each channel triplet.
+    """
+    stem = Path(name).name.casefold()
+    if "contact_force" in stem:
+        return parse_ensite_contact_force
+    return parse_ensite_waveforms
+
+
 def iter_waveforms(study_plan, source: ImportSource):
     """Yield ``(key stem, waveform, point id, map name)`` for a plan's signals.
 
@@ -366,7 +463,7 @@ def iter_waveforms(study_plan, source: ImportSource):
     for name in study_plan.waveforms.files:
         yield (
             Path(name).stem,
-            parse_ensite_waveforms(source.open(name).read(), name=name),
+            _reader_for(name)(source.open(name).read(), name=name),
             None,
             None,
         )
@@ -742,7 +839,14 @@ _ANATOMY_GLOBS = ("*Model_Groups*.xml", "*dif[0-9][0-9][0-9].xml")
 # another writes ``Wave_rov.csv`` / ``Wave_uni_distal.csv``. Matching only the
 # first reported "0 waveform files" for an export that was nothing but
 # waveforms.
-_WAVEFORM_GLOBS = ("*Waveforms*.csv", "*ECG*.csv", "*Wave_*.csv")
+#: Per-timepoint signal exports. All share the ``t_dws`` sample-matrix shape
+#: and go into the same Parquet store; ``_reader_for`` picks the parser.
+_WAVEFORM_GLOBS = (
+    "*Waveforms*.csv",
+    "*ECG*.csv",
+    "*Wave_*.csv",
+    "*Contact_Force_*.csv",
+)
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
 
 
