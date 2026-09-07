@@ -335,7 +335,7 @@ button, .btn { cursor: pointer; font-family: var(--font); font-size: 14px;
             padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.06);
             font-size: 13px; }
 .prop-row:last-child { border-bottom: none; }
-.prop-label { color: rgba(255,255,255,.4); font-size: 12px; }
+.prop-label { color: var(--text-2); font-size: 12px; }
 .prop-value { color: #e2e8f0; font-weight: 500; }
 
 /* ═══════════════════════════════════════════════════════

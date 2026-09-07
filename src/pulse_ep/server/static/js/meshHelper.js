@@ -28,7 +28,7 @@ export class MeshHelper {
             console.warn('No current map ID to reload mesh');
             return;
         }
-        await this.fetchAndRenderMesh(this.currentMapId, this.currentStudyName, this.currentMapName, true);
+        await this.fetchAndRenderMesh(this.currentMapId, this.currentMapName, this.currentStudyName, true);
     }
 
     async fetchAndRenderMesh(mapId, mapName, studyName, isReload = false) {
@@ -236,6 +236,7 @@ export class MeshHelper {
             intervals = intervals.map(interval => (interval - minInterval) / intervalRange);
         }
 
+        const linearColor = new THREE.Color();
         for (let i = 0; i < scalarData.length; i++) {
             const scalar = scalarData[i];
             let color;
@@ -269,10 +270,11 @@ export class MeshHelper {
                 }
             }
 
-            // Apply the color to the colors array
-            colors[i * 3] = color[0];
-            colors[i * 3 + 1] = color[1];
-            colors[i * 3 + 2] = color[2];
+            // The colour-bar hex values and interpolation are sRGB. Vertex
+            // attributes must be linear: otherwise the renderer brightens
+            // them a second time and the mesh no longer matches its legend.
+            linearColor.setRGB(color[0], color[1], color[2], THREE.SRGBColorSpace);
+            linearColor.toArray(colors, i * 3);
         }
 
         return colors;
