@@ -39,7 +39,8 @@ once at import from a per-vendor lexicon. One query then spans a CARTO
 map and an EnSiteX map alike.
 
 From there, heterogeneous clients can analyse the data: Python and MATLAB
-scripts, R workflows, Excel reports, or the bundled web viewer.
+scripts, R workflows, Excel reports, the bundled web viewer, or an AI
+assistant through the MCP server — all over the same REST endpoints.
 
 ## Architecture
 
@@ -50,15 +51,19 @@ EnSiteX export┘   │   sniff → prepare → (human review) → commit     �
    (folder/ZIP)    │   vendor decode + lexicon → vendor-neutral      │
                    └────────────────────────────────────────────────┘
                                        │
-        ┌──────────────────────────────┼──────────────────────────────┐
-        ▼                              ▼                              ▼
-  pulse_ep.server                pulse_ep.cli                   pulse_ep.core
-  Flask + JWT,                   import_carto,                  EPMap, Study,
-  Three.js viewer,               import_ensite,                 ScalarField,
-  REST API,                      tag_maps,                      MeasurementPoint,
-  import review UI,              populate_colormaps,            geodesic, comparison,
-  HTML reports                   check_mesh, demo               SQLAlchemy models
+        ┌───────────────┬──────────────┴───────┬──────────────────────┐
+        ▼               ▼                      ▼                      ▼
+  pulse_ep.server   pulse_ep.mcp         pulse_ep.cli          pulse_ep.core
+  Flask + JWT,      read-only tools      init, import_carto,   EPMap, Study,
+  Three.js viewer,  for an AI client,    import_ensite,        ScalarField,
+  REST API,         anonymised by        migrate, tag_maps,    MeasurementPoint,
+  import review UI, default, and         populate_colormaps,   interpolation,
+  HTML reports      switchable off       create_user, demo     geodesic, waveform
 ```
+
+The server, the viewer, the toolkit and the MCP server are **peers**: each
+is a client of the same JWT REST endpoints, and none has a privileged path
+into the database.
 
 An export is auto-detected, turned into a **reviewable import plan**
 (what would be imported, with issues flagged), and only written once the
@@ -80,7 +85,10 @@ pip install "pulse-ep[server]"
 # add the figure / report generation extras
 pip install "pulse-ep[figures]"
 
-# everything (server, figures, dev tools)
+# add the MCP server (read-only access for an AI client)
+pip install "pulse-ep[mcp]"
+
+# everything (server, figures, MCP, dev tools)
 pip install "pulse-ep[all]"
 ```
 
@@ -99,6 +107,12 @@ pip install -e ".[all]"
 [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/).
 All variables share the prefix `PULSE_EP_`; see [`.env.example`](.env.example)
 for the full list.
+
+```bash
+pulse-ep-init          # writes .env, generates the secret, and sets the rest up
+```
+
+or by hand:
 
 ```bash
 cp .env.example .env
@@ -147,23 +161,17 @@ what we call it).
 # 1) start Postgres (Docker)
 docker compose up -d
 
-# 2) configure the connection
-cp .env.example .env
-# edit PULSE_EP_DATABASE_URL and PULSE_EP_JWT_SECRET_KEY
+# 2) configure and set up in one command: .env with a generated JWT secret,
+#    the migrations, the default colormaps, an administrator — and, on
+#    request, a read-only account for the MCP server
+pulse-ep-init
 
-# 3) create the schema (migrations ship with the package)
-pulse-ep-migrate
-
-# 4) import a study — folder or ZIP, either vendor
+# 3) import a study — folder or ZIP, either vendor
 pulse-ep-import-carto  -i /path/to/carto-export-dir   # a directory
 pulse-ep-import-ensite -i /path/to/ensite-export.zip --dry-run   # plan only
 pulse-ep-import-ensite -i /path/to/ensite-export.zip
 
-# 5) seed default colormaps and create an admin user
-pulse-ep-populate-colormaps
-pulse-ep-create-user --username admin --role admin
-
-# 6) launch the web app
+# 4) launch the web app
 pulse-ep-server
 # → http://localhost:5000
 ```
@@ -171,6 +179,22 @@ pulse-ep-server
 `--dry-run` prints the import plan — which maps, which scalar fields, how
 many points, and any issues detected — without writing anything. Run it
 first on an unfamiliar export.
+
+Signal traces are **opt-in**, because they dwarf the rest of an export: a
+CARTO study writes one 2.5 s window of every channel per acquired point.
+
+```bash
+pulse-ep-import-carto -i /path/to/carto-export \
+    --waveforms --store-dir /var/pulse/waveforms
+```
+
+They are stored as Parquet beside the database (about twenty times smaller
+than the exported text) and read back through
+`/waveforms/<id>/download`, the example clients, or the MCP server.
+
+`pulse-ep-init --non-interactive` asks nothing and takes flags instead, for
+a scripted install; it is idempotent, so running it again after an upgrade
+is a reasonable thing to do.
 
 ### 4. Full Docker stack
 
@@ -180,8 +204,9 @@ cp .env.example .env  # set PULSE_EP_JWT_SECRET_KEY at a minimum
 # Bring up Postgres and the API server in one go.
 docker compose --profile server up -d --build
 
-# One-off admin user (runs inside the running server container).
-docker compose exec server pulse-ep-create-user --username admin --role admin
+# One-off setup inside the running server container: migrations, colormaps
+# and an administrator (or just pulse-ep-create-user for the account alone).
+docker compose exec server pulse-ep-init --non-interactive --admin-user admin
 
 # Optional: pgAdmin on http://localhost:8080
 docker compose --profile admin up -d
@@ -195,23 +220,26 @@ Postgres volume.
 ```
 src/pulse_ep/
 ├── core/
-│   ├── importers/  # Per-vendor decode: carto, ensite, the lexicon,
-│   │               #   ImportSource (dir/ZIP) and the ImportPlan
+│   ├── importers/  # Per-vendor decode: carto, carto_signal, ensite, the
+│   │               #   lexicon, ImportSource (dir/ZIP) and the ImportPlan
 │   ├── ...         # EPMap, Study, ScalarField, MeasurementPoint,
-│   │               #   PlacedPoint, comparison, geodesic, ORM models
+│   │               #   PlacedPoint, comparison, geodesic, interpolation,
+│   │               #   waveform storage, roles, ORM models
 │   └── ingest_*    # Import queue + drop-directory watcher
-├── cli/            # Console scripts for data ingestion and utilities
+├── cli/            # Console scripts: init, import, migrate, users, utilities
 ├── figures/        # Clinical / journal heatmap generators
-├── server/         # Flask app, REST API, Three.js viewer, review UI
+├── mcp/            # MCP server: read-only tools, the anonymiser, REST client
+├── migrations/     # Alembic revisions — they ship inside the package, so an
+│                   #   installed deployment can run pulse-ep-migrate
+├── server/         # Flask app, REST API, Three.js viewer, review UI, roles
 └── examples/       # Synthetic end-to-end demo (pulse-ep-demo)
-
-alembic/            # Database schema migrations
 
 examples/           # Cross-language client examples — see examples/README.md
 ├── paraview/         ParaView Programmable Source + CLI .vtu export
 ├── r/                httr2 REST client + rgl/ggplot demo
 ├── matlab/           webread/webwrite client + trisurf demo
-└── notebooks/        Jupyter walkthrough (PyVista)
+├── notebooks/        Jupyter walkthrough (PyVista)
+└── python/           MCP clients over stdio (analysis, signal plotting)
 ```
 
 ## Documentation
@@ -233,6 +261,12 @@ identical inputs (one REST payload per map) produce identical platform
 reductions — the per-vertex scalar histogram and the per-interval
 surface-area breakdown — in four independent toolchains. The bundled
 web viewer is a fifth.
+
+[`examples/python/`](examples/python/) drives the **MCP server** over stdio
+instead: one client reproduces an aggregate analysis through the tools, the
+other plots a point's own signal window. They are shown separately because
+they are a different transport, not a fifth reproduction of the paper's
+reduction.
 
 ## Citation
 

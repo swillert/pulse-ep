@@ -19,10 +19,12 @@ independent surfaces:
 
 | Subpackage | Role |
 |---|---|
-| `pulse_ep.core` | Domain models (`EPMap`, `Study`, `ScalarField`, `MeasurementPoint`, `PlacedPoint`), SQLAlchemy ORM, mesh processing, area integration, geodesic distances (Heat Method), map-vs-map comparison, the import queue and drop-directory watcher, typed config (`Settings`). |
-| `pulse_ep.core.importers` | Everything vendor-specific: `carto`, `ensite`, the `lexicon` (per-vendor token → quantity), `source` (directory / ZIP transport) and `plan` (the reviewable `ImportPlan`). |
-| `pulse_ep.server` | Flask app, JWT auth, REST API, the Three.js viewer and the import review UI (static frontend). |
-| `pulse_ep.cli` | Console scripts: `pulse-ep-import-carto`, `pulse-ep-import-ensite`, `pulse-ep-populate-colormaps`, `pulse-ep-tag-maps`, `pulse-ep-create-user`, `pulse-ep-check-mesh`, `pulse-ep-extract-meshes`, `pulse-ep-server`, `pulse-ep-demo`. |
+| `pulse_ep.core` | Domain models (`EPMap`, `Study`, `ScalarField`, `MeasurementPoint`, `PlacedPoint`), SQLAlchemy ORM, mesh processing, area integration, geodesic distances (Heat Method), scattered-data `interpolation`, map-vs-map comparison, out-of-database `waveform` storage, the role vocabulary, the import queue and drop-directory watcher, typed config (`Settings`). |
+| `pulse_ep.core.importers` | Everything vendor-specific: `carto`, `carto_signal` (its per-point ECG windows), `ensite`, the `lexicon` (per-vendor token → quantity), `source` (directory / ZIP / 7-Zip transport) and `plan` (the reviewable `ImportPlan`). |
+| `pulse_ep.server` | Flask app, JWT auth and role enforcement, REST API, the Three.js viewer and the import review UI (static frontend). |
+| `pulse_ep.mcp` | The MCP server: read-only tools for an AI client, the anonymiser that decides what may leave the deployment, and a REST client — it holds no privileged path of its own. |
+| `pulse_ep.migrations` | Alembic revisions, shipped inside the package so an installed deployment can run `pulse-ep-migrate` without a source checkout. |
+| `pulse_ep.cli` | Console scripts: `pulse-ep-init`, `pulse-ep-import-carto`, `pulse-ep-import-ensite`, `pulse-ep-migrate`, `pulse-ep-populate-colormaps`, `pulse-ep-tag-maps`, `pulse-ep-create-user`, `pulse-ep-check-mesh`, `pulse-ep-extract-meshes`, `pulse-ep-server`, `pulse-ep-mcp`, `pulse-ep-demo`. |
 | `pulse_ep.figures` | Standard heatmap generators for clinical reports. |
 | `pulse_ep.examples.demo_synthetic` | Self-contained end-to-end walkthrough on a synthetic atrium, wired as `pulse-ep-demo`. |
 
@@ -107,11 +109,23 @@ stays in the vendor importer, not the lexicon.
 - **Optional extras as functional capabilities.** `pulse-ep` (core
   data + CLI) installs slim; `pulse-ep[server]` adds Flask / JWT /
   gunicorn; `pulse-ep[figures]` adds reportlab / openpyxl /
-  simplekml; `pulse-ep[dev]` adds the test and lint tooling.
-  Heavyweight, optional dependencies stay out of the core install.
-- **REST first.** The bundled web viewer is a client of the same
-  endpoints the `examples/` directory consumes. There is
-  no privileged "internal" API; every reader can be substituted.
+  simplekml; `pulse-ep[mcp]` adds the MCP SDK; `pulse-ep[dev]` adds the
+  test and lint tooling. Heavyweight, optional dependencies stay out of
+  the core install, and the package imports without any of them.
+- **REST first.** The bundled web viewer, the `examples/` clients and
+  the MCP server are all clients of the same endpoints. There is no
+  privileged "internal" API; every reader can be substituted.
+- **Who may do what is enforced, not annotated.** The JWT's `role` claim
+  decides: `admin`, `user`, and `readonly` — refused on every endpoint
+  that changes stored state, which is what makes a read-only account for
+  an AI client a property of the deployment rather than a promise in a
+  document. Reads that arrive as `POST` stay open, because what decides
+  is what an endpoint does, not the verb it came under.
+- **What leaves the deployment is decided deliberately.** A study is
+  named after its export, and a real one carries a case number and
+  initials — so MCP results are anonymised by default, aliased to the
+  database id, and the switch is the operator's alone: no tool can lift
+  it, and `PULSE_EP_MCP_ENABLED=0` refuses AI access at both ends.
 
 ## 6 Repository conventions
 
@@ -143,12 +157,15 @@ stays in the vendor importer, not the lexicon.
   loss.
 - **No patient data in the open repository.** Tests and demos use
   synthetic meshes only; clinical data lives in private deployments.
-- **Tests own the synthetic data.** `tests/conftest.py` and
-  `src/pulse_ep/examples/demo_synthetic.py` are the only places that
-  generate input data; downstream code is data-agnostic. The suite needs
-  no live database: the ORM's PostgreSQL types (`JSONB`, `ARRAY`) cannot
-  be created on SQLite, so persistence tests exercise the
-  (de)serialisation converters directly.
+- **Tests own the data they run on.** `tests/conftest.py`,
+  `src/pulse_ep/examples/demo_synthetic.py` and the shipped synthetic
+  exports under `tests/fixtures/synthetic/` supply it, and a test that
+  needs a particular shape — a folded surface, a mesh with a reordered
+  colour section — builds it inline. Nothing reads an external export, and
+  downstream code stays data-agnostic. The suite needs no live database:
+  the ORM's PostgreSQL types (`JSONB`, `ARRAY`) cannot be created on
+  SQLite, so persistence tests exercise the (de)serialisation converters
+  directly and route tests use Flask's test client.
 - **`data/`, `drop/` and archive files are gitignored.** The GitHub
   mirror force-pushes every `main` commit to a public repository, so
   anything committed there is published irreversibly.
