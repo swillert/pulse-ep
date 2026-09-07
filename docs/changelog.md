@@ -4,10 +4,111 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] — 2026-09-07
 
 ### Added
 
+- **MCP access can be switched off** (`PULSE_EP_MCP_ENABLED=0`), at both ends
+  with one setting: the server refuses requests that identify themselves as
+  MCP (`403`, other clients untouched), and `pulse-ep-mcp` refuses to start.
+  Until now that decision lived only with whoever started the MCP server; a
+  deployment had no say. The MCP identifies itself on every request
+  (`X-Pulse-EP-Client`), which also makes AI access visible in the server log —
+  a gate against a forgotten or misconfigured MCP, not against a person with
+  valid credentials, for whom the boundary is the account.
+- **An MCP server** (`pulse-ep-mcp`, `pip install "pulse-ep[mcp]"`): read-only
+  access to a deployment for an AI client, as a fourth peer beside the REST
+  API, the viewer and the toolkit — and a client of the same JWT endpoints,
+  not a second route into the database. It answers what SQL on the database
+  cannot: signal samples (which live outside it as Parquet), what a map's
+  scalar fields mean and range over, and the operations that are computation
+  rather than query. The complete stored data is reachable too — `fetch_map`,
+  `fetch_points` and `fetch_waveform` write it next to the client and return
+  the path, because one real map is 3.2 MB of JSON: in a file it can be
+  computed with, in a context window it only fills it.
+- **Study identity is anonymised by default** in MCP results. A study is named
+  after its export, and a real one has the shape of this invented example —
+  `10054321_XY_AB 01_02_2020 09-15-00` — a case number, initials and the time of the procedure — which is
+  also embedded in stored file paths. The alias is the database id
+  (`study/12`): no key file, no mapping table. Map names, quantities, units and
+  signal values are untouched. `--no-anonymize` (or
+  `PULSE_EP_MCP_ANONYMIZE=0`) switches it off for local work; no *tool* can,
+  because a model must not be able to lift the restriction it is under. See
+  [the MCP guide](guides/mcp.md).
+- **`GET /epmaps/<id>/points`** and **`GET /epmaps/<id>/waveforms`** serve a
+  map's points and its signal windows on their own. Both were only reachable
+  through `/get_mesh_data?representation=raw`, which returns a whole mesh
+  alongside — tens of thousands of vertices to read a few hundred
+  measurements.
+- **`waveform_from_parquet()`** reads a downloaded waveform back without a
+  store around it — what every client of `/waveforms/<id>/download` otherwise
+  has to reimplement.
+- **A CARTO pace map's points carry their pace-match score.** CARTO writes the
+  score per point exactly as it writes it per vertex — as the annotation
+  difference `Map_Annotation - Reference_Annotation`, negative, with `-10000`
+  on the reference beat that is never scored against itself — and the
+  conversion labelled that difference `activation_time` on every map. So a
+  pace map's points carried "activation times" of -50 … -100 ms, one of
+  -10000, and the only per-site measurement of a pace map was invisible
+  under that name; a client sampling the vertex field at the point instead
+  got the vendor's interpolation, which differs from the point's own score
+  by more than two points at 21 % of the points of a reference study.
+  Points now follow the mesh's verdict (`point_primary_kind`): on a pace map
+  the difference is `pacemap_score` (%), sentinels and non-percentages are
+  omitted, on an activation map it stays `activation_time`. Verified against
+  the `_car.txt` of 59 pace maps: 2987 of 3021 points identical, the rest
+  correctly missing. An export that writes the scores unsigned is still
+  classified an activation map — the `pacemap` attribute remains the override.
+  The mesh's verdict is read from the **column** the points correspond to: a
+  scalar field records which CARTO column it came from (`carto:LAT`,
+  `carto:Paso`), so an activation map whose export also fills `Paso` — now
+  possible, since colour columns are read by name — keeps activation times on
+  its points instead of having them read as percentages.
+- **Measurement points carry their annotation components**
+  (`MeasurementPoint.annotations`, `measurement_points.annotations`, migration
+  `f3a8b5c6d201`): the window's first sample on the study clock, the reference
+  and mapping annotations as offsets into it, and the window of interest —
+  what says where in a 2.5 s signal window a point's beat sits. Only the
+  *derived* value (the activation time or pace-match score) had survived into
+  the vendor-neutral point; the components lived on in CARTO's fixed-column
+  `ep_map_points`, which only `pulse-ep-import-carto` writes, so a study
+  imported through the drop directory had them nowhere. A stored waveform
+  records the same facts under the same names, so a point and its window now
+  agree by construction rather than by coincidence.
+- **`pulse-ep-import-carto` built its measurement-point rows by hand**, so
+  every field added to the point since — `tags`, and now `annotations` —
+  reached the database on the queue path and was silently null on the CLI one.
+  Both paths go through `measurement_points_to_models` now and produce
+  identical rows.
+- **Measurement points carry their tags** (`MeasurementPoint.tags`,
+  `measurement_points.tags`, migration `d7e2c4a9f1b6`): the names of the
+  markers the study catalogue put on the point — `Location Only` on the
+  reference beat of a pace map, `Scar`, `His`, a study's own labels —
+  resolved through the study's `TagsTable`. The catalogue's element text had
+  been discarded by a stub (`xml_proc.str2var` returned `None` for every
+  non-empty string), which is why `<Tags>` looked empty in every parsed
+  study.
+
+- **CARTO signals are imported.** Every acquired point has a
+  `*_ECG_Export_*.txt` — 2.5 s of all 78 channels at 1 kHz — and none of them
+  were ever read; the note in the code said "too large for DB storage", which
+  was true of the relational database and not of the Parquet waveform store
+  that has existed since. Opt-in (`pulse-ep-import-carto --waveforms
+  --store-dir …`, or the waveform selection in the import plan), converted to
+  millivolts, timestamped on the study clock, and stored with the points taken
+  from that window and the channels each of them was annotated on. A
+  multi-electrode catheter acquires many points from one recording — in the
+  reference export 1934 points share 699 windows — so the samples are stored
+  once and every point references that copy. About 20× smaller as Parquet than
+  as the exported text.
+- **`interpolate_scalar_values(method=…)`** — the method only ever masked the
+  vendor's own per-vertex field. It can now compute the field from the map's
+  measurement points instead: `gaussian` (straight-line distance) or
+  `geodesic` (along the surface, via the heat kernel — two sparse solves, not
+  one distance field per point). `cycle_length` interpolates activation times
+  cyclically, so late meets early instead of averaging straight through a
+  reentrant wavefront. The default stays `mask`; see
+  [Masking and interpolation](guides/interpolation.md).
 - **`pulse-ep-migrate`**, and the migrations now ship inside the package.
   `alembic upgrade head` only ever worked from a source checkout — an
   installed deployment had no way to run them, which the promise that
@@ -15,6 +116,23 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Re-seeding a colormap corrected only one of its display flags.**
+  `pulse-ep-populate-colormaps` learned to bring `is_relative` in step with a
+  changed definition but left `clipping` and `use_gradient` at whatever the
+  database was first seeded with — so `viridis_0_3_mV`, whose fixed 0–3 mV
+  scale depends on clipping being on, would have kept the wrong setting on any
+  database seeded before it existed. All three are synced now; colours and
+  intervals still stay as the operator edited them. A definition carrying
+  annotations but no intervals now reports which colormap is wrong instead of
+  failing inside `len(None)`.
+- **The CARTO mesh reader took its per-vertex columns by position.** A `.mesh`
+  file names its own columns, and only three of them were read: `Paso` (the
+  pace-match score), `µBi` and the entire `[VerticesAttributesSection]`
+  (`SCAR`, `EML`) never arrived, and an export ordering the columns
+  differently would have had every quantity mislabelled without a word.
+  Columns are now taken by name, unknown ones import under their raw CARTO
+  token, and empty ones — most of the thirteen, in any given export — are not
+  registered at all.
 - **The cross-language examples worked for CARTO only.** ParaView, R, MATLAB
   and the Jupyter notebook all defaulted to `scalar_name = "act"` — a
   CARTO-only name that every EnSiteX map rejects, so the ParaView exporter
@@ -211,3 +329,5 @@ Initial open-source release. Extracted from the upstream
 - Patient-identifiable data is **never** committed; all tests and
   demos run on synthetic meshes generated by
   `pulse_ep.examples.demo_synthetic`.
+
+- Adjacent surface-area bins now use half-open boundaries, with the final upper edge included; exact boundary triangles are counted once.
