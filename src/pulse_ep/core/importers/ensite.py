@@ -28,10 +28,10 @@ from pulse_ep.core.epmap import EPMap
 from pulse_ep.core.importers.base import register_importer
 from pulse_ep.core.importers.lexicon import (
     ENSITE_DXL_CHANNELS,
-    ENSITE_FORCE_UNITS,
     ENSITE_POINT_COLUMNS,
     ENSITE_POLARITY,
     ENSITE_POLARITY_CHANNELS,
+    ENSITE_TIMESERIES_UNITS,
     resolve,
 )
 from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan, WaveformPlan
@@ -284,21 +284,35 @@ def merge_dif_group(items: list[tuple[str, DifVolume]], study_name: str, source:
 _TIME_COLS = {"t_dws", "t_secs", "t_usecs", "t_ref"}
 
 
+#: File-name markers of the per-timepoint family, all read by one parser.
+_TIMESERIES_ELEMENTS = (
+    "contact_force",
+    "electrode_locations",
+    "contact_index",
+    "magnetic_location",
+)
+
+
 def _signal_type(name: str) -> str:
-    n = name.lower()
-    if "contact_force" in n or "contactforce" in n:
-        # The three processing stages are separate windows, so the type has to
-        # tell them apart: a listing of "contact_force" three times is useless.
-        for stage in ("raw", "filtered", "computed"):
-            if stage in n:
-                return f"contact_force_{stage}"
-        return "contact_force"
-    if "unipolar" in n:
+    """The stored ``signal_type`` for an export, from its ``Export Data Element``.
+
+    Electrograms keep the names they have always been stored under. Everything
+    else takes the vendor's own element name, lowercased: ``Contact_Force_Raw``
+    becomes ``contact_force_raw`` and ``Respiration_Compensated_Magnetic_Location``
+    keeps its full name. That needs no table to maintain, and it keeps the
+    processing stages apart — a listing that called three force windows
+    ``contact_force`` would be useless, and the four magnetic variants are the
+    same value computed four ways.
+    """
+    n = Path(name).stem.lower() if name else ""
+    if "unipolar" in n and "magnetic" not in n:
         return "egm_unipolar"
-    if "bipolar" in n:
+    if "bipolar" in n and "magnetic" not in n:
         return "egm_bipolar"
     if "ecg" in n:
         return "ecg"
+    if any(k in n for k in _TIMESERIES_ELEMENTS):
+        return re.sub(r"[^a-z0-9]+", "_", n).strip("_")
     return ""
 
 
@@ -386,65 +400,17 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
     )
 
 
-#: A contact-force column's sensor suffix: ``totalForce_0`` -> ``totalforce``.
-_FORCE_SENSOR_SUFFIX = re.compile(r"_\d+$")
-
-
-def force_channel_unit(column: str) -> str:
-    """The unit of one contact-force column, or ``unknown``.
-
-    ``Contact_Force_Computed`` indexes its columns per sensor (``totalForce_0``,
-    ``totalForce_1``); ``_Raw`` and ``_Filtered`` carry one sensor and no
-    suffix. Both resolve against the same table.
-    """
-    base = _FORCE_SENSOR_SUFFIX.sub("", column.strip()).casefold()
-    return ENSITE_FORCE_UNITS.get(base, UNKNOWN_UNIT)
-
-
-def parse_ensite_contact_force(data: bytes | str, name: str = "") -> Waveform:
-    """Parse an EnSite X ``Contact_Force_{Raw,Filtered,Computed}.csv``.
-
-    One window of the catheter's force sensor(s) on the study clock — the same
-    ``t_dws`` shape as the waveform exports, so it goes into the same Parquet
-    store (see :func:`parse_dws_table`).
-
-    Every non-time column is kept, including the status and message columns:
-    the legend that explains their bits is in the file's own preamble, and
-    dropping them would discard the only record of why a sample is unreliable.
-    Units come per channel from :data:`ENSITE_FORCE_UNITS` — one file mixes
-    grams, degrees, millimetres and degrees Celsius, which is why a unit for
-    the whole waveform would be wrong for most of its columns.
-
-    All three processing stages are imported. Which one an analysis should use
-    is the researcher's decision, not the importer's, and together they are a
-    few tens of kilobytes.
-    """
-    meta, df = parse_dws_table(data)
-    channels = [c for c in df.columns if c not in _TIME_COLS]
-    time, sample_rate = _dws_time(df)
-    return Waveform(
-        data=df[channels].to_numpy(dtype=float) if channels else np.empty((len(df), 0)),
-        channels=[str(c) for c in channels],
-        units=[force_channel_unit(str(c)) for c in channels],
-        sample_rate=sample_rate,
-        signal_type=_signal_type(name or meta.get("Export Data Element", "")),
-        time=time,
-        meta={
-            "segment": meta.get("Export from Segment"),
-            "study_guid": meta.get("Export from Study"),
-            "software_version": meta.get("Exported from Software Version"),
-            "export_data_element": meta.get("Export Data Element"),
-            "export_file_version": meta.get("Export File Version"),
-        },
-    )
-
-
 #: A position column: ``c12x`` -> channel 12, axis x. The file's own glossary
 #: spells it ``c###x|y|z : channel ### x|y|z coordinate``.
 _POSITION_COLUMN = re.compile(r"^c(\d+)([xyz])$", re.IGNORECASE)
 
-#: Header of the channel table that precedes the samples in the location and
-#: contact-index exports.
+#: A per-channel prefix (``c0_contactIndex``) or a per-sensor suffix
+#: (``totalForce_0``). Both index the same quantity; neither is part of it.
+_CHANNEL_PREFIX = re.compile(r"^c\d+_", re.IGNORECASE)
+_SENSOR_SUFFIX = re.compile(r"_\d+$")
+
+#: Header of the channel table that precedes the samples in the location,
+#: contact-index and magnetic-location exports.
 _CHANNEL_TABLE_HEADER = "channel,catheter name,electrode name"
 
 
@@ -476,47 +442,63 @@ def parse_channel_map(data: bytes | str) -> dict[str, dict]:
     return out
 
 
-def position_channel_unit(column: str) -> str:
-    """Millimetres for a coordinate column, ``unknown`` for the status ones.
+def timeseries_channel_unit(column: str) -> str:
+    """The unit of one per-timepoint channel, or ``unknown``.
 
-    The export states the axis but not the unit. Millimetres is not a guess
-    here: these positions are in the same coordinate frame as the mesh
-    vertices, which the REST layer already declares as ``mm``. The ``_ds`` and
-    ``_ps`` columns are bitfields whose bits the file's own legend names, so
-    they have no unit at all.
+    Handles every column shape these exports use: a coordinate (``c12x``), a
+    per-channel prefix (``c0_contactIndex``), a per-sensor suffix
+    (``totalForce_0``, ``tx_1``), and the ``_ds`` / ``_ps`` status columns that
+    accompany many of them.
+
+    A status column never inherits its quantity's unit — ``c0_contactIndex_ds``
+    is a bitfield, not an index. Only physical units are assigned. Quaternion
+    components, contact indices and level codes are left ``unknown`` rather
+    than given a "dimensionless" token: recording that a value has no unit is
+    a distinction worth having, but it is not the one this field was added to
+    make, and inventing vocabulary for it here would be premature.
     """
-    return "mm" if _POSITION_COLUMN.match(column.strip()) else UNKNOWN_UNIT
+    name = column.strip()
+    if name.endswith(("_ds", "_ps")):
+        return UNKNOWN_UNIT
+    if _POSITION_COLUMN.match(name):
+        # Same coordinate frame as the mesh vertices, which the REST layer
+        # already declares as mm. Not inferred from the column name.
+        return "mm"
+    base = _SENSOR_SUFFIX.sub("", _CHANNEL_PREFIX.sub("", name)).casefold()
+    return ENSITE_TIMESERIES_UNITS.get(base, UNKNOWN_UNIT)
 
 
-def parse_ensite_electrode_locations(data: bytes | str, name: str = "") -> Waveform:
-    """Parse an EnSite X ``Electrode_Locations.csv`` — catheter geometry over time.
+def parse_ensite_timeseries(data: bytes | str, name: str = "") -> Waveform:
+    """Parse any EnSite X per-timepoint export into a :class:`Waveform`.
 
-    Same ``t_dws`` shape as every other per-timepoint export. Each channel
-    contributes ``c<n>x``/``c<n>y``/``c<n>z`` plus a data- and a
-    position-status column, and the channel table above the matrix says which
-    catheter and electrode each channel is.
+    Contact force, electrode locations, contact index and the four magnetic
+    location variants are one family: a preamble, legend blocks, a
+    ``t_dws`` header and a sample matrix (see :func:`parse_dws_table`). They
+    differ only in which quantities their columns hold.
 
-    The raw column names are kept rather than rewritten to electrode labels:
-    what is stored then still matches what the export says, and the mapping
-    travels with it in ``meta["channels"]`` for anyone who wants the labels.
-    The status columns are kept too — they are the only record of why a
-    position is unreliable.
+    Every non-time column is kept, status and message columns included: the
+    legend that explains their bits is in the file's own preamble, and they are
+    the only record of why a sample is unreliable. Raw column names are kept
+    rather than rewritten to electrode labels, so that what is stored still
+    matches what the export wrote; the mapping travels alongside in
+    ``meta["channels"]`` for anyone who wants ``CS/D`` instead of ``c0``.
     """
     meta, df = parse_dws_table(data)
     channels = [c for c in df.columns if c not in _TIME_COLS]
     time, sample_rate = _dws_time(df)
+    element = meta.get("Export Data Element", "")
     return Waveform(
         data=df[channels].to_numpy(dtype=float) if channels else np.empty((len(df), 0)),
         channels=[str(c) for c in channels],
-        units=[position_channel_unit(str(c)) for c in channels],
+        units=[timeseries_channel_unit(str(c)) for c in channels],
         sample_rate=sample_rate,
-        signal_type="electrode_position",
+        signal_type=_signal_type(element or name),
         time=time,
         meta={
             "segment": meta.get("Export from Segment"),
             "study_guid": meta.get("Export from Study"),
             "software_version": meta.get("Exported from Software Version"),
-            "export_data_element": meta.get("Export Data Element"),
+            "export_data_element": element,
             "export_file_version": meta.get("Export File Version"),
             "channels": parse_channel_map(data),
         },
@@ -532,10 +514,8 @@ def _reader_for(name: str):
     reader drops the ``_ds``/``_ps`` flag columns of each channel triplet.
     """
     stem = Path(name).name.casefold()
-    if "contact_force" in stem:
-        return parse_ensite_contact_force
-    if "electrode_locations" in stem:
-        return parse_ensite_electrode_locations
+    if any(k in stem for k in _TIMESERIES_ELEMENTS):
+        return parse_ensite_timeseries
     return parse_ensite_waveforms
 
 
@@ -933,6 +913,8 @@ _WAVEFORM_GLOBS = (
     "*Wave_*.csv",
     "*Contact_Force_*.csv",
     "*Electrode_Locations*.csv",
+    "*Contact_Index*.csv",
+    "*Magnetic_Location*.csv",
 )
 _VERT_RE = re.compile(rb'<Vertices number="(\d+)"')
 

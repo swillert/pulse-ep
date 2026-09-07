@@ -11,9 +11,9 @@ import numpy as np
 import pytest
 
 from pulse_ep.core.importers.ensite import (
-    force_channel_unit,
     parse_dws_table,
-    parse_ensite_contact_force,
+    parse_ensite_timeseries,
+    timeseries_channel_unit,
 )
 from pulse_ep.core.waveform import UNKNOWN_UNIT
 
@@ -58,14 +58,14 @@ def _export(element: str, body: str) -> str:
 def test_the_three_stages_are_told_apart():
     """A listing of three windows all called "contact_force" would be useless."""
     for stage in ("Raw", "Filtered", "Computed"):
-        w = parse_ensite_contact_force(
+        w = parse_ensite_timeseries(
             _export(f"Contact_Force_{stage}", _ONE_SENSOR), name=f"Contact_Force_{stage}.csv"
         )
         assert w.signal_type == f"contact_force_{stage.lower()}"
 
 
 def test_samples_channels_and_rate():
-    w = parse_ensite_contact_force(_export("Contact_Force_Raw", _ONE_SENSOR))
+    w = parse_ensite_timeseries(_export("Contact_Force_Raw", _ONE_SENSOR))
     assert w.data.shape == (3, 9)  # 13 columns minus the four t_* ones
     assert "t_ref" not in w.channels and "t_secs" not in w.channels
     assert w.channels[0] == "reliability"  # a flag, but not a time column
@@ -75,7 +75,7 @@ def test_samples_channels_and_rate():
 
 def test_one_file_carries_four_different_units():
     """Which is the whole reason units are per channel and not per waveform."""
-    w = parse_ensite_contact_force(_export("Contact_Force_Raw", _ONE_SENSOR))
+    w = parse_ensite_timeseries(_export("Contact_Force_Raw", _ONE_SENSOR))
     got = dict(zip(w.channels, w.units, strict=True))
     assert got["totalForce"] == "g"
     assert got["alphaAngle"] == "deg"
@@ -86,7 +86,7 @@ def test_one_file_carries_four_different_units():
 
 def test_a_column_the_lexicon_does_not_know_is_unknown_not_plausible():
     """An ammeter reading in A and one in mA look identical in a CSV."""
-    w = parse_ensite_contact_force(_export("Contact_Force_Raw", _ONE_SENSOR))
+    w = parse_ensite_timeseries(_export("Contact_Force_Raw", _ONE_SENSOR))
     got = dict(zip(w.channels, w.units, strict=True))
     assert got["ablationCurrent"] == UNKNOWN_UNIT
     assert got["qStatus"] == UNKNOWN_UNIT
@@ -95,7 +95,7 @@ def test_a_column_the_lexicon_does_not_know_is_unknown_not_plausible():
 
 def test_the_per_sensor_suffix_resolves_to_the_same_unit():
     """Computed indexes per sensor; Raw and Filtered carry one and no suffix."""
-    w = parse_ensite_contact_force(_export("Contact_Force_Computed", _TWO_SENSORS))
+    w = parse_ensite_timeseries(_export("Contact_Force_Computed", _TWO_SENSORS))
     got = dict(zip(w.channels, w.units, strict=True))
     assert got["totalForce_0"] == got["totalForce_1"] == "g"
     assert got["cavityDistance1_0"] == got["cavityDistance1_1"] == "mm"
@@ -106,7 +106,7 @@ def test_the_per_sensor_suffix_resolves_to_the_same_unit():
     [("totalForce", "g"), ("totalForce_11", "g"), ("THETAANGLE", "deg"), ("nope_0", UNKNOWN_UNIT)],
 )
 def test_unit_lookup_ignores_case_and_sensor_index(column, unit):
-    assert force_channel_unit(column) == unit
+    assert timeseries_channel_unit(column) == unit
 
 
 def test_the_header_is_found_by_its_marker_not_by_position():
@@ -121,4 +121,4 @@ def test_the_header_is_found_by_its_marker_not_by_position():
 
 def test_a_file_without_a_sample_matrix_says_so():
     with pytest.raises(ValueError, match="t_dws"):
-        parse_ensite_contact_force(_PREAMBLE.format(element="Contact_Force_Raw"))
+        parse_ensite_timeseries(_PREAMBLE.format(element="Contact_Force_Raw"))
