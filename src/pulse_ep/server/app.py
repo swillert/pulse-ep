@@ -60,6 +60,40 @@ from pulse_ep.server.compare_api import compare_api  # noqa: E402
 app.register_blueprint(compare_api)
 
 
+#: How the MCP server identifies itself on every request. Sent so a deployment
+#: can see AI access in its logs, and refuse it when it does not want it.
+MCP_CLIENT_HEADER = "X-Pulse-EP-Client"
+MCP_CLIENT_NAME = "pulse-ep-mcp"
+
+
+@app.before_request
+def _gate_mcp_access():
+    """Refuse MCP requests where the deployment has switched them off.
+
+    A deployment decides whether it is reachable by an AI client at all —
+    ``PULSE_EP_MCP_ENABLED=0`` — rather than that decision living only in
+    whoever starts the MCP server.
+
+    This is a gate, not a boundary: the MCP names itself honestly, and
+    anything it can do a user with the same credentials can do with ``curl``.
+    It stops a forgotten, inherited or misconfigured MCP — which is the case
+    that actually happens. What stops a person is the account: do not issue
+    one, or disable it.
+    """
+    client = (request.headers.get(MCP_CLIENT_HEADER) or "").strip()
+    if client.startswith(MCP_CLIENT_NAME) and not get_settings().mcp_enabled:
+        return (
+            jsonify(
+                {
+                    "error": "MCP access is disabled on this deployment",
+                    "hint": "set PULSE_EP_MCP_ENABLED=1 on the server to allow it",
+                }
+            ),
+            403,
+        )
+    return None
+
+
 @app.route("/")
 def index():
     return redirect(url_for("login"))
@@ -217,6 +251,121 @@ def list_map_scalars(map_id):
     )
 
 
+@app.route("/epmaps/<int:map_id>/points", methods=["GET"])
+@jwt_required()
+def list_map_points(map_id):
+    """The acquisition points behind a map, paged.
+
+    The whole point set was only reachable through
+    ``/get_mesh_data?representation=raw``, which returns the mesh alongside —
+    tens of thousands of vertices to read a few hundred measurements. This is
+    the point set on its own, with ``measurements`` flattened to
+    ``{name: value}`` and the units stated once for the page.
+
+    ``limit=0`` returns every point: a map holds hundreds to a few thousand,
+    which is a reasonable single response, and a client that wants them all
+    should not have to page for them.
+    """
+    from pulse_ep.core.models import MeasurementPointModel
+
+    try:
+        limit = int(request.args.get("limit", 500))
+        offset = int(request.args.get("offset", 0))
+    except ValueError:
+        return jsonify({"error": "limit and offset must be integers"}), 400
+
+    with get_db_session() as session:
+        epmap_model = EPMapModel.retrieve(session, map_id)
+        if not epmap_model:
+            return jsonify({"error": f"EPMap {map_id} not found"}), 404
+        query = (
+            session.query(MeasurementPointModel)
+            .filter_by(map_id=map_id)
+            .order_by(MeasurementPointModel.point_index)
+        )
+        count = query.count()
+        rows = query.offset(offset).limit(limit if limit > 0 else None).all()
+
+        units, points = {}, []
+        for row in rows:
+            measurements = row.measurements or {}
+            for name, entry in measurements.items():
+                units.setdefault(name, entry.get("unit", ""))
+            points.append(
+                {
+                    "point_index": row.point_index,
+                    "source_id": row.source_id,
+                    "position": row.position,
+                    "measurements": {n: e.get("value") for n, e in measurements.items()},
+                    "tags": row.tags or [],
+                    # where this point's beat sits in the signal recorded for
+                    # it — the components its activation time was derived from
+                    "annotations": row.annotations or {},
+                }
+            )
+    return jsonify(
+        {
+            "map_id": map_id,
+            "count": count,
+            "offset": offset,
+            "returned": len(points),
+            "units": units,
+            "points": points,
+        }
+    )
+
+
+@app.route("/epmaps/<int:map_id>/waveforms", methods=["GET"])
+@jwt_required()
+def list_map_waveforms(map_id):
+    """The signal windows recorded for this map, without their samples.
+
+    Listing them was only possible through ``/get_mesh_data?representation=raw``,
+    which drags a whole mesh along — tens of thousands of vertices to answer
+    "which signals are there". The samples themselves stay behind
+    ``/waveforms/<id>/download``.
+
+    CARTO records one window per acquisition and a multi-electrode catheter
+    takes several points from it, so rows can share a ``data_uri``; each row
+    is one point's view of that window.
+    """
+    from pulse_ep.core.models import WaveformModel
+
+    with get_db_session() as session:
+        epmap_model = EPMapModel.retrieve(session, map_id)
+        if not epmap_model:
+            return jsonify({"error": f"EPMap {map_id} not found"}), 404
+        rows = (
+            session.query(WaveformModel)
+            .filter(
+                (WaveformModel.map_id == map_id)
+                | (
+                    (WaveformModel.study_id == epmap_model.study_id)
+                    & WaveformModel.map_id.is_(None)
+                )
+            )
+            .order_by(WaveformModel.id)
+            .all()
+        )
+        waveforms = [
+            {
+                "id": row.id,
+                "study_id": row.study_id,
+                "map_id": row.map_id,
+                "point_source_id": row.point_source_id,
+                "signal_type": row.signal_type,
+                "sample_rate": row.sample_rate,
+                "n_samples": row.n_samples,
+                "n_channels": row.n_channels,
+                "channels": row.channels,
+                "segment": row.segment,
+                "download_url": f"/waveforms/{row.id}/download",
+            }
+            for row in rows
+        ]
+    return jsonify({"map_id": map_id, "count": len(waveforms), "waveforms": waveforms})
+
+
 def get_epmap_from_db(map_id, include_points=True):
     with get_db_session() as session:
         epmap_model = EPMapModel.retrieve(session, map_id)
@@ -274,6 +423,26 @@ def get_epmaps_by_ids():
 @app.route("/get_mesh_data", methods=["GET"])
 @jwt_required()
 def get_mesh_data():
+    representation = request.args.get("representation", "display")
+    if representation not in {"raw", "display"}:
+        return jsonify({"error": "representation must be raw or display"}), 400
+    if representation == "raw":
+        from pulse_ep.server.raw_export import export_map
+
+        try:
+            map_id = int(request.args.get("map_id", ""))
+        except ValueError:
+            return jsonify({"error": "map_id must be an integer"}), 400
+        with get_db_session() as session:
+            model = EPMapModel.retrieve(session, map_id)
+            if model is None:
+                return jsonify({"error": "Map not found"}), 404
+            try:
+                data = export_map(session, model, request.args.get("scalar_name") or None)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+            return jsonify(data)
+
     print("Received request for /get_mesh_data")
 
     map_id = request.args.get("map_id")
@@ -307,7 +476,6 @@ def get_mesh_data():
     try:
         # Extract the mesh data
         data = ep_map.extract_mesh_data(scalar_name=scalar_name, distance=distance)
-        print(f"Extracted mesh data: {data}")
 
         # Unwrap the dictionary into individual variables
         vertices = data["mesh_data"]["vertices"]
@@ -1027,6 +1195,29 @@ def main():
         print(f"WARNING: init_db skipped — {exc}")
 
     app.run(host=settings.host, port=settings.port, debug=settings.debug)
+
+
+@app.route("/waveforms/<int:waveform_id>/download", methods=["GET"])
+@jwt_required()
+def download_waveform(waveform_id):
+    """Download stored samples as Parquet, with channel and timing metadata."""
+    from pathlib import Path
+
+    from flask import send_file
+
+    from pulse_ep.core.models import WaveformModel
+
+    root = (get_settings().waveform_store_dir or "").strip()
+    if not root:
+        return jsonify({"error": "Waveform store is not configured"}), 503
+    with get_db_session() as session:
+        row = session.query(WaveformModel).filter_by(id=waveform_id).first()
+        if row is None:
+            return jsonify({"error": "Waveform not found"}), 404
+        path = (Path(root) / row.data_uri).resolve()
+        if not path.is_relative_to(Path(root).resolve()) or not path.is_file():
+            return jsonify({"error": "Waveform file unavailable"}), 404
+        return send_file(path, as_attachment=True, download_name=f"waveform-{waveform_id}.parquet")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,26 @@ from pulse_ep.core.models import ColormapModel
 # Predefined colormaps with annotations and intervals
 predefined_colormaps = [
     {
+        # Same nine Viridis control points as the paper's ParaView view.
+        "name": "viridis_0_3_mV",
+        "colors": [
+            "#440154",
+            "#472D7B",
+            "#3B528B",
+            "#2C728E",
+            "#21918C",
+            "#28AE80",
+            "#5EC962",
+            "#ADDC30",
+            "#FDE725",
+        ],
+        "intervals": [0, 0.375, 0.75, 1.125, 1.5, 1.875, 2.25, 2.625, 3],
+        "use_gradient": True,
+        "annotations": None,
+        "is_relative": False,
+        "clipping": True,
+    },
+    {
         "name": "jet",
         "colors": [
             "#00007F",
@@ -186,6 +206,27 @@ predefined_colormaps = [
 ]
 
 
+#: Settings a re-seed brings in step. Colours and intervals are left as the
+#: operator edited them; these three decide only how a colormap is *applied*,
+#: and a definition that changes one of them means the shipped default was
+#: wrong, not that the operator chose otherwise.
+SYNCED_FLAGS = ("is_relative", "clipping", "use_gradient")
+
+
+def flags_to_sync(existing, definition: dict) -> dict:
+    """The display flags whose stored value no longer matches the definition.
+
+    Split out so it can be tested without a database — the same reason the
+    route serialisers are.
+    """
+    defaults = {"is_relative": False, "clipping": False, "use_gradient": True}
+    return {
+        flag: definition.get(flag, defaults[flag])
+        for flag in SYNCED_FLAGS
+        if getattr(existing, flag) != definition.get(flag, defaults[flag])
+    }
+
+
 def populate_colormaps():
     with get_db_session() as session:
         for colormap in predefined_colormaps:
@@ -197,10 +238,13 @@ def populate_colormaps():
             is_relative = colormap.get("is_relative", False)
             clipping = colormap.get("clipping", False)  # Ensure clipping is False
 
-            # Ensure annotations match intervals or are None
-            if annotations and len(annotations) != len(intervals):
+            # Ensure annotations match intervals or are None. A definition
+            # with annotations but no intervals is a mistake in this list, and
+            # must say so rather than raise TypeError inside len(None).
+            if annotations and len(annotations) != len(intervals or []):
                 raise ValueError(
-                    f"Annotations length {len(annotations)} does not match intervals length {len(intervals)} for colormap {name}"
+                    f"Annotations length {len(annotations)} does not match intervals "
+                    f"length {len(intervals or [])} for colormap {name}"
                 )
 
             # Check if the colormap already exists
@@ -209,10 +253,21 @@ def populate_colormaps():
                 # Skipping wholesale meant a corrected definition never reached
                 # a database that had been seeded once. Bring the display flags
                 # in step; colours and intervals stay as the operator left them.
-                if existing_colormap.is_relative != is_relative:
-                    existing_colormap.is_relative = is_relative
+                #
+                # All three flags, not only ``is_relative``: they are the same
+                # kind of setting, and a colormap defined with clipping on
+                # (``viridis_0_3_mV``, whose fixed 0-3 mV scale depends on it)
+                # would otherwise keep whatever it was first seeded with.
+                changed = flags_to_sync(existing_colormap, colormap)
+                for flag, value in changed.items():
+                    setattr(existing_colormap, flag, value)
+                if changed:
                     session.commit()
-                    print(f"Colormap '{name}': is_relative -> {is_relative}.")
+                    print(
+                        f"Colormap '{name}': "
+                        + ", ".join(f"{flag} -> {value}" for flag, value in changed.items())
+                        + "."
+                    )
                 else:
                     print(f"Colormap '{name}' already exists. Skipping.")
                 continue
