@@ -53,7 +53,7 @@ ruff:
     # libosmesa6 is what makes off-screen rendering possible at all — the
     # publication figure test renders, and without it VTK segfaults.
     - apt-get update && apt-get install -y --no-install-recommends libgl1 libglu1-mesa libosmesa6 libxrender1 libsm6 libxext6 libfontconfig1 libxkbcommon0
-    - pip install -e ".[server,figures,sevenzip,dev]"
+    - pip install -e ".[server,figures,sevenzip,mcp,dev]"
     - pytest -v --maxfail=5
   coverage: '/^TOTAL.*?(\d+\%)$/'
 
