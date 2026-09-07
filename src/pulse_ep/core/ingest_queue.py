@@ -21,6 +21,7 @@ from pulse_ep.core.models import (
     JOB_ERROR,
     JOB_IMPORTING,
     JOB_NEEDS_REVIEW,
+    EPMapModel,
     ImportJobModel,
     StudyModel,
     ingest_waveforms,
@@ -115,8 +116,15 @@ def commit_job(session, job: ImportJobModel) -> ImportJobModel:
 
             sp = wanted.get(study.name)
             if sp is not None:
+                # Per-point signals belong to the map they were acquired on;
+                # the ids only exist once the study is persisted.
+                session.flush()
+                map_ids = {
+                    m.map_name: m.id
+                    for m in session.query(EPMapModel).filter_by(study_id=model.id).all()
+                }
                 for row in ingest_waveforms(
-                    ImportPlan(studies=[sp]), source, store, study_id=model.id
+                    ImportPlan(studies=[sp]), source, store, study_id=model.id, map_ids=map_ids
                 ):
                     session.add(row)
 

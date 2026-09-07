@@ -351,6 +351,22 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
     )
 
 
+def iter_waveforms(study_plan, source: ImportSource):
+    """Yield ``(key stem, waveform, point id, map name)`` for a plan's signals.
+
+    EnSiteX waveforms are per *segment*, so they belong to neither an acquired
+    point nor a single map — both are ``None``, which is the shape the ingest
+    path shares with CARTO, where they are not.
+    """
+    for name in study_plan.waveforms.files:
+        yield (
+            Path(name).stem,
+            parse_ensite_waveforms(source.open(name).read(), name=name),
+            None,
+            None,
+        )
+
+
 # --- measurement points (map_*_points.csv) ---------------------------------
 
 #: Columns of the raw-archive ``map_*_points.csv``, in the order they are read.
