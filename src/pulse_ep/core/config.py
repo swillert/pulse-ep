@@ -117,14 +117,16 @@ class Settings(BaseSettings):
         description="Drop directory the import watcher scans for new export bundles.",
     )
     mcp_enabled: bool = Field(
-        default=True,
+        default=False,
         description=(
             "Whether this deployment serves the MCP server (pulse-ep-mcp). "
-            "Set false to turn AI access off: requests that identify themselves "
-            "as MCP are refused with 403, and pulse-ep-mcp refuses to start "
-            "against this server. The identification is honest self-declaration, "
-            "so this stops a forgotten or misconfigured MCP, not a person with "
-            "valid credentials and curl — for that, disable the account."
+            "Off unless set: AI access is opted into, because serving it means "
+            "study data leaves this deployment for a language model. While it "
+            "is off, requests that identify themselves as MCP are refused with "
+            "403, and pulse-ep-mcp refuses to start against this server. The "
+            "identification is honest self-declaration, so this stops a "
+            "forgotten or misconfigured MCP, not a person with valid "
+            "credentials and curl — for that, disable the account."
         ),
     )
     waveform_store_dir: str = Field(

@@ -35,6 +35,7 @@ def test_defaults_when_no_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert s.host == "127.0.0.1"
     assert s.port == 5000
     assert s.debug is False
+    assert s.mcp_enabled is False
     assert s.database_url is None
     assert s.resolved_database_url is None
     assert s.resolved_jwt_secret_key is None

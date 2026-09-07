@@ -4,6 +4,48 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-09-07
+
+### Changed
+
+- **MCP access is opt-in.** `PULSE_EP_MCP_ENABLED` no longer defaults to on: a
+  deployment serves an AI client only where it is set to `1` — at the server
+  and in the MCP process both — and anything unrecognised, an empty value or a
+  typo, leaves it off. 0.3 had it the other way round, failing open on the
+  argument that the switch grants no access of its own. That is the wrong
+  direction for this particular switch: what it governs is study data leaving
+  the deployment for a language model, and a deployment that has never
+  considered the question should not already be answering it.
+
+    **Upgrading:** a 0.3 deployment that serves MCP without having set the
+    variable stops serving it. Set `PULSE_EP_MCP_ENABLED=1` at both ends to
+    restore access — after the check described below. Nothing else changes and
+    no migration is involved; every other client is untouched.
+
+- **What has to be established before enabling it is now written down**, in the
+  MCP guide, the CLI reference, `.env.example`, and at the prompt
+  `pulse-ep-init` asks the question at. Serving MCP sends study data to a
+  language model — in most setups a third-party service, outside the systems
+  the data was approved for — and whether that is permitted depends on rules
+  this software cannot check: institutional policy on research and patient
+  data, the terms and any ethics approval the studies were collected under, the
+  agreement with the AI provider. Where those require more than the anonymiser
+  provides — it replaces study names, paths and free-text fields, and sends map
+  names, quantities and measured values unchanged — the software must be
+  adapted to meet them **before** it is switched on. Anonymisation is a
+  safeguard against accidental disclosure, not a certificate that what leaves
+  is anonymous in the sense a particular rule means it.
+
+### Fixed
+
+- Messages and documentation that still described the switch as opt-out: the
+  `--enabled` flag advertised itself as the default; `pulse-ep-mcp` told an
+  operator to *remove* the setting in order to allow access, which now denies
+  it; the error raised against a refusing server named `PULSE_EP_MCP_ENABLED=0`
+  as the cause when the variable is simply unset; the CLI reference listed no
+  `--enabled` row at all; and the MCP guide's configuration table never
+  mentioned the variable that governs all of it.
+
 ## [0.3.1] — 2026-09-07
 
 A documentation release. 0.3.0 changed what the project *is* — a fourth

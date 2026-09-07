@@ -18,7 +18,9 @@ surfaces:
   distances, surface-area integration, per-point catheter geometry, and
   per-vertex scalar fields, and
 - an **MCP server** (`pulse-ep-mcp`) giving an AI client read-only access,
-  with study identity anonymised by default and switchable off entirely.
+  **off unless switched on**, with study identity anonymised by default.
+  Enabling it sends study data to a language model — check what your data
+  permits before you do, and adapt what is sent where more is required.
 
 Each is a client of the same REST endpoints; none has a privileged path
 into the database.
@@ -56,9 +58,9 @@ EnSiteX export┘   │   sniff → prepare → (human review) → commit     �
   pulse_ep.server   pulse_ep.mcp         pulse_ep.cli          pulse_ep.core
   Flask + JWT,      read-only tools      init, import_carto,   EPMap, Study,
   Three.js viewer,  for an AI client,    import_ensite,        ScalarField,
-  REST API,         anonymised by        migrate, tag_maps,    MeasurementPoint,
-  import review UI, default, and         populate_colormaps,   interpolation,
-  HTML reports      switchable off       create_user, demo     geodesic, waveform
+  REST API,         off unless           migrate, tag_maps,    MeasurementPoint,
+  import review UI, enabled, anonymised  populate_colormaps,   interpolation,
+  HTML reports      by default           create_user, demo     geodesic, waveform
 ```
 
 The server, the viewer, the toolkit and the MCP server are **peers**: each

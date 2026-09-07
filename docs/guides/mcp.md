@@ -24,26 +24,67 @@ It is a client of the same JWT REST API as the viewer and the `examples/`
 clients — there is no privileged path into the database — so it sees exactly
 what the account it logs in with can see.
 
-## Switching it off
+## Enabling it
 
-`PULSE_EP_MCP_ENABLED=0`. One setting, read at both ends, so a shared
-environment turns off both with one line:
+**MCP access is off until you turn it on.** It is not a default anyone
+inherits, and it is not enabled by installing the extra.
 
-- **On the server** it is the one that decides for the deployment. Requests
-  that identify themselves as MCP are refused with `403`; the viewer, the
-  example clients and every other consumer are untouched.
-- **On the MCP server** it refuses to start: it prints why on stderr and exits
-  0 — switched off on purpose is not a crash, and a client that restarts a
-  "failed" server would otherwise fight the setting. `--disabled` does the
-  same for one run, `--enabled` overrides the environment.
+!!! danger "Establish what you may send before you enable it"
+
+    Serving MCP means study data leaves this deployment for a language model —
+    in most setups a third-party service, outside the systems your data was
+    approved for. Whether that is permitted is not a question this software
+    can answer for you.
+
+    Before turning it on, establish that it is allowed: your institution's
+    rules on processing research and patient data, the terms and any ethics
+    approval the studies were collected under, the data protection agreement
+    with the AI provider, and whatever your data protection officer requires.
+
+    Those conditions may demand more than this software does by default. What
+    the anonymiser removes is documented under [Study
+    identity](#study-identity) — study names, paths and free-text fields —
+    while map names, quantities and measured values are sent unchanged. Where
+    that is not sufficient for your data, **adapt what is sent** (extend the
+    anonymiser, restrict the account's visible studies, run a local model)
+    before enabling it, rather than after.
+
+    Anonymisation is a safeguard against accidental disclosure, not a
+    certification that the result is anonymous in the sense your rules mean.
+
+Then set it explicitly, at **both** ends:
+
+```bash
+PULSE_EP_MCP_ENABLED=1
+```
+
+- **On the server** it decides for the deployment. While it is unset,
+  requests that identify themselves as MCP are refused with `403`; the
+  viewer, the example clients and every other consumer are untouched.
+- **In the MCP process** it decides for that process, which is what a
+  workstation wants. Without it, `pulse-ep-mcp` refuses to start: it prints
+  why on stderr and exits 0 — not serving on purpose is not a crash, and a
+  client that restarts a "failed" server would otherwise fight the setting.
+
+One setting, read at both ends, so a shared environment covers both with one
+line. `--enabled` and `--disabled` override the environment for a single run
+of the local process — neither can talk a deployment into serving, which is
+the point of the server holding the decision too.
 
 ```console
-$ pulse-ep-mcp --check                 # deployment has it off
+$ pulse-ep-mcp --check                 # deployment does not serve it
 pulse-ep-mcp: http://pulse-ep.local does not serve MCP access
-              (PULSE_EP_MCP_ENABLED=0 on the server)
+              (PULSE_EP_MCP_ENABLED=1 is not set on the server)
 $ echo $?
 3
 ```
+
+## Switching it off
+
+Unset `PULSE_EP_MCP_ENABLED`, or set it to `0` — anything that is not
+`1`/`true`/`yes`/`on` refuses access, so a typo leaves it off rather than on.
+It takes effect at both ends on restart, and revoking the account (below) is
+what ends access for good.
 
 !!! warning "A gate, not a boundary"
 
@@ -113,6 +154,7 @@ and how to log in:
 
 | Variable | Meaning |
 | -------- | ------- |
+| `PULSE_EP_MCP_ENABLED` | `1` serves at all — **off unless set**, at both ends (see [Enabling it](#enabling-it)) |
 | `PULSE_EP_MCP_BASE_URL` | pulse-ep server (default `http://localhost:5000`) |
 | `PULSE_EP_MCP_TOKEN` | a JWT, if you have one … |
 | `PULSE_EP_MCP_USERNAME` / `PULSE_EP_MCP_PASSWORD` | … or an account to log in with — give it the `readonly` role |

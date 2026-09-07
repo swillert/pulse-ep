@@ -69,7 +69,7 @@ def test_check_reports_the_mode_and_exits(monkeypatch, capsys):
         "pulse_ep.mcp.server.client_from_env",
         lambda env: _StubClient(),
     )
-    assert main(["--check"]) == 0
+    assert main(["--enabled", "--check"]) == 0
     out = capsys.readouterr().out
     assert "anonymised: True" in out
     assert "study/12" in out
@@ -78,7 +78,7 @@ def test_check_reports_the_mode_and_exits(monkeypatch, capsys):
 
 def test_check_without_anonymisation_warns_on_stderr(monkeypatch, capsys):
     monkeypatch.setattr("pulse_ep.mcp.server.client_from_env", lambda env: _StubClient())
-    assert main(["--check", "--no-anonymize"]) == 0
+    assert main(["--enabled", "--check", "--no-anonymize"]) == 0
     captured = capsys.readouterr()
     assert "anonymisation is OFF" in captured.err
     assert "10054321_XY_AB 01_02_2020 09-15-00" in captured.out  # the real name, as asked
@@ -94,17 +94,11 @@ class _StubClient:
 # --- switching it off --------------------------------------------------------
 
 
-def test_it_serves_unless_something_explicitly_says_otherwise():
-    """Fail *open* here, unlike anonymisation: this switch grants no access.
-
-    A typo must not silently disable a working deployment either, so only the
-    explicit off values count.
-    """
-    assert is_enabled({}) is True
-    assert is_enabled({"PULSE_EP_MCP_ENABLED": "1"}) is True
-    assert is_enabled({"PULSE_EP_MCP_ENABLED": "yes"}) is True
-    assert is_enabled({"PULSE_EP_MCP_ENABLED": "flase"}) is True  # typo
-    for off in ("0", "false", "no", "off", "OFF"):
+def test_serving_requires_explicit_opt_in():
+    assert is_enabled({}) is False
+    for on in ("1", "true", "yes", "on", "ON"):
+        assert is_enabled({"PULSE_EP_MCP_ENABLED": on}) is True
+    for off in ("", "0", "false", "no", "off", "OFF", "flase"):
         assert is_enabled({"PULSE_EP_MCP_ENABLED": off}) is False
 
 
@@ -113,17 +107,25 @@ def test_the_flag_wins_over_the_environment():
     assert is_enabled({}, override=False) is False
 
 
-def test_a_disabled_server_serves_nothing_and_says_why(monkeypatch, capsys):
-    """It must not start and then answer questions — and not look crashed."""
+@pytest.mark.parametrize("value", [None, "0"])
+def test_a_server_that_may_not_serve_starts_nothing_and_says_why(monkeypatch, capsys, value):
+    """It must not start and then answer questions — and not look crashed.
+
+    Unset is the case that matters: opt-in means an operator who never made
+    the decision gets the same refusal as one who made it explicitly.
+    """
     started = []
     monkeypatch.setattr(
         "pulse_ep.mcp.server.build_server", lambda *a, **k: started.append(a) or _NeverRun()
     )
-    monkeypatch.setenv("PULSE_EP_MCP_ENABLED", "0")
+    monkeypatch.delenv("PULSE_EP_MCP_ENABLED", raising=False)
+    if value is not None:
+        monkeypatch.setenv("PULSE_EP_MCP_ENABLED", value)
 
-    assert main([]) == 0  # switched off on purpose is not a failure
+    assert main([]) == 0  # not serving on purpose is not a failure
     assert started == []
-    assert "disabled" in capsys.readouterr().err
+    # Says what to do, not merely that it did nothing.
+    assert "PULSE_EP_MCP_ENABLED=1" in capsys.readouterr().err
 
 
 def test_a_deployment_that_refuses_mcp_is_reported_as_that(monkeypatch, capsys):
@@ -137,7 +139,7 @@ def test_a_deployment_that_refuses_mcp_is_reported_as_that(monkeypatch, capsys):
             raise MCPDisabled("http://server does not serve MCP access")
 
     monkeypatch.setattr("pulse_ep.mcp.server.client_from_env", lambda env: _Refusing())
-    assert main(["--check"]) == 3  # its own exit code, distinct from a config error
+    assert main(["--enabled", "--check"]) == 3  # its own exit code, distinct from a config error
     assert "does not serve MCP access" in capsys.readouterr().err
 
 
