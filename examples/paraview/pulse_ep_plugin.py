@@ -44,7 +44,7 @@ except ImportError:  # pragma: no cover - depends on the ParaView build
 from paraview.util.vtkAlgorithm import smdomain, smproperty, smproxy
 from vtkmodules.numpy_interface import dataset_adapter as dsa  # noqa: F401  (ParaView needs it)
 from vtkmodules.util.vtkAlgorithm import VTKPythonAlgorithmBase
-from vtkmodules.vtkCommonCore import vtkFloatArray, vtkPoints
+from vtkmodules.vtkCommonCore import vtkDoubleArray, vtkPoints, vtkStringArray
 from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData
 
 _TIMEOUT = 60
@@ -100,11 +100,18 @@ def _login(base_url: str, username: str) -> str:
     return resp["access_token"]
 
 
-def fetch_polydata(base_url: str, username: str, map_id: int, scalar_name: str, distance: float):
+def fetch_polydata(
+    base_url: str,
+    username: str,
+    map_id: int,
+    scalar_name: str,
+    distance: float,
+    representation="display",
+):
     """The map as a vtkPolyData, plus the quantity the server actually used."""
     token = _login(base_url, username)
 
-    query = {"map_id": str(map_id), "distance": str(distance)}
+    query = {"map_id": str(map_id), "distance": str(distance), "representation": representation}
     # Omitting scalar_name lets the server resolve the map's own primary
     # quantity, which differs by vendor — activation_time for CARTO,
     # voltage_bipolar for EnSiteX. Never guess a field name here.
@@ -116,6 +123,7 @@ def fetch_polydata(base_url: str, username: str, map_id: int, scalar_name: str, 
     name = scalar_name or mesh.get("scalar_name") or "scalar"
 
     points = vtkPoints()
+    points.SetDataTypeToDouble()
     for x, y, z in data["vertices"]:
         points.InsertNextPoint(x, y, z)
 
@@ -130,7 +138,7 @@ def fetch_polydata(base_url: str, username: str, map_id: int, scalar_name: str, 
     polydata.SetPolys(polys)
 
     def _array(values, array_name):
-        arr = vtkFloatArray()
+        arr = vtkDoubleArray()
         arr.SetName(array_name)
         arr.SetNumberOfComponents(1)
         for v in values:
@@ -141,6 +149,14 @@ def fetch_polydata(base_url: str, username: str, map_id: int, scalar_name: str, 
 
     polydata.GetPointData().AddArray(_array(data["scalar_data"], name))
     polydata.GetPointData().AddArray(_array(data["normalized_scalar_data"], name + "_normalized"))
+    for field_name, field in data.get("scalar_fields", {}).items():
+        polydata.GetPointData().AddArray(_array(field["values"], field_name))
+        if field.get("status_mask") is not None:
+            polydata.GetPointData().AddArray(_array(field["status_mask"], field_name + "_valid"))
+    metadata = vtkStringArray()
+    metadata.SetName("pulse_ep_export_json")
+    metadata.InsertNextValue(json.dumps(mesh, allow_nan=False))
+    polydata.GetFieldData().AddArray(metadata)
     polydata.GetPointData().SetActiveScalars(name)
     return polydata, name
 
@@ -150,12 +166,13 @@ class PulseEPMapSource(VTKPythonAlgorithmBase):
     """Fetches one electroanatomical map from a pulse-ep server."""
 
     def __init__(self):
-        super().__init__(nInputPorts=0, nOutputPorts=1, outputType="vtkPolyData")
+        super().__init__(nInputPorts=0, nOutputPorts=2, outputType="vtkPolyData")
         self._base_url = os.environ.get("PULSE_EP_BASE_URL", "http://127.0.0.1:5000")
         self._username = os.environ.get("PULSE_EP_USERNAME", "admin")
         self._map_id = 1
         self._scalar_name = ""
         self._distance = 5.0
+        self._representation = "display"
 
     @smproperty.stringvector(name="ServerURL", default_values="")
     @smdomain.xml("<Documentation>Base URL. Empty: $PULSE_EP_BASE_URL.</Documentation>")
@@ -205,12 +222,49 @@ class PulseEPMapSource(VTKPythonAlgorithmBase):
         self._distance = float(value)
         self.Modified()
 
+    @smproperty.stringvector(name="Representation", default_values="display")
+    def SetRepresentation(self, value):
+        if value not in {"raw", "display"}:
+            raise ValueError("Representation must be raw or display")
+        self._representation = value
+        self.Modified()
+
     def RequestData(self, request, in_info, out_info):
         polydata, name = fetch_polydata(
-            self._base_url, self._username, self._map_id, self._scalar_name, self._distance
+            self._base_url,
+            self._username,
+            self._map_id,
+            self._scalar_name,
+            self._distance,
+            self._representation,
         )
         output = vtkPolyData.GetData(out_info, 0)
         output.ShallowCopy(polydata)
+        # Second output: unprojected acquisition points for spatial analysis.
+        payload = json.loads(
+            polydata.GetFieldData().GetAbstractArray("pulse_ep_export_json").GetValue(0)
+        )
+        samples = payload["point_data"].get("measurement_points", [])
+        coordinates = payload["point_data"].get("coordinates", [])
+        point_cloud = vtkPolyData.GetData(out_info, 1)
+        point_cloud.Initialize()
+        points = vtkPoints()
+        points.SetDataTypeToDouble()
+        cells = vtkCellArray()
+        for i, position in enumerate(coordinates):
+            points.InsertNextPoint(*[float("nan") if x is None else x for x in position])
+            cells.InsertNextCell(1)
+            cells.InsertCellPoint(i)
+        point_cloud.SetPoints(points)
+        point_cloud.SetVerts(cells)
+        for field_name in sorted({n for p in samples for n in p["measurements"]}):
+            arr = vtkDoubleArray()
+            arr.SetName(field_name)
+            for point in samples:
+                value = point["measurements"].get(field_name, {}).get("value")
+                arr.InsertNextValue(float("nan") if value is None else value)
+            point_cloud.GetPointData().AddArray(arr)
+        point_cloud.GetFieldData().ShallowCopy(polydata.GetFieldData())
         print(
             f"pulse-ep: map {self._map_id} — {polydata.GetNumberOfPoints()} points, "
             f"{polydata.GetNumberOfCells()} cells, scalar '{name}'"

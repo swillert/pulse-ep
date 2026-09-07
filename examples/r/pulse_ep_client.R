@@ -115,19 +115,21 @@ pe_map_scalars <- function(token, map_id) {
 }
 
 pe_get_mesh <- function(token, map_id, scalar_name = NULL,
-                        distance = 5.0, base_url = NULL) {
+                        distance = 5.0, base_url = NULL, representation = "display") {
   data <- .pe_get(
     token, "/get_mesh_data",
     query = list(
-      map_id = map_id, scalar_name = scalar_name, distance = distance
+      map_id = map_id, scalar_name = scalar_name, distance = distance,
+      representation = representation
     ),
     base_url = base_url
   )
   md <- data$mesh_data
   pd <- data$point_data
   list(
-    vertices       = matrix(unlist(md$vertices), ncol = 3, byrow = TRUE),
-    faces          = matrix(unlist(md$faces),    ncol = 3, byrow = TRUE) + 1L,  # R is 1-indexed
+    data = data, # Complete response, including every raw field and measurement.
+    vertices       = if (is.matrix(md$vertices)) md$vertices else matrix(unlist(md$vertices), ncol = 3, byrow = TRUE),
+    faces          = (if (is.matrix(md$faces)) md$faces else matrix(unlist(md$faces), ncol = 3, byrow = TRUE)) + 1L,  # R is 1-indexed
     scalars        = as.numeric(md$scalar_data),
     normalized     = as.numeric(md$normalized_scalar_data),
     # An empty JSON array arrives as an empty *list*, not NULL, so a
@@ -135,8 +137,18 @@ pe_get_mesh <- function(token, map_id, scalar_name = NULL,
     # that unlist() returns. A map may legitimately have no acquisition
     # points: an EnSiteX mesh carrying only per-vertex fields has none.
     points         = if (length(pd$coordinates) > 0)
-                       matrix(unlist(pd$coordinates), ncol = 3, byrow = TRUE)
+                       if (is.matrix(pd$coordinates)) pd$coordinates else matrix(unlist(pd$coordinates), ncol = 3, byrow = TRUE)
                      else matrix(numeric(), ncol = 3),
     point_scalars  = as.numeric(pd$scalar_data)
   )
+}
+
+#' Download a waveform listed in mesh$data$waveforms as a Parquet file.
+#' Read with arrow::read_parquet(path); channel/timing metadata is in the file.
+pe_download_waveform <- function(token, waveform_id, path, base_url = NULL) {
+  request(pe_base_url(base_url)) |>
+    req_url_path(paste0("/waveforms/", waveform_id, "/download")) |>
+    req_headers(Authorization = paste("Bearer", token)) |>
+    req_perform(path = path)
+  invisible(path)
 }

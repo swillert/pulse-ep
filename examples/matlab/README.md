@@ -12,7 +12,7 @@ Files in this directory:
 - [`areas_per_interval.m`](areas_per_interval.m) — call
   `/calculate_areas_for_intervals` and tabulate the surface area
   per score bin — the same reduction the bundled web viewer and the
-  clinical Excel reports show, computed independently in MATLAB.
+  clinical Excel reports show, computed by the shared server and displayed in MATLAB.
 
 ## What this demonstrates
 
@@ -45,3 +45,20 @@ If you prefer to hardcode credentials for a one-off run, edit the
   indices already converted from the 0-based JSON payload.
 - `NaN` scalars (vertices outside the catheter interpolation radius)
   are passed through to MATLAB unchanged; `trisurf` colors them grey.
+
+## Scope of the reproducibility claim
+
+Histograms are calculated in the client from the returned mesh values.
+The interval-area examples call the shared server calculation; they do
+not independently reimplement surface integration. The default mesh payload uses the API's display representation. Select
+`representation=raw` to compute on the original stored geometry.
+See [complete analysis export](../../docs/reference/rest-api.md#complete-analysis-export).
+
+## Full analysis data
+
+The API now supports `representation=raw`, including every stored field,
+measurement, electrode position, marker, provenance and waveform download links.
+R and MATLAB retain the complete response in `data`; ParaView exposes raw
+surface fields and a second acquisition-point output. See the
+[API contract](../../docs/reference/rest-api.md#complete-analysis-export) for
+units, missing values and the distinction between stored and vendor-original data.

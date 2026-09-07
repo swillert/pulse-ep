@@ -141,7 +141,7 @@ def fig_area_per_interval(epmap, out: Path) -> Path:
     values = np.asarray(epmap.get_scalar(field), float)
     edges = np.linspace(np.nanmin(values), np.nanmax(values), 9)
     areas = [
-        epmap.area_of_range(lo, hi, scalar_name=field) / 100.0
+        epmap.area_of_range(lo, hi, scalar_name=field, include_upper=hi == edges[-1])
         for lo, hi in zip(edges[:-1], edges[1:])  # noqa: B905
     ]
     centres = (edges[:-1] + edges[1:]) / 2

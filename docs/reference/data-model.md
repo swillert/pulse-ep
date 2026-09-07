@@ -33,6 +33,7 @@ erDiagram
         float_array position
         jsonb measurements
         jsonb electrodes
+        jsonb tags
     }
     PlacedPointModel {
         int id PK
@@ -165,7 +166,11 @@ domain object suitable for mesh / area / geodesic computations.
 ### `MeasurementPointModel` — `measurement_points`
 
 The acquisition points behind a map, with an **open** set of measurements
-rather than fixed vendor columns. Successor to `EPMapPoint`.
+rather than fixed vendor columns. Successor to `EPMapPoint`, which it now
+fully supersedes: everything the legacy table holds lives here, except
+`connector_types` — derivable from the electrode labels — and only
+`pulse-ep-import-carto` writes legacy rows at all (the queue and review-UI
+path never has).
 
 | Column          | Type    | Notes                                                          |
 | --------------- | ------- | -------------------------------------------------------------- |
@@ -176,6 +181,8 @@ rather than fixed vendor columns. Successor to `EPMapPoint`.
 | `position`      | float[] | `[x, y, z]` on / near the surface.                             |
 | `measurements`  | jsonb   | `{name: {value, kind, unit}}` — keyed by quantity, so a CARTO and an EnSiteX point are directly comparable. |
 | `electrodes`    | jsonb   | `{label: [x, y, z]}` — catheter electrode geometry (`CS_1`, `20A_1`, …). |
+| `tags`          | jsonb   | `[name, …]` — the vendor's markers on the point (`Location Only`, `Scar`, a study's own labels); what the point was meant for, not what it measured. |
+| `annotations`   | jsonb   | `{start_time, reference, map, woi_from, woi_to}` — where the point's beat sits in the signal recorded for it: the window's first sample on the study clock, the reference and mapping annotations as offsets into it, and the window of interest. Acquisition bookkeeping, not a measured quantity, and the components `measurements` derives its activation time / pace-match score from. Keys an export does not carry are absent. |
 
 ### `PlacedPointModel` — `placed_points`
 
@@ -203,6 +210,7 @@ a reference, the samples live in Parquet.
 | `id`           | int    | Primary key.                                             |
 | `study_id`     | int    | Owning study.                                            |
 | `map_id`       | int    | Owning map, where the trace belongs to one.              |
+| `point_source_id` | text | The acquired point this row is the signal for, where signals are per point (CARTO). `NULL` for per-segment exports (EnSiteX). Several rows can share one `data_uri`: a multi-electrode catheter takes many points from one recording. |
 | `signal_type`  | text   | ECG, bipolar, unipolar, …                                |
 | `channels`     | jsonb  | Channel labels, in column order.                         |
 | `sample_rate`  | float  | Hz.                                                      |

@@ -9,7 +9,7 @@ hide:
 
 `pulse-ep` parses **CARTO 3** (Biosense Webster / Johnson & Johnson) and **EnSiteX**
 (Abbott / St. Jude) export archives into a relational PostgreSQL database — under one
-vendor-neutral vocabulary — and exposes the data through three independent surfaces:
+vendor-neutral vocabulary — and exposes the data through four independent surfaces:
 
 <div class="grid cards" markdown>
 
@@ -51,6 +51,15 @@ vendor-neutral vocabulary — and exposes the data through three independent sur
 
     [:octicons-arrow-right-24: CLI reference](reference/cli.md)
 
+-   :material-robot-outline:{ .lg .middle } __MCP server__
+
+    ---
+
+    Read-only access for an AI client over the Model Context Protocol.
+    Study identity is anonymised by default, and a deployment can switch
+    it off entirely.
+
+    [:octicons-arrow-right-24: The MCP server](guides/mcp.md)
 </div>
 
 ## Why pulse-ep?

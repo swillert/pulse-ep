@@ -9,18 +9,17 @@ language you work in.
 | `paraview/`   | Python (ParaView)  | Load a map directly into ParaView via the REST API, plus a CLI VTU exporter that uses `pulse_ep.core` without a running server. |
 | `r/`          | R (httr2 + rgl)    | Minimal REST client, mesh rendering, per-vertex scalar histogram and area-per-interval table — re-computed independently in R. |
 | `matlab/`     | MATLAB (R2020a+)   | `webread` / `webwrite` client, `trisurf` 3D, scalar histogram and area-per-interval table — the same numbers, in MATLAB. |
+| `python/` | Python | Retrieve a CARTO point and its linked waveform; plot the mesh and annotated electrograms. |
 | `notebooks/`  | Jupyter / Python   | End-to-end notebook: login → study browsing → 3D plot with PyVista, scalar histogram and area-per-interval table. |
 
 ## Why these examples exist (and what they prove)
 
-These examples form the **cross-language reproducibility statement of
-the software paper**: from one study, served by one REST endpoint,
-four independent toolchains compute identical platform-level reductions
-— the per-vertex scalar histogram and the per-interval surface-area
-breakdown (`/calculate_areas_for_intervals`). If a clinical co-author
-in MATLAB and a stats co-author in R get the same numbers as the
-Python toolkit and the bundled web viewer, the platform itself is
-faithful — independent of any one stack.
+These examples connect one shared data service to multiple analysis
+environments. They demonstrate both shared server calculations and local
+analysis of retrieved arrays. Matching interval-area responses verifies
+consistent API use; independent geometric calculations provide a separate
+check of the downloaded mesh. The Python waveform example additionally
+follows a source point to its stored multichannel recording.
 
 The Python end-to-end demo without any external dependencies lives at
 [`src/pulse_ep/examples/demo_synthetic.py`](../src/pulse_ep/examples/demo_synthetic.py)
@@ -105,3 +104,12 @@ for the full surface.
 | `GET`  | `/list_epmaps_in_study/<study_id>`  | List EP maps in a study.                                 |
 | `GET`  | `/get_mesh_data?map_id=&scalar_name=&distance=` | Mesh + per-vertex scalars + measurement points. |
 | `POST` | `/calculate_areas_for_intervals`    | Surface area per score bin — the clinical-report reduction. |
+
+## Scope of the reproducibility claim
+
+Histograms are calculated in the client from the returned mesh values.
+The interval-area examples call the shared server calculation; they do
+not independently reimplement surface integration. The default mesh payload uses the repaired/simplified display representation.
+Select `representation=raw` to obtain the original stored geometry and every
+field for independent computations. The API documentation describes metadata,
+measurement points and authenticated waveform downloads.

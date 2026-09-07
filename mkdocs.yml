@@ -136,7 +136,9 @@ nav:
   - Guides:
       - Importing CARTO studies: guides/carto-import.md
       - Importing EnSite X studies: guides/ensite-import.md
+      - Masking and interpolation: guides/interpolation.md
       - The web viewer: guides/web-viewer.md
+      - The MCP server: guides/mcp.md
       - Docker deployment: guides/docker-deployment.md
       - Managing users: guides/managing-users.md
       - Colormaps and reports: guides/colormaps-and-reports.md
