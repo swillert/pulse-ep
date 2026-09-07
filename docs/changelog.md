@@ -6,8 +6,36 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.3.0] — 2026-09-07
 
+### Security
+
+- **`/register_user` had no authentication and took the role from the request
+  body**, so anyone who could reach a deployment could ask for `role: admin`
+  and get it. The REST reference has always described the endpoint as admin
+  only. Registration stays open — the bundled UI has a page for it — but an
+  unauthenticated caller may now only ever create a plain `user`; naming a
+  privileged role requires an administrator's token.
+- **The `role` claim was minted at login and never read again.** The four
+  endpoints documented as admin-only were open to every account, and the
+  read-only user the MCP guide recommends could set map attributes and delete
+  colormaps and reports. Three roles are enforced now — `admin`, `user`, and
+  `readonly`, refused on every endpoint that changes stored state, which is
+  what makes a read-only MCP account a property of the deployment rather than
+  a sentence in a document. Reads that arrive as `POST` (a filter, an area
+  integration, a comparison) stay open. An account whose role claim predates
+  this is treated as an ordinary user: nobody is locked out, nobody promoted.
+
 ### Added
 
+- **`pulse-ep-init`** brings a fresh installation to a running state in one
+  command: it writes `.env` with a generated JWT secret, creates the waveform
+  and drop directories, applies the migrations, seeds the colormaps, creates
+  an administrator and, on request, a `readonly` account for the MCP server —
+  printing the client configuration to paste. The quickstart was fifteen
+  commands, and the ones easiest to miss are the ones whose absence looks like
+  a different bug. Interactive where there is a terminal, flags and defaults
+  otherwise, and idempotent: an existing `.env` is kept, migrations run only
+  when behind, and an account that exists is left alone with its password
+  unchanged — never reported as though a new one had been set.
 - **MCP access can be switched off** (`PULSE_EP_MCP_ENABLED=0`), at both ends
   with one setting: the server refuses requests that identify themselves as
   MCP (`403`, other clients untouched), and `pulse-ep-mcp` refuses to start.
@@ -116,6 +144,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A histogram's top bin dropped its maximum.** Adjacent bins stopped
+  counting a boundary value twice — `area_of_range` is half-open, as the REST
+  reference always said — and every caller moved to the new rule except
+  `plot_histogram`, whose highest bin then lost every vertex sitting exactly
+  at the top of the range. On a three-value sample the bins summed to two
+  thirds of the surface, and the third that vanished was the perfect pace
+  match.
 - **Re-seeding a colormap corrected only one of its display flags.**
   `pulse-ep-populate-colormaps` learned to bring `is_relative` in step with a
   changed definition but left `clipping` and `use_gradient` at whatever the
