@@ -78,8 +78,9 @@ def _gate_mcp_access():
     """Refuse MCP requests where the deployment has switched them off.
 
     A deployment decides whether it is reachable by an AI client at all —
-    ``PULSE_EP_MCP_ENABLED=0`` — rather than that decision living only in
-    whoever starts the MCP server.
+    ``PULSE_EP_MCP_ENABLED=1``, refused while unset — rather than that
+    decision living only in whoever starts the MCP server. It is opt-in
+    because serving it means study data leaves here for a language model.
 
     This is a gate, not a boundary: the MCP names itself honestly, and
     anything it can do a user with the same credentials can do with ``curl``.

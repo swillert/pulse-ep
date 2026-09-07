@@ -226,7 +226,11 @@ def run(args) -> int:
     )
     waveform_dir = args.waveform_dir or ask.text("   Waveform store", DEFAULT_WAVEFORM_DIR)
     drop_dir = args.drop_dir or ask.text("   Drop directory", DEFAULT_DROP_DIR)
-    mcp_enabled = args.mcp if args.mcp is not None else ask.yes("   Serve MCP access?", True)
+    if args.mcp is None and ask.interactive:
+        print("   MCP serves this deployment to an AI client, read-only. Study")
+        print("   data then leaves it for a language model, so establish what")
+        print("   you may send before saying yes — see docs/guides/mcp.md.")
+    mcp_enabled = args.mcp if args.mcp is not None else ask.yes("   Serve MCP access?", False)
 
     values = env_values(database_url, waveform_dir, drop_dir, mcp_enabled)
     _, effective = write_env(env_path, values, ask)
@@ -290,6 +294,11 @@ def run(args) -> int:
         print(f"  log in as {admin_user!r} / {admin_password}")
     elif not admin_created:
         print(f"  log in as {admin_user!r} (existing password)")
+    if mcp_enabled:
+        print()
+        print("  MCP access is ON. Study data reaches a language model through")
+        print("  it: keep to the rules that apply to your data, and adapt what")
+        print("  is sent where they ask for more than the anonymiser removes.")
     if mcp_config:
         print()
         print("  Register the MCP server with your client (the password is not")

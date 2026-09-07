@@ -14,7 +14,7 @@ Configuration (environment, or the flags below):
 ``PULSE_EP_MCP_BASE_URL``        pulse-ep server (default http://localhost:5000)
 ``PULSE_EP_MCP_TOKEN``           a JWT, or …
 ``PULSE_EP_MCP_USERNAME/PASSWORD`` … an account to log in with
-``PULSE_EP_MCP_ENABLED``         ``0`` refuses to serve at all (default: on)
+``PULSE_EP_MCP_ENABLED``         ``1`` explicitly enables serving (default: off)
 ``PULSE_EP_MCP_ANONYMIZE``       ``0`` turns anonymisation off (default: on)
 ``PULSE_EP_MCP_DOWNLOAD_DIR``    where bulk downloads are written
 ===============================  ==============================================
@@ -160,14 +160,19 @@ def build_server(tools: Tools, anonymized: bool):
     return mcp
 
 
-#: Values that switch the server off. Everything else leaves it on — the same
-#: rule the anonymiser uses, and for the same reason: a typo must not change
-#: what a deployment does.
-_OFF = {"0", "false", "no", "off"}
+#: Values that switch the server on. Everything else — an unset variable, an
+#: empty string, a typo — leaves it off. It fails *closed*, like the
+#: anonymiser and for a stronger reason: this switch is what lets study data
+#: reach a language model, so the direction a mistake falls in must be the one
+#: that sends nothing.
+_ON = {"1", "true", "yes", "on"}
 
 
 def is_enabled(env, override: bool | None = None) -> bool:
     """Whether this MCP server may serve at all.
+
+    Off unless the environment explicitly says otherwise: AI access is opted
+    into, never inherited from a default.
 
     Two switches, one name. This is the local one — it stops the process here,
     which is what a workstation wants. The one that decides for a *deployment*
@@ -178,7 +183,7 @@ def is_enabled(env, override: bool | None = None) -> bool:
     """
     if override is not None:
         return override
-    return str(env.get("PULSE_EP_MCP_ENABLED", "")).strip().casefold() not in _OFF
+    return str(env.get("PULSE_EP_MCP_ENABLED", "")).strip().casefold() in _ON
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -211,13 +216,13 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="enabled",
         action="store_true",
         default=None,
-        help="Serve (the default).",
+        help="Serve for this run. Off unless PULSE_EP_MCP_ENABLED=1.",
     )
     switch.add_argument(
         "--disabled",
         dest="enabled",
         action="store_false",
-        help="Do not serve. Refuses to start, and says so.",
+        help="Do not serve (the default). Refuses to start, and says so.",
     )
     p.add_argument(
         "--check",
@@ -240,8 +245,10 @@ def main(argv: list[str] | None = None) -> int:
         # Exit code 0: switched off on purpose is not a failure, and a client
         # that restarts a "crashed" server would fight the setting.
         print(
-            "pulse-ep-mcp: disabled (PULSE_EP_MCP_ENABLED=0). "
-            "No tools are served; remove the setting to allow AI access.",
+            "pulse-ep-mcp: not enabled. No tools are served. AI access is "
+            "opt-in: set PULSE_EP_MCP_ENABLED=1, here and on the server, once "
+            "you have established what your data may be sent to a language "
+            "model (see the MCP guide).",
             file=sys.stderr,
         )
         return 0

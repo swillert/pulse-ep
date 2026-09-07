@@ -258,12 +258,17 @@ over stdio, **read-only**. Needs the optional extra: `pip install "pulse-ep[mcp]
 | `--anonymize` | on | Study names become `study/<id>`; paths and free-text fields are redacted. |
 | `--no-anonymize` | | Send real study names — they carry case numbers and initials. Warns on stderr. |
 | `--download-dir` | `PULSE_EP_MCP_DOWNLOAD_DIR`, else a temp folder | Where `fetch_map` / `fetch_points` / `fetch_waveform` write bulk data. |
-| `--disabled` | | Do not serve. Prints why and exits 0 — switched off on purpose is not a crash. Same as `PULSE_EP_MCP_ENABLED=0`. |
+| `--enabled` | | Serve for this run. AI access is **off unless** `PULSE_EP_MCP_ENABLED=1`; the flag sets it for one run and cannot make a deployment serve. |
+| `--disabled` | on | Do not serve — the default, and what any unset or unrecognised `PULSE_EP_MCP_ENABLED` means. Prints why and exits 0: not serving on purpose is not a crash. |
 | `--check` | off | Connect, log in, print what the model would see, exit. Exit 2 on a configuration problem, **3** when the deployment refuses MCP access. |
 
 Credentials come from `PULSE_EP_MCP_TOKEN`, or `PULSE_EP_MCP_USERNAME` +
 `PULSE_EP_MCP_PASSWORD`. There is no tool that changes the anonymisation mode:
 it is the operator's decision, taken at startup.
+
+Enabling MCP access sends study data to a language model. Establish what your
+data permits, and adapt what is sent where more is required, before switching
+it on — see the [MCP guide](../guides/mcp.md#enabling-it).
 
 See the [MCP guide](../guides/mcp.md) for the tool list and client setup.
 

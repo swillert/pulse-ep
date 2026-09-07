@@ -18,8 +18,9 @@ DEFAULT_BASE_URL = "http://localhost:5000"
 DEFAULT_TIMEOUT = 60.0
 
 #: Every request says what it is. A deployment can then see AI access in its
-#: logs and refuse it (``PULSE_EP_MCP_ENABLED=0`` on the server), instead of
-#: that decision living only with whoever starts this process.
+#: logs and decide on it (``PULSE_EP_MCP_ENABLED=1`` on the server, refused
+#: while unset), instead of that decision living only with whoever starts this
+#: process.
 CLIENT_HEADER = "X-Pulse-EP-Client"
 CLIENT_NAME = "pulse-ep-mcp"
 
@@ -95,11 +96,12 @@ class PulseEpClient:
                 continue
             break
 
-        # A deployment that has switched MCP access off says so on every
+        # A deployment that does not serve MCP access says so on every
         # request; report that as itself rather than as "403 on /list_studies".
         if response.status_code == 403 and "MCP access is disabled" in _message(response):
             raise MCPDisabled(
-                f"{self.base_url} does not serve MCP access (PULSE_EP_MCP_ENABLED=0 on the server)"
+                f"{self.base_url} does not serve MCP access "
+                "(PULSE_EP_MCP_ENABLED=1 is not set on the server)"
             )
         if response.status_code >= 400:
             raise PulseEpError(f"{method} {path} -> {response.status_code}: {_message(response)}")

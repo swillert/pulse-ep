@@ -125,7 +125,12 @@ stays in the vendor importer, not the lexicon.
   named after its export, and a real one carries a case number and
   initials — so MCP results are anonymised by default, aliased to the
   database id, and the switch is the operator's alone: no tool can lift
-  it, and `PULSE_EP_MCP_ENABLED=0` refuses AI access at both ends.
+  it. AI access itself is **opt-in**: `PULSE_EP_MCP_ENABLED=1` at both
+  ends, refused while unset and on any value that is not recognised, so
+  a typo cannot enable it. Both switches fail towards sending nothing,
+  because what an operator must decide before turning this on — which
+  rules govern the data, and whether anonymised study names are enough —
+  is not a question the software can answer for them.
 
 ## 6 Repository conventions
 
