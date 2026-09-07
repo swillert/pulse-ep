@@ -1,4 +1,4 @@
-"""Abbott EnSiteX (St. Jude) DIF decode.
+"""Abbott EnSite X (St. Jude) DIF decode.
 
 Parses the ``SJM_DIF_5.0`` XML meshes (``Contact_Mapping_Model*.xml``,
 ``Model_Groups.xml``, ``difNNN.xml``) into vendor-neutral geometry +
@@ -354,7 +354,7 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
 def iter_waveforms(study_plan, source: ImportSource):
     """Yield ``(key stem, waveform, point id, map name)`` for a plan's signals.
 
-    EnSiteX waveforms are per *segment*, so they belong to neither an acquired
+    EnSite X waveforms are per *segment*, so they belong to neither an acquired
     point nor a single map — both are ``None``, which is the shape the ingest
     path shares with CARTO, where they are not.
     """
@@ -784,7 +784,7 @@ def _read_provenance(source: ImportSource) -> dict:
 
 
 class EnsiteImporter:
-    """Vendor importer for Abbott EnSiteX (St. Jude) DIF exports."""
+    """Vendor importer for Abbott EnSite X (St. Jude) DIF exports."""
 
     name = "ensite"
 

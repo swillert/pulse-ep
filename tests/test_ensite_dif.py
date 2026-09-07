@@ -1,4 +1,4 @@
-"""EnSiteX DIF parser + descriptor decoder (synthetic fixtures only)."""
+"""EnSite X DIF parser + descriptor decoder (synthetic fixtures only)."""
 
 from __future__ import annotations
 

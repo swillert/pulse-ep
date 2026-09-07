@@ -8,7 +8,7 @@ per-interval area breakdown).
 Runs **without** a database, so it works as a quickstart that exercises
 just the array-only public API. Invoke from the shell with::
 
-    pulse-ep-demo                      # default 642-vertex sphere
+    pulse-ep-demo                      # default 530-vertex ellipsoid
     pulse-ep-demo --resolution 32      # higher mesh resolution
     pulse-ep-demo --sigma 8.0          # narrower / wider focal point
     pulse-ep-demo --show               # open a 3D viewer window
@@ -132,10 +132,17 @@ def main(argv: list[str] | None = None) -> int:
         map_number_of_points=int(len(vertices)),
         triangles=triangles,
         vertices=vertices,
+        # mm², the unit every importer stores and /get_mesh_data declares
+        # (raw_export: units.triangle_areas = "mm^2"). area_of_surface() and
+        # area_of_range() do not read this attribute — they recompute from the
+        # PyVista mesh and convert to cm² themselves.
         triangle_areas=tri_areas,
         # act_bip[:,0] holds activation/score values by convention; the
         # synthetic score field stands in for matching-score data here.
         act_bip=np.column_stack([scores, np.zeros_like(scores)]),
+    )
+    epmap.register_scalar(
+        "pacemap_score", scores, kind="pacemap_score", unit="%", source="synthetic"
     )
     print(f"EPMap:          name='{epmap.map_name}', study='{epmap.study_name}'")
 

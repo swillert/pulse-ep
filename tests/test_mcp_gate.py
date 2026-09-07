@@ -60,3 +60,10 @@ def test_other_clients_are_not_affected_by_the_switch(client, monkeypatch):
 
     assert http.get("/list_studies").status_code == 401  # no MCP header: ordinary auth
     assert http.get("/login").status_code == 200  # the UI is untouched
+
+
+@pytest.mark.parametrize("value", ["", "typo", "enabled", "false", "0"])
+def test_invalid_or_false_service_settings_keep_mcp_off(value):
+    from pulse_ep.core.config import Settings
+
+    assert Settings(_env_file=None, mcp_enabled=value).mcp_enabled is False

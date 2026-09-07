@@ -150,11 +150,11 @@ def register_carto_scalars(
     :func:`register_carto_mesh_scalars`. Without them it falls back to the
     historical two-column decode: the overloaded primary slot (see
     :func:`classify_primary_scalar`) plus the bipolar voltage, registered
-    **under the name of the quantity they hold** — the same names EnSiteX
+    **under the name of the quantity they hold** — the same names EnSite X
     uses, so one query spans both vendors.
 
     These used to be ``"act"`` and ``"vol"``: CARTO's own spelling, which no
-    EnSiteX map answers to. The old names still resolve through
+    EnSite X map answers to. The old names still resolve through
     ``EPMap.get_scalar`` for studies imported before this change.
     """
     if colors:
@@ -296,7 +296,7 @@ def point_annotations(pd: dict) -> dict:
     from, kept beside the derived value: without them a stored 2.5 s window is
     2500 samples with no landmark in it, and until now they survived only in
     the legacy ``ep_map_points`` table — which the queue and review-UI import
-    path never writes, and which no EnSiteX study has at all.
+    path never writes, and which no EnSite X study has at all.
 
     A field the export does not carry is left out rather than stored as null:
     absent means "not exported", the same as for a measurement. CARTO's
@@ -322,7 +322,7 @@ def carto_points_to_measurements(
 
     CARTO's per-point data was already parsed — it just stopped at the
     fixed-column ``EPMapPointModel``, so nothing downstream could compare it
-    with an EnSiteX point set. This is a conversion, not a new parser: the
+    with an EnSite X point set. This is a conversion, not a new parser: the
     legacy rows are still written, and the raw WOI and annotation components
     travel on the neutral point as ``annotations`` (see
     :func:`point_annotations`), so they no longer depend on that CARTO-shaped
@@ -514,7 +514,7 @@ def _visitag_files(source: ImportSource) -> list[str]:
 def _waveform_plan(source: ImportSource, map_names: list[str]) -> WaveformPlan:
     """The study's per-point ECG windows, proposed but **not** selected.
 
-    Opt-in for the same reason EnSiteX waveforms are: CARTO writes one 2.5 s
+    Opt-in for the same reason EnSite X waveforms are: CARTO writes one 2.5 s
     window of every channel per acquired point, so a few thousand points are
     several gigabytes — more than the rest of the export put together.
 
@@ -563,7 +563,7 @@ class CartoImporter:
     name = "carto"
 
     def sniff(self, source: ImportSource) -> bool:
-        # CARTO exports carry per-map ``.mesh`` files; EnSiteX uses DIF XML
+        # CARTO exports carry per-map ``.mesh`` files; EnSite X uses DIF XML
         # and has none — a clean discriminator without parsing anything.
         return bool(source.list("*.mesh"))
 

@@ -85,7 +85,7 @@ class EPMap:
     #: Which quantity a map "is about" when the caller does not say, most
     #: interesting first. Every analysis default resolves through this — a
     #: literal ``"act"`` default (CARTO's old name) made those calls fail on
-    #: every EnSiteX map.
+    #: every EnSite X map.
     PRIMARY_SCALAR_ORDER = (
         "activation_time",
         "pacemap_score",
@@ -150,7 +150,7 @@ class EPMap:
         """Where this map was actually measured, or ``None`` if nowhere.
 
         Prefers the legacy CARTO ``xyz`` array, then falls back to the
-        vendor-neutral :class:`MeasurementPoint` positions. EnSiteX maps only
+        vendor-neutral :class:`MeasurementPoint` positions. EnSite X maps only
         ever have the latter, so anything reading ``xyz`` directly rejected
         every one of them.
         """
@@ -341,7 +341,7 @@ class EPMap:
 
         # The distance threshold is a confidence mask: only show scalar values
         # near where the map was actually measured. A map with no measurement
-        # positions at all — an EnSiteX mesh carrying only per-vertex fields —
+        # positions at all — an EnSite X mesh carrying only per-vertex fields —
         # has nothing to mask against, so its values pass through unmasked
         # rather than the whole map failing to render.
         if self.measurement_positions() is None:
@@ -764,7 +764,7 @@ class EPMap:
 
         # Build point data (measurement points projected onto mesh). Read the
         # positions through measurement_positions(), not the legacy xyz array:
-        # an EnSiteX map keeps them as MeasurementPoints and would otherwise
+        # an EnSite X map keeps them as MeasurementPoints and would otherwise
         # report no acquisition points at all despite having thousands.
         if self.measurement_positions() is not None:
             p_points = self.create_polydata_for_projected_points(

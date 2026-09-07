@@ -4,7 +4,7 @@ Proves the Phase-0 refactor:
 
 1. The legacy CARTO ``act_bip`` bridge still resolves as before
    (``"act"`` → column 0 with sign-normalisation, ``"vol"`` → column 1).
-2. A map carrying only registered ``scalar_fields`` (as an EnSiteX voltage
+2. A map carrying only registered ``scalar_fields`` (as an EnSite X voltage
    mesh would) flows through the same analysis methods.
 3. ``kind`` is declared at registration and conditioning (activation
    sign-flip, sentinel masking) happens once, at import.
@@ -69,7 +69,7 @@ def ensite_like_map():
 
 
 def test_carto_registers_scalars_under_the_quantity_name(carto_like_map) -> None:
-    """CARTO's fields carry the same names EnSiteX uses, so one query spans
+    """CARTO's fields carry the same names EnSite X uses, so one query spans
     both vendors — they used to be CARTO-only ``act``/``vol``."""
     # Positive scores → activation_time (no flip)
     np.testing.assert_array_equal(
@@ -250,7 +250,7 @@ def test_carto_and_ensite_answer_to_the_same_name() -> None:
 
 
 def test_measurement_positions_fall_back_to_measurement_points() -> None:
-    """EnSiteX maps never populate the legacy CARTO ``xyz`` array, so anything
+    """EnSite X maps never populate the legacy CARTO ``xyz`` array, so anything
     reading it directly rejected every one of them."""
     from pulse_ep.core.measurement import MeasurementPoint
 

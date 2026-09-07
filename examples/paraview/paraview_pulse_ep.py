@@ -41,7 +41,7 @@ import vtk
 # ---------------------------------------------------------------------
 MAP_ID = 1  # ID of the EPMap to load (see GET /list_epmaps_in_study/<id>)
 # None asks the server for the map's own primary quantity, which differs
-# between vendors — a CARTO map has activation_time, an EnSiteX one
+# between vendors — a CARTO map has activation_time, an EnSite X one
 # voltage_bipolar. List a map's fields with GET /epmaps/<id>/scalars.
 SCALAR_NAME = None  # or e.g. "voltage_bipolar", "activation_time"
 DISTANCE = 5.0  # interpolation radius around catheter points [mm]

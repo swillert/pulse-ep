@@ -4,7 +4,7 @@
 sensible defaults and detected issues (no DB writes); a human reviews /
 adjusts it; ``commit(plan, source)`` executes it. This is the single place
 "pre-fill as much as sensibly possible" lives, and it works the same for
-CARTO and EnSiteX.
+CARTO and EnSite X.
 """
 
 from __future__ import annotations

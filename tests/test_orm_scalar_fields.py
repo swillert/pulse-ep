@@ -1,6 +1,6 @@
 """Persistence layer for vendor-neutral scalar fields + vendor/provenance.
 
-The ORM uses PostgreSQL ARRAY/JSONB types that SQLite can't create, so
+The production schema uses PostgreSQL ARRAY/JSONB types, so
 these tests exercise the pure (de)serialisation converters directly rather
 than a live session.
 """

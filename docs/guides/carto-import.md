@@ -1,360 +1,162 @@
-# Importing CARTO studies
+# Importing EnSite X studies
 
-This guide explains what a CARTO 3 export looks like, what
-[`pulse-ep-import-carto`](../reference/cli.md#pulse-ep-import-carto) does with it, and how
-to drive batch imports from a study CSV.
+How an Abbott EnSite X export is decoded, what pulse-ep takes
+from it, and how to drive the import — by command line or through the
+browser review queue.
 
-## What is a CARTO 3 export?
+## What an export contains
 
-When an electrophysiology recording is exported from the CARTO 3 mapping
-system (Biosense Webster / Johnson & Johnson) it is a directory tree
-containing per-study XML manifests, per-map mesh files, per-point catheter
-geometry, and tabular signal data.
+An EnSite X export is a folder (or ZIP of one) of `SJM_DIF_5.0` XML meshes
+and DxL CSV tables. pulse-ep reads these:
 
-For pulse-ep the relevant artefacts are:
+| File | What it becomes |
+| ---- | --------------- |
+| `Contact_Mapping_Model*.xml` | An EP map: geometry plus its per-vertex voltage field. |
+| `Model_Groups.xml` | Chamber shells, as geometry-only anatomy maps. |
+| `difNNN.xml` | The CT segmentation — endocardium, wall-thickness shells, channels, fat infiltration — likewise as anatomy maps. |
+| `Contact_Mapping/Map_*.csv` | The map's measurement points, one DxL channel per file. |
+| `AutoMark_Data.csv`, `Duo_AutoMarksSummaryList*.csv`, `Lesions.csv`, `Labels.csv` | Placed points: ablations, PFA applications, markers and labels. |
+| `*Waveforms*.csv`, `*ECG*.csv` | Signal traces — **opt-in**, see [Waveforms](#waveforms). |
 
-| Artefact            | Format            | Purpose                                                  |
-| ------------------- | ----------------- | -------------------------------------------------------- |
-| `Study_*.xml`       | XML               | Patient/study metadata, list of EP maps.                 |
-| `Map_*.xml`         | XML               | Per-map metadata, list of points, colormap references.   |
-| `*.mesh`            | text mesh         | Triangulated chamber surface (vertices + triangles + per-vertex columns). |
-| `*.car`             | tabular           | Per-point coordinates and reference electrode positions. |
-| `*Eleclectrode_Positions*.txt` | tabular | Reference catheter geometry per point.                   |
-| `*_ECG_Export_*.txt` | tabular          | One 2.5 s signal window per acquired point — **opt-in**, see [Signals](#signals-the-per-point-ecg-windows). |
+Everything else in the export (patch impedance, system configuration,
+respiration traces, notebook logs) is deliberately not imported.
 
-pulse-ep does not require you to know the format details — the importer
-parses everything and writes structured records into the relational
-database.
+!!! note "Filenames are not trustworthy"
 
-## Single-study import
+    Operators rename maps by hand, so the same map can arrive as
+    `…_RVStimPre-unipolar.xml` and `…_RvStimPre-bipolar.xml`, or with a
+    typo like `-bpolar`. Grouping is therefore case-insensitive and the
+    polarity suffix is matched tolerantly. If a pair still fails to merge,
+    the plan says so rather than silently producing two half-maps.
 
-```bash
-pulse-ep-import-carto /path/to/study-export.zip
-```
+## bipolar and unipolar are one map
 
-You can also pass an unpacked directory:
+A map's bipolar and unipolar exports are separate files that share
+identical geometry. pulse-ep merges them into **one** map carrying both
+`voltage_bipolar` and `voltage_unipolar`. If the grouped files turn out
+not to share vertices, they are kept separate instead of merged blindly.
 
-```bash
-pulse-ep-import-carto /path/to/study-export/
-```
+## Measurement points
 
-The importer:
+A map exports its point set **once per DxL channel** — the same columns
+and the same point ids, with only the value column differing. pulse-ep
+merges them back into one set of points, each carrying every measurement:
 
-1. Auto-detects whether the path is a zip archive or a directory.
-2. Parses the `Study_*.xml` manifest, extracting patient ID, study name,
-   creation date, mapping catheter, anatomical region (atrium).
-3. For each `Map_*.xml` listed in the study: parses metadata, loads the
-   referenced `.mesh` file, attaches the per-point `.car` table.
-4. Writes the data into a `StudyModel` + `EPMapModel` + `EPMapPoint`
-   tree via the SQLAlchemy ORM.
+| `Map type:` | Quantity | Unit |
+| ----------- | -------- | ---- |
+| `PP_bi` / `PP_uni` / `PP_omni` | `voltage_bipolar` / `voltage_unipolar` | mV |
+| `LAT` | `activation_time` | ms |
+| `Score` | `map_score` | — |
+| `CFEmean` | `cfe_mean` | ms |
+| `CFEstdDev` | `cfe_stddev` | ms |
+| `Fractionation` | `fractionation` | — |
+| `PFreq` | `peak_frequency` | Hz |
+| `PNeg` | `voltage_peak_negative` | mV |
 
-Use `--help` for the full flag list:
+A channel this list does not cover is still imported, under the export's
+own column name with kind `unknown`, so nothing is lost while the
+vocabulary catches up.
 
-```bash
-pulse-ep-import-carto --help
-```
+!!! warning "`adjTime` is not activation time"
 
-## Idempotency
+    The `adjTime (ms)` column is the annotation *window offset* and is
+    frequently one constant value across an entire export. It is imported
+    as `annotation_time`. A map's activation time comes from the `LAT`
+    channel.
 
-Re-importing the same study is safe: existing records with the same
-`study_name + map_name` keys are detected and the importer either
-updates them in place or skips, depending on the `--on-conflict` flag.
-The default behaviour is `skip`, which is appropriate for CI pipelines
-that re-run the import nightly.
+## Waveforms
 
-## Batch imports from a CSV
-
-For research workflows with many studies, write a `studies.csv` like:
-
-```csv
-study_path,atrium,operator,notes
-/data/uksh/2024/study_01.zip,LA,sw,AF first pass
-/data/uksh/2024/study_02.zip,LA,sw,AF redo
-/data/uksh/2024/study_03/,RA,el,atrial flutter
-```
-
-Then drive the importer from Python:
-
-```python
-from pathlib import Path
-from pulse_ep.core.importer import (
-    get_filenames_from_csv,
-    import_studies,
-)
-
-paths, attributes = get_filenames_from_csv(Path("studies.csv"))
-import_studies(paths, attributes)
-```
-
-`import_studies` ingests each row with the same idempotency guarantees
-as the single-study command, and additionally attaches the CSV-row
-attributes (`atrium`, `operator`, `notes`, …) to the resulting
-`EPMapAttributes` records so they are queryable through the REST API.
-
-## Tagging pace-maps
-
-Pace-mapping similarity scores are the central quantity of the
-σ-resolution research. After import, mark the relevant maps as
-pace-maps with [`pulse-ep-tag-maps`](../reference/cli.md#pulse-ep-tag-maps):
+Signal traces are **off by default** — they can be larger than the rest
+of the export combined. Turn them on explicitly and say where to put
+them; they are stored as Parquet outside the database, with only a
+reference row in it.
 
 ```bash
-pulse-ep-tag-maps --pacemap 12 13 14 15
-```
-
-This sets the `pacemap=true` attribute on the listed map IDs, which the
-viewer renders with a distinct icon and the REST `filter_by_attributes`
-endpoint can then query.
-
-Inspect existing tags:
-
-```bash
-pulse-ep-tag-maps --list
-```
-
-## Verifying an import
-
-Three quick checks after a fresh import:
-
-=== "CLI"
-
-    ```bash
-    pulse-ep-check-mesh --study "AF-2024-01"
-    ```
-
-    Reports vertex / triangle counts and flags meshes with non-manifold
-    edges or duplicate triangles.
-
-=== "REST"
-
-    ```bash
-    curl -s "$PULSE_EP_BASE_URL/list_studies" \
-        -H "Authorization: Bearer $TOKEN" | python -m json.tool
-    ```
-
-=== "Python"
-
-    ```python
-    from pulse_ep import get_db_session, StudyModel
-
-    with get_db_session() as s:
-        for study in s.query(StudyModel).all():
-            print(study.id, study.study_name, len(study.maps))
-    ```
-
-## Extracting meshes for offline analysis
-
-The [`pulse-ep-extract-meshes`](../reference/cli.md#pulse-ep-extract-meshes)
-CLI walks the database and dumps each EPMap as an NPZ file
-(`vertices`, `triangles`, `scores`, `point_coordinates`), suitable for
-external scientific pipelines that take NumPy arrays.
-
-```bash
-pulse-ep-extract-meshes --output /tmp/extracted/
-```
-
-## Troubleshooting
-
-??? failure "`KeyError: 'CartoSystem'` when parsing a Study_*.xml"
-
-    The export is from a CARTO 3 version pulse-ep has not been tested
-    against. Open an issue with the XML snippet (patient data removed).
-    The XML parser lives in `pulse_ep.core.xml_proc` and is the right
-    place to add a new schema variant.
-
-??? failure "Mesh file is empty after extraction"
-
-    Some clinical exports include encrypted mesh archives. pulse-ep
-    detects and skips these with a warning. Check that
-    `chardet.detect()` reports a sensible encoding on the file before
-    blaming pulse-ep.
-
-??? failure "Import succeeds but the viewer shows no scalars"
-
-    Run `pulse-ep-populate-colormaps` once after the first import — the
-    colormaps table needs initial rows so the viewer knows how to color
-    the scalar field. This is a one-time bootstrap, not per-study.
-
-## See also
-
-- [REST API reference](../reference/rest-api.md) — querying imported
-  studies and maps.
-- [Data model](../reference/data-model.md) — the ORM tables the importer
-  writes to.
-- [CLI reference: `pulse-ep-import-carto`](../reference/cli.md#pulse-ep-import-carto)
-  — full flag listing.
-
-## Archive format
-
-CARTO exports are frequently **7-Zip archives named `.zip`**. pulse-ep detects
-the container by its content signature rather than its suffix, so such an
-export imports without renaming — but reading it needs the optional `py7zr`
-package:
-
-```bash
-pip install -e ".[sevenzip]"
-```
-
-Without it, a 7-Zip export raises a message naming the missing package rather
-than failing obscurely.
-
-## What the mesh carries
-
-A `.mesh` file names its own per-vertex columns in the
-`[VerticesColorsSection]` header. Every column that holds data is imported
-under the quantity it names:
-
-| Column | Imported as |
-| ------ | ----------- |
-| `Unipolar` / `Bipolar` | `voltage_unipolar` / `voltage_bipolar` |
-| `LAT` | `activation_time` — or `pacemap_score`, when the slot holds an entirely negative pace-match correlation (CARTO overloads it) |
-| `Paso` | `pacemap_score` |
-| `Impedance` / `Force` | `impedance` / `contact_force` |
-| `µBi` | `voltage_bipolar_micro` — micro-electrode bipolar amplitude, a different quantity from the electrode-pair one |
-| `A1`, `A2`, `A2-A1`, `SCI`, `ICL`, `ACL` | kept under their raw CARTO names: they are real quantities whose exact semantics are not established here, and a guessed label on a clinical measurement is worse than an unfamiliar one |
-| `EML`, `ExtEML`, `SCAR` (`[VerticesAttributesSection]`) | kept under their raw names, and only where something is actually marked |
-
-Most exports fill only three or four of the thirteen colour columns; the
-empty ones are not registered, so a map advertises the quantities it really
-measured.
-
-!!! note "Column *names*, not positions"
-
-    Until 0.2.4 the reader took columns by position, which dropped `Paso`,
-    `µBi` and the whole attributes section, and would have mis-assigned every
-    quantity in an export that ordered them differently.
-
-## What a point carries
-
-Every acquired point (`<map>_Points_Export.xml` + `<map>_P<n>_Point_Export.xml`)
-becomes a vendor-neutral measurement point with its position from the study
-catalogue, `voltage_unipolar` / `voltage_bipolar`, its catheter electrodes,
-and the quantity CARTO stores as the annotation difference
-`Map_Annotation - Reference_Annotation`:
-
-| The map's `LAT` slot holds | The point's annotation difference is imported as |
-| -------------------------- | ------------------------------------------------- |
-| an activation time | `activation_time` (ms) |
-| a pace-match score (`pacemap_score`) | `pacemap_score` (%) — the **per-site score the operator saw**, stored with the same negative sign as the mesh; `-10000` (the reference beat itself, which is never scored) and values that are no percentage (a point annotated in another mode) are omitted |
-
-The points follow the mesh's verdict on what the slot holds, so a map and its
-points never disagree. This is the measurement the interpolated per-vertex
-field is built from; sampling the vertex field at a point's position returns
-the vendor's interpolation, not the point's own score (in one reference study
-21 % of the points differed by more than two points, up to fifty).
-
-!!! warning "An export that writes the scores without the sign"
-
-    One study wrote its pace-match scores as positive values (54 … 96). Such
-    a map cannot be told from an activation map by the data alone; it is
-    imported as one, and its points carry `activation_time`. Mark it with the
-    `pacemap` attribute (see [Tagging pace-maps](#tagging-pace-maps)) and
-    read the points' values as scores.
-
-Beside that value the point keeps the **components it was derived from**, as
-`annotations`:
-
-```json
-{"start_time": 13500280, "reference": 2000, "map": 1904,
- "woi_from": -170, "woi_to": 129}
-```
-
-The first sample of the recorded window on the study clock, the reference and
-mapping annotations as offsets into it, and the window of interest. They are
-what tells a reader where in a 2.5 s signal window to look — a stored waveform
-records the same facts under the same names, so a point and its window agree
-by construction. Until now they survived only in the CARTO-shaped legacy table
-`ep_map_points`, which only `pulse-ep-import-carto` writes; a study imported
-through the drop directory had them nowhere.
-
-Points also carry their **tags** — `Location Only` on the reference beat of a
-pace map, `Scar`, `His`, or a study's own labels — as names resolved through
-the study's `TagsTable`, in `MeasurementPoint.tags` /
-`measurement_points.tags`.
-
-## Signals: the per-point ECG windows
-
-CARTO writes one `*_ECG_Export_<timestamp>.txt` per acquired point: 2500
-samples at 1 kHz of every recorded channel — surface leads, coronary sinus,
-mapping electrodes and the derived bipoles — as raw counts with a single gain
-factor in the header.
-
-```bash
-pulse-ep-import-carto -i /data/carto-export \
+pulse-ep-import-ensite -i /path/to/export.zip \
     --waveforms --store-dir /var/pulse/waveforms
 ```
 
-They are **opt-in**, and for a good reason: a study with a few thousand
-points carries several gigabytes of them, more than the rest of the export
-together. As Parquet in the waveform store they compress about twentyfold.
+For the [import queue](#the-import-queue), the store location comes from
+`PULSE_EP_WAVEFORM_STORE_DIR` instead. Selecting waveforms with no store
+configured fails the job **before** anything is written, rather than
+quietly dropping the signals.
 
-Samples are converted to millivolts on import (the header's gain is applied,
-so a stored waveform is in a physical unit), timestamped on the study clock so
-windows from different points share one axis, and each window keeps what makes
-it readable rather than 78 anonymous traces:
+## Command-line import
 
-- the points it was acquired at (`waveforms.point_source_id`, one row per
-  point),
-- which channels each of those points was annotated on —
-  `UnipolarMappingChannel`, `BipolarMappingChannel`, `ReferenceChannel` from
-  the point XML,
-- the annotations themselves (reference, map, window of interest).
+```bash
+# 1. See what would happen. Writes nothing.
+pulse-ep-import-ensite -i /path/to/export.zip --dry-run
 
-!!! note "A window belongs to several points"
+# 2. Import it.
+pulse-ep-import-ensite -i /path/to/export.zip
 
-    A multi-electrode catheter acquires many points from one 2.5 s recording,
-    and each of them references the same file. In the export this was
-    developed against, **1934 points share 699 windows** — 84 % of points in
-    groups of up to ten. The samples are therefore stored once per window and
-    every point taken from it gets its own row pointing at that copy, so
-    "the signal at point 37" resolves for all of them.
+# 3. Re-import a study that is already in the database.
+pulse-ep-import-ensite -i /path/to/export.zip --clear
+```
 
-Through the [import queue](../reference/rest-api.md) the same files appear in
-the plan as a waveform selection a reviewer can switch on, exactly like
-EnSiteX signals.
+The input may be a folder or a ZIP. Imports are idempotent by the
+export's study GUID: running the same import twice does nothing the
+second time unless `--clear` is given.
 
-## Ablation sites (VisiTag)
+A dry run prints the plan:
 
-!!! warning "Unverified — confirm before relying on it"
+```
+study 70538697-25b4-43bd-854c-a9000da6fa96  (vendor=ensite)
+  map Contact_Mapping_Model  verts=65739  fields=['voltage_bipolar']  point-files=8
+  waveforms: 6 files ~3.3 MB (include=False)
+```
 
-    The VisiTag parser has **never been tested against a real VisiTag
-    export**; no sample was available when it was written. It is built from
-    the documented layout and is deliberately defensive, but the ablation
-    sites it produces must be checked against the mapping system before they
-    are used for anything.
+Read it before importing an export from a site you have not seen before:
+the map count, the vertex counts, the number of point files and any
+`issues=[…]` are exactly what the importer will act on.
 
-VisiTag is a **separately selected** part of a CARTO export. A bundle exported
-without it contains no ablation sites at all — not an empty set, but nothing
-to read. If your export has none, re-export from CARTO with VisiTag enabled.
+## The import queue
 
-When present, sites are read from the VisiTag `Sites` table into
-study-level placed points of type `ablation`, carrying whatever RF parameters
-the table holds:
+The import queue supports a review workflow through `/import`:
 
-| Column | Attribute |
-| ------ | --------- |
-| `X`, `Y`, `Z` | position |
-| `DurationTime` | `duration_s` |
-| `AverageForce` | `average_force_g` |
-| `FTI` | `force_time_integral` |
-| `MaxTemperature` / `MaxPower` | `max_temperature_c` / `max_power_w` |
-| `BaseImpedance` / `ImpedanceDrop` | `base_impedance_ohm` / `impedance_drop_ohm` |
-| `RFIndex` / `AblationIndex` / `LesionIndex` | `rf_index` / `ablation_index` / `lesion_index` |
+```
+detected → needs_review → importing → done | error
+```
 
-Columns are matched **by name**, case- and separator-insensitively — never by
-position, since VisiTag's column set varies between CARTO versions. A column
-that is not listed is still kept, under its own name. A table with no
-recognisable `X`/`Y`/`Z` yields **no points at all** rather than guesses, and
-the import plan flags the file so a reviewer sees the warning.
+1. Copy a complete export folder or `.zip` bundle to `PULSE_EP_DROP_DIR`.
+2. Open `/import` and select **Scan drop directory**. The scanner enqueues
+   previously unseen paths whose files have been unchanged for at least five
+   seconds; scanning is requested explicitly, not run by a background daemon.
+3. Prepare the job, inspect the proposed plan, adjust selections and commit.
 
-## Tags in the study XML
+For automated transfers, finish copying before scanning. Python callers can
+use `scan_and_enqueue(..., require_marker=True)` to require a sibling
+`<name>.done` completion marker instead of a quiescence interval.
 
-The study catalogue contains a `TagsTable` — the *definitions* of the tag
-types available in that study (`ABL`/Ablation, `HIS`/His, `PS`/Pacing Site,
-…), with ids and colours. These are a palette, not placements: actual tag
-placements appear inside a point's `<Tags>` element, which is empty in an
-untagged study. Placements are imported as the names of the tags on each
-measurement point (`MeasurementPoint.tags`, see
-[What a point carries](#what-a-point-carries)); ids the table does not define
-are kept as their number. `Anatomical_Tag` entries are region outlines
-(`Perimiter`/`LINE_LOOP`), a different concept from placed points, and are
-not imported yet.
+Repeat scans skip already queued paths. Commit checks for existing study
+identities; keep the source location stable and avoid concurrent imports of
+the same study, because study names are not protected by a uniqueness constraint.
+
+The same lifecycle is available over REST — see
+[`/api/import-jobs`](../reference/rest-api.md#import-queue).
+
+## Comparing two maps
+
+Maps in the same coordinate frame can be compared numerically, for example:
+
+```bash
+curl -s -X POST "$PULSE_EP_BASE_URL/api/compare" \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+    -d '{"map_a_id": 12, "map_b_id": 13,
+         "scalar_name": "voltage_bipolar", "metric": "geodesic"}'
+```
+
+`euclidean` uses the nearest vertex in space. `geodesic` first places B
+vertices on their nearest A vertices, then propagates correspondence along
+A's surface. Both require aligned coordinate frames. Initial projection can
+still select the wrong surface near folds; neither method performs registration
+or establishes biological comparability.
+
+## See also
+
+- [CARTO import guide](carto-import.md) — the other supported vendor.
+- [Command-line tools](../reference/cli.md#pulse-ep-import-ensite)
+- [Configuration](../getting-started/configuration.md) —
+  `PULSE_EP_DROP_DIR`, `PULSE_EP_WAVEFORM_STORE_DIR`.
+- [Data model](../reference/data-model.md) — how scalar fields,
+  measurement points and placed points are stored.

@@ -137,7 +137,7 @@ def build_ensite(real_zip: str, out_dir: Path) -> None:
         etree.tostring(root, xml_declaration=True, encoding="UTF-8", pretty_print=False)
     )
     _ensite_points(src, out, verts, volts)
-    print(f"  EnSiteX: {n_v} Vertices, {n_t * 2} Dreiecke -> {out}")
+    print(f"  EnSite X: {n_v} vertices, {n_t * 2} triangles -> {out}")
 
 
 def _ensite_points(src, out: Path, verts, volts) -> None:
@@ -257,10 +257,10 @@ def build_carto(real_dir: str, out_dir: Path) -> None:
     out = _fresh(out_dir / "carto" / "synthetic_study")
     (out / f"{MAP}.mesh").write_text("\n".join(head + body) + "\n")
 
-    # ── Punkte: Points_Export.xml + je ein Point_Export.xml + Elektrodendatei ──
-    # Die erste Zeile der Elektrodendatei ist eine Formatkennung ("…_2.0"),
-    # die zweite die Spaltenüberschrift; beide werden aus der echten Datei
-    # übernommen, damit der Zeilen-Offset im Parser stimmt.
+    # ── points: Points_Export.xml + one Point_Export.xml each + electrode file ──
+    # The electrode file's first line is a format marker ("…_2.0") and the
+    # second is the column header; both are taken over from the real file so
+    # that the parser's line offset is right.
     elec_real = next(real.glob("*_Eleclectrode_Positions_*.txt"), None)
     elec_head = (
         elec_real.read_text(encoding="latin-1").splitlines()[:2]
@@ -327,13 +327,13 @@ def build_carto(real_dir: str, out_dir: Path) -> None:
         etree.tostring(study, xml_declaration=True, encoding="UTF-8", pretty_print=True)
     )
     print(
-        f"  CARTO:   {len(verts)} Vertices, {len(tris)} Dreiecke, {n_colours} Farbspalten -> {out}"
+        f"  CARTO:   {len(verts)} vertices, {len(tris)} triangles, {n_colours} colour columns -> {out}"
     )
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--ensite", required=True, help="A real EnSiteX export (folder or archive).")
+    p.add_argument("--ensite", required=True, help="A real EnSite X export (folder or archive).")
     p.add_argument("--carto", required=True, help="An unpacked real CARTO export.")
     p.add_argument("--out", type=Path, default=Path("tests/fixtures/synthetic"))
     args = p.parse_args(argv)

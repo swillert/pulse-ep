@@ -1,6 +1,6 @@
 """Vendor-neutral per-vertex scalar fields and their physical semantics.
 
-A CARTO or EnSiteX mesh carries per-vertex scalar values, but *what* a
+A CARTO or EnSite X mesh carries per-vertex scalar values, but *what* a
 value means is decided by the acquisition context, not by a storage slot.
 Historically pulse-ep stored the "primary" scalar in ``act_bip[:, 0]`` and
 re-derived its meaning heuristically wherever it was read (activation time
@@ -92,8 +92,8 @@ def field_name(kind: str, vendor_token: str | None = None) -> str:
 
     **A field is named by what it is.** Asking for a name and asking for a
     kind then become the same question, so CARTO's bipolar voltage answers to
-    the same name as EnSiteX's and one query spans both vendors. (Historically
-    they did not: CARTO wrote ``act``/``vol`` while EnSiteX wrote
+    the same name as EnSite X's and one query spans both vendors. (Historically
+    they did not: CARTO wrote ``act``/``vol`` while EnSite X wrote
     ``voltage_bipolar`` — the same quantity under two names, findable by
     neither.)
 

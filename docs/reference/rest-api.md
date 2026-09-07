@@ -3,7 +3,7 @@
 The pulse-ep HTTP API exposes everything the bundled viewer (and every
 [cross-language example](../examples/index.md)) consumes. All endpoints
 except `/login_user`, the static UI routes (`/`, `/login`, `/register`,
-`/dashboard`) and `/register_user` require a JWT access token.
+`/dashboard`, `/import`) and standard-user registration require a JWT access token.
 
 Default base URL: `http://127.0.0.1:5000` (configurable via
 `PULSE_EP_HOST` / `PULSE_EP_PORT`).
@@ -40,7 +40,7 @@ decides is what an endpoint does, not the verb it came under.
 
 The token must accompany every subsequent request as
 `Authorization: Bearer <token>`. It carries a `role` claim
-(`admin` | `user`) and a 1-hour expiry by default
+(`admin` | `user` | `readonly`) and a 15-minute expiry by default
 (see Flask-JWT-Extended config in `server/app.py`).
 
 ### `POST /register_user`
@@ -58,7 +58,7 @@ Content-Type: application/json
 { "username": "clinician_01", "password": "…", "role": "user" }
 ```
 
-`201 Created` on success; `400` if username already exists.
+`201 Created` on success; `400` for missing fields or an existing username.
 
 ## Studies and maps
 
@@ -68,8 +68,8 @@ Returns every study in the database.
 
 ```json
 [
-  { "id": 1, "study_name": "AF-2024-01" },
-  { "id": 2, "study_name": "AFL-2024-03" }
+  { "id": 1, "study_name": "Synthetic CARTO", "vendor": "carto" },
+  { "id": 2, "study_name": "Synthetic EnSite", "vendor": "ensite" }
 ]
 ```
 
@@ -77,8 +77,8 @@ Returns every study in the database.
 
 ```json
 [
-  { "id": 12, "study_id": 1, "map_name": "LA-pacemap-001", "number_of_points": 142 },
-  { "id": 13, "study_id": 1, "map_name": "LA-pacemap-002", "number_of_points": 167 }
+  { "id": 12, "study_id": 1, "map_name": "LA-pacemap-001", "number_of_points": 142, "measurement_points": 142 },
+  { "id": 13, "study_id": 1, "map_name": "LA-pacemap-002", "number_of_points": 167, "measurement_points": 167 }
 ]
 ```
 
@@ -113,12 +113,13 @@ and the catheter point cloud for one map.
 | Param         | Type     | Required | Default | Notes                                                         |
 | ------------- | -------- | -------- | ------- | ------------------------------------------------------------- |
 | `map_id`      | int      | ✓        |         | Database ID of the EP map.                                    |
-| `scalar_name` | string   |          | `act`   | Per-vertex scalar (`act` / `voltage` / `similarity_score` / …). |
-| `distance`    | float    |          | `5.0`   | Interpolation radius in mm. Vertices farther than `distance` from any catheter point receive `NaN`. |
+| `scalar_name` | string | | map primary | Named field; discover choices at `/epmaps/<id>/scalars`. |
+| `distance` | float | | `5.0` | Measurement-distance threshold in display mode, in mm; ignored in raw mode. |
+| `representation` | string | | `display` | `display` or `raw`; see the complete analysis export below. |
 
-**Response**
+**Response structure** (schematic; `…` denotes array entries)
 
-```json
+```text
 {
   "mesh_data": {
     "vertices":                  [[x, y, z], …],
@@ -235,8 +236,11 @@ Content-Type: application/json
 { "areas": [0.81, 1.46, 2.84, 3.91, 3.32] }
 ```
 
-Areas are in cm². `null` marks empty bins. Bins are interpreted as
-half-open `[lo, hi)`.
+Areas are in cm²; empty bins return `0`. Triangles use the mean of their
+finite vertex values; triangles with none are excluded. Adjacent bins are
+left-closed and right-open, except the greatest upper endpoint in the request,
+which is included. Geometry is unsimplified; hold the distance setting fixed
+when comparing results.
 
 ## Colormaps
 
@@ -251,7 +255,7 @@ for the field semantics.
 {
   "name": "pacemap_clinical",
   "colors":      ["#3a76ff", "#ffd700", "#e34a33"],
-  "intervals":   [50, 70, 85, 100],
+  "intervals":   [50, 85, 100],
   "annotations": ["low", "match", "perfect"],
   "use_gradient": false,
   "is_relative":  false,
@@ -293,7 +297,8 @@ Async clinical Excel generation.
 }
 ```
 
-Returns the new `report_id`.
+Returns `{"message":"Report saved successfully."}` with status 200.
+Use `GET /reports` to retrieve the saved report ID.
 
 ### `GET /reports`
 
@@ -301,7 +306,7 @@ List all saved reports.
 
 ### `DELETE /reports/<report_id>`
 
-Delete a report (the row + the generated file, if any).
+Delete the report row. An already generated file is not automatically removed.
 
 ### `POST /reports/<report_id>/generate`
 
@@ -434,14 +439,18 @@ geometry.
 | `metric`       | `euclidean` | `euclidean` (nearest vertex) or `geodesic` (along A's surface). |
 | `max_distance` | none        | Correspondences further than this become `NaN`.              |
 
-Use `geodesic` when the two meshes differ: it will not match across a
-wall or fold that is close in space but far along the tissue.
+Geodesic correspondence first projects B vertices to their nearest A vertices,
+then propagates along A. Initial projection can still be wrong near folds.
+Both metrics require aligned coordinate frames; neither performs registration.
+`geodesic_solver` selects `dijkstra` (default) or `heat`; `include_delta=false`
+returns statistics without the per-vertex difference array.
 
 ## Import queue
 
 All routes below are under `/api/import-jobs` and are JWT-protected.
+GET is available to all roles; mutations require `user` or `admin`.
 They drive the lifecycle `detected → needs_review → importing → done |
-error`; see the [EnSiteX import guide](../guides/ensite-import.md#the-import-queue).
+error`; see the [EnSite X import guide](../guides/ensite-import.md#the-import-queue).
 
 | Method + path                        | Purpose                                                     |
 | ------------------------------------ | ----------------------------------------------------------- |
@@ -449,7 +458,7 @@ error`; see the [EnSiteX import guide](../guides/ensite-import.md#the-import-que
 | `GET /api/import-jobs/<id>`          | One job, including its full plan.                           |
 | `POST /api/import-jobs`              | Enqueue an export by path. Auto-detects the vendor.         |
 | `POST /api/import-jobs/scan`         | Scan the drop directory for new bundles.                    |
-| `POST /api/import-jobs/<id>/prepare` | Build the import plan (no writes).                          |
+| `POST /api/import-jobs/<id>/prepare` | Build and save the plan; no study data imported.                          |
 | `PATCH /api/import-jobs/<id>/plan`   | Store the reviewer's edited plan.                           |
 | `POST /api/import-jobs/<id>/commit`  | Execute the plan and persist.                               |
 
@@ -471,8 +480,10 @@ pulse-ep uses standard HTTP status codes:
 | 404    | Study / map / colormap / report not found.             |
 | 500    | Unexpected server error.                               |
 
-Error responses always have a JSON body with at least `msg` or `error`
-keys; clients should not need to parse free-form HTML.
+Handled API errors generally use a JSON `msg` or `error`. Framework-level
+errors, unknown routes or unhandled exceptions can return HTML; clients should
+check the HTTP status and content type before parsing JSON. Invalid or expired
+JWTs can also produce status 422 or 401 depending on the failure.
 
 ## Rate limits
 
@@ -481,10 +492,9 @@ behind a reverse proxy and rate-limit there.
 
 ## Versioning
 
-Endpoints are unversioned in `0.1.x` — the API surface is still firming
-up. From `1.0.0` onwards (cut when the SoftwareX paper is accepted),
-breaking changes will be reflected in a major-version bump and an
-explicit deprecation notice in the [Changelog](../changelog.md).
+Endpoints are unversioned in the current `0.x` series. Consult the
+[Changelog](../changelog.md) when upgrading and pin a release for reproducible
+workflows. Raw exports additionally identify their payload schema version.
 
 ## See also
 

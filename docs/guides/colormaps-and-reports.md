@@ -1,147 +1,89 @@
 # Colormaps and reports
 
-The viewer's colorbar and the Excel reports are two surfaces of the
-same underlying concept: a **colormap** — a list of color steps with
-matching score intervals — defines how scalar fields are visualised in
-3D **and** how the per-interval area breakdown is computed.
+A colormap defines colour control points at numeric positions. The viewer
+uses these to colour a scalar field and submits adjacent positions as
+intervals for surface-area calculations.
 
-## The colormap model
+## Colormap fields
 
-A `ColormapModel` row has:
+| Field | Meaning |
+| --- | --- |
+| `name` | Unique saved name |
+| `colors` | Hex colour strings, one per control point |
+| `intervals` | Numeric positions; **same length as `colors`** |
+| `annotations` | Optional labels, same length as `intervals` |
+| `use_gradient` | Interpolate between colours or use steps |
+| `is_relative` | In the viewer, normalise the field and control-point ranges for colour mapping |
+| `clipping` | Use endpoint colours outside the range; otherwise finite out-of-range values are white |
 
-| Field         | Notes                                                                 |
-| ------------- | --------------------------------------------------------------------- |
-| `name`        | Unique. Human-readable identifier (e.g. `pacemap_default`).           |
-| `colors`      | List of CSS hex strings, one per interval (`["#3a76ff", "#ffd700", "#e34a33"]`). |
-| `intervals`   | List of score boundaries; length = `len(colors) + 1`.                 |
-| `annotations` | Optional labels per interval (e.g. `["below threshold", "match", "perfect"]`). |
-| `use_gradient`| If `true`, smoothly interpolate between colors; if `false`, hard steps. |
-| `is_relative` | If `true`, intervals are interpreted as percentages of the per-map max score. |
-| `clipping`    | If `true`, values outside `intervals[0]..intervals[-1]` are clipped to the nearest interval. If `false`, they get `NaN` and render as grey. |
+Missing values remain grey. The REST endpoints enforce matching lengths;
+there is no equivalent automatic length check on direct ORM construction.
 
-The constraint `len(intervals) == len(colors) + 1` is enforced by the
-REST endpoint and at the ORM level.
-
-## Bootstrapping the default colormaps
+## Default colormaps
 
 ```bash
 pulse-ep-populate-colormaps
 ```
 
-This loads three named colormaps appropriate for pace-mapping similarity
-scores (50–100 %, 5-step rainbow), activation time, and bipolar voltage.
-Run it once after the first import; re-running is safe (idempotent
-upsert by `name`).
+The eight presets are `viridis_0_3_mV`, `jet`, `viridis`, `plasma`, `magma`,
+`inferno`, `pacemapping_5` and `pacemapping`. Re-running preserves edited
+colours and intervals, but synchronises the shipped `is_relative`, `clipping`
+and `use_gradient` flags.
 
-## Creating and editing colormaps
+## Create or edit
 
-### From the viewer
-
-The inspector's colorbar is editable: drag interval boundaries to
-re-bin, double-click a color stop to change it. Changes are saved to
-the database immediately via `PUT /colormaps/<id>`.
-
-### From the REST API
+Administrators can use the viewer's colormap form and **Save** button, or the
+REST API. A valid three-control-point voltage scale is:
 
 ```bash
 curl -X POST "$PULSE_EP_BASE_URL/colormaps" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{
-        "name": "pacemap_clinical",
-        "colors":     ["#1a3a8c", "#3a76ff", "#ffd700", "#ff8c1a", "#e34a33"],
-        "intervals":  [50, 70, 80, 90, 95, 100],
-        "annotations":["below-50", "70-80", "80-90", "90-95", "95-100"],
-        "use_gradient": false,
-        "is_relative": false,
-        "clipping": true
-    }'
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"voltage_example", "colors":["#440154","#21918c","#fde725"],
+       "intervals":[0,1.5,3], "annotations":["0","1.5","3"],
+       "use_gradient":true, "is_relative":false, "clipping":true}'
 ```
 
-### From Python
-
-```python
-from pulse_ep import get_db_session, ColormapModel
-
-with get_db_session() as s:
-    cm = ColormapModel(
-        name="pacemap_clinical",
-        colors=["#1a3a8c", "#3a76ff", "#ffd700", "#ff8c1a", "#e34a33"],
-        intervals=[50, 70, 80, 90, 95, 100],
-        annotations=["below-50", "70-80", "80-90", "90-95", "95-100"],
-        use_gradient=False,
-        is_relative=False,
-        clipping=True,
-    )
-    cm.create(s)
-```
-
-## Reports
-
-A **report** is a saved configuration: a list of map IDs, a colormap,
-a scalar name (`act`, `voltage`, …) and an interpolation radius. It
-serializes a per-map breakdown of surface area into each colormap bin,
-ready for an Excel sheet that fits the clinical reporting template.
-
-### Workflow
-
-1. **Save a report** — `POST /save_report` records the configuration.
-2. **Generate the Excel** — `POST /reports/<id>/generate` starts a
-   background worker that computes the per-map area table and writes
-   it to disk in `PULSE_EP_REPORTS_DIR`.
-3. **Poll for status** — `GET /reports/<id>/status` returns
-   `generating | ready | error`.
-4. **Download** — `GET /reports/<id>/download` streams the `.xlsx` file.
-
-The viewer drives all four steps; CLI / scripted clients call the same
-endpoints directly.
-
-### What ends up in the Excel
-
-One sheet, one row per map. Columns:
-
-| Column                       | Meaning                                            |
-| ---------------------------- | -------------------------------------------------- |
-| `ID`, `Study`, `Map Name`    | Identifiers.                                       |
-| `Total Area (cm²)`           | Total mesh surface area.                           |
-| `Min` / `Max` / `Mean` / `Std` | Scalar-field summary statistics.                  |
-| `<lo>–<hi> (abs)`            | Surface area falling in this absolute score bin.   |
-| `<lo>–<hi> (rel)`            | Same bin, but bounds rescaled to the per-map max.  |
-| any `EPMapAttributes` key    | Pacemap flag, atrium, operator, …                  |
-
-The headers are styled with a `header_fill` (CARTO-style navy) and
-column widths are auto-fitted. The file lives in
-`PULSE_EP_REPORTS_DIR` and is served via `send_file` with the
-`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
-MIME type.
-
-## When to compute areas live vs. saved reports
-
-| Endpoint                                        | When to use it                                          |
-| ----------------------------------------------- | ------------------------------------------------------- |
-| `POST /calculate_areas_for_intervals`           | Interactive single-map probing in the viewer or an R / MATLAB / Jupyter client. Synchronous, fast (<200 ms typical). |
-| `POST /save_report` + `/generate` + `/download` | Batch over many maps, snapshot for clinical archive. Asynchronous, persistent file output. |
-
-The [cross-language examples](../examples/index.md) demonstrate the
-synchronous endpoint in R, MATLAB and Jupyter — the same numbers the
-saved Excel reports contain, computed independently in each toolchain.
-
-## See also
-
-- [REST API → Colormaps](../reference/rest-api.md#colormaps)
-- [REST API → Reports](../reference/rest-api.md#reports)
-- [Data model: `ColormapModel`, `ReportModel`](../reference/data-model.md)
+Here the adjacent analysis intervals are 0–1.5 and 1.5–3 mV. An equivalent
+configuration can be constructed with `ColormapModel` using the same lists.
 
 ## Fixed bipolar-voltage scale
 
-`pulse-ep-populate-colormaps` also supplies `viridis_0_3_mV`. Select it
-with `voltage_bipolar` in the web viewer for an absolute 0–3 mV scale.
+Select `viridis_0_3_mV` with `voltage_bipolar` for an absolute 0–3 mV scale.
 It uses the same nine Viridis control points as the publication's ParaView
-view, rounded to 8-bit sRGB. Values below zero use the first colour; values
-above 3 mV use the last colour. Missing values remain grey. Relative
-normalisation is disabled and endpoint clipping is enabled.
+view, rounded to 8-bit sRGB. Relative normalisation is disabled and endpoint
+clipping enabled. The mesh converts these sRGB colours to Three.js linear
+vertex colours before rendering. Display geometry and lighting can still
+affect the appearance compared with another application.
 
-The mesh converts sRGB colormap values to Three.js linear vertex colours
-before rendering, so its colours agree with the legend. Geometry processing,
-missing values and lighting in other applications may still change how
-individual surface regions appear.
+## Excel reports
+
+A report saves map IDs, colormap, scalar and measurement-distance settings.
+Install the `figures` extra for Excel generation.
+
+1. `POST /save_report` stores the configuration and returns a success message.
+2. `GET /reports` lists saved reports and their IDs.
+3. `POST /reports/<id>/generate` starts background generation.
+4. `GET /reports/<id>/status` reports `generating`, `ready`, `error` or `null`.
+5. `GET /reports/<id>/download` downloads the generated XLSX.
+
+The table contains map identifiers, total area, scalar statistics, interval
+areas and map attributes. For each numeric interval it reports an absolute
+area and a separate relative area obtained by interpreting the bounds as
+percentages of that map's maximum. This report convention is distinct from
+the viewer's min–max colour normalisation. Use absolute voltage intervals for
+physical voltage thresholds; do not interpret a relative column as a clinical
+voltage threshold without specifying its reference.
+
+Generated files are written to `PULSE_EP_REPORTS_DIR`. Deleting a report removes
+its database row; it does not automatically remove an already generated file.
+
+## Live calculations
+
+`POST /calculate_areas_for_intervals` calculates areas synchronously. The
+viewer, R, MATLAB and Jupyter examples call this same operation. Histograms
+and independent geometric calculations can instead use downloaded raw arrays.
+Adjacent bins are half-open except for the greatest upper endpoint, which is
+included. Empty bins return zero.
+
+See the [REST API reference](../reference/rest-api.md) for request and response shapes.

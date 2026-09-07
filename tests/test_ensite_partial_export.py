@@ -1,6 +1,6 @@
 """Exports that are not a full study: waveforms only, no geometry.
 
-A real EnSiteX export turned up carrying nothing but DxL point tables and
+A real EnSite X export turned up carrying nothing but DxL point tables and
 waveform CSVs — no DIF model at all. It imported as an empty study and
 reported success, and its waveforms were reported as "0 files" because they
 use a naming scheme the globs did not cover.

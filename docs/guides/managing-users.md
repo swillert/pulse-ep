@@ -1,151 +1,82 @@
 # Managing users
 
-`pulse-ep` ships with a minimal role-based authentication model — enough
-for a small research lab. Heavyweight identity (SSO, LDAP, OIDC) is
-intentionally out of scope; if you need that, put pulse-ep behind a
-reverse-proxy that does the auth and disable JWT login.
+The service uses bcrypt passwords and JWT access tokens. It has three
+roles: `admin`, `user` and `readonly`. Permissions apply across the database;
+there are no per-study access lists or built-in SSO, LDAP or OIDC integration.
+An external access layer can restrict who reaches the service, but API
+clients still authenticate with pulse-ep JWTs.
 
-## The model
+## Permissions
 
-Users live in the `users` table (`UserModel`). Each user has:
+| Operation | `readonly` | `user` | `admin` |
+| --- | :---: | :---: | :---: |
+| Read studies, meshes, points, waveforms and reports | ✓ | ✓ | ✓ |
+| Calculate areas and compare maps | ✓ | ✓ | ✓ |
+| Create, generate and delete reports | | ✓ | ✓ |
+| Enqueue, prepare, edit and commit imports | | ✓ | ✓ |
+| Create, edit and delete colormaps | | | ✓ |
+| Change map attributes through REST | | | ✓ |
+| Register an `admin` or `readonly` account through REST | | | ✓ |
 
-| Field      | Notes                                                |
-| ---------- | ---------------------------------------------------- |
-| `username` | Unique. Login identifier.                            |
-| `password` | bcrypt hash, never plaintext. Cost factor configurable via `PULSE_EP_BCRYPT_LOG_ROUNDS`. |
-| `role`     | Either `admin` or `user`.                            |
+**Standard-user self-registration is open.** Anyone who can reach
+`/register_user` can create a `user` account. Creating an administrator does
+not disable that endpoint. Restrict network access or apply an external
+access-control policy before storing clinical data in a shared deployment.
 
-Roles map to permissions:
+## Create or update an account
 
-| Operation                              | `user` | `admin` |
-| -------------------------------------- | :----: | :-----: |
-| Read studies / maps / meshes / reports |   ✓    |   ✓     |
-| Create / save reports                  |   ✓    |   ✓     |
-| Create / update colormaps              |        |   ✓     |
-| Set EPMap attributes                   |        |   ✓     |
-| Register new users                     |        |   ✓     |
-
-The role is encoded into the JWT access token as the `role` claim, and
-the Flask endpoints check it via Flask-JWT-Extended's `additional_claims`.
-
-## Creating the first admin user
-
-Right after `pulse-ep-import-carto` is run for the first time, the database
-has no users — the login screen will reject every credential. Bootstrap an
-admin with the CLI:
+The initializer creates the first administrator:
 
 ```bash
-pulse-ep-create-user --username admin --role admin
+pulse-ep-init
 ```
 
-You will be prompted for a password (input is hidden). If you want
-to pass the password non-interactively, e.g. from a secret manager:
-
-=== "Inline `--password`"
-
-    ```bash
-    pulse-ep-create-user --username admin --role admin --password '…'
-    ```
-
-    Only safe for ad-hoc scripts; the password ends up in your shell
-    history.
-
-=== "stdin pipe"
-
-    ```bash
-    op read "op://uksh-secrets/pulse-ep-admin/password" \
-      | pulse-ep-create-user --username admin --role admin --password-stdin
-    ```
-
-    Recommended for CI / orchestration.
-
-The password is hashed with bcrypt (cost factor 12 by default) before
-it ever touches the database.
-
-## Creating users inside a running Docker container
+For subsequent account creation or password/role changes:
 
 ```bash
-docker compose exec server pulse-ep-create-user --username clinician_01 --role user
+pulse-ep-create-user --username clinician_01 --role user
+pulse-ep-create-user --username mcp-reader --role readonly
 ```
 
-This is the right path when the stack lives in Compose and you do not
-have a local Python install.
+The command prompts for a hidden password. **An existing account is updated**,
+including its role. Always pass the intended role; the CLI default is `admin`.
+For scripted use, pass the password on standard input with `--password-stdin`.
 
-## Adding more users (admin self-service)
-
-Once an admin exists, they can register additional users through the
-REST API. A common ergonomic shortcut:
+In Docker, prefix the command with `docker compose exec server`:
 
 ```bash
-TOKEN=$(curl -s -X POST "$PULSE_EP_BASE_URL/login_user" \
-    -H "Content-Type: application/json" \
-    -d '{"username":"admin","password":"…"}' \
-    | python -c 'import sys, json; print(json.load(sys.stdin)["access_token"])')
-
-curl -s -X POST "$PULSE_EP_BASE_URL/register_user" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $TOKEN" \
-    -d '{"username":"clinician_01","password":"…","role":"user"}'
+docker compose exec server pulse-ep-create-user --username mcp-reader --role readonly
 ```
 
-The web viewer also exposes this via `Settings → Users` for admins.
+There is no `Settings → Users` administrator screen. Accounts can be managed
+with the CLI or created through the [registration endpoint](../reference/rest-api.md#post-register_user).
 
-## Rotating a user's password
+## MCP accounts
 
-The CLI rejects existing usernames as a safety belt. To rotate, drop
-into Python:
+Use a dedicated `readonly` account for MCP. The MCP server exposes read and
+calculation tools only, and the role also prevents changes through direct REST
+requests with that account. Data access is still database-wide: isolate an
+approved study collection in a separate deployment if narrower access is
+required. See the [MCP guide](mcp.md) before enabling it.
 
-```python
-from pulse_ep.core.database import get_db_session
-from pulse_ep.core.models import UserModel
-from flask_bcrypt import Bcrypt
+## Revoking access
 
-new_hash = Bcrypt().generate_password_hash("new-strong-password").decode("utf-8")
-with get_db_session() as s:
-    user = s.query(UserModel).filter_by(username="clinician_01").first()
-    user.password = new_hash
-```
+The schema has no enabled/disabled flag. Changing a password blocks new logins
+with the old password; deleting an account blocks future logins entirely.
+Existing JWTs retain their signed identity and role until expiry. The current
+Flask-JWT-Extended default is 15 minutes; pulse-ep does not override it.
+To invalidate all issued tokens immediately, change `PULSE_EP_JWT_SECRET_KEY`
+and restart every server worker.
 
-A dedicated `pulse-ep-reset-password` CLI is on the roadmap — for now,
-this is the recommended path.
-
-## Disabling vs. deleting a user
-
-There is no `enabled` flag in the current schema; to revoke access,
-delete the row:
+An administrator with direct database access can remove an account:
 
 ```python
 from pulse_ep.core.database import get_db_session
 from pulse_ep.core.models import UserModel
 
-with get_db_session() as s:
-    s.query(UserModel).filter_by(username="clinician_01").delete()
+with get_db_session() as session:
+    session.query(UserModel).filter_by(username="mcp-reader").delete()
 ```
 
-Active JWT access tokens remain valid until they expire (default
-1 hour from issue). If you need to invalidate tokens immediately,
-rotate `PULSE_EP_JWT_SECRET_KEY` — that revokes **all** outstanding
-tokens.
-
-## Security notes
-
-- pulse-ep stores **only** bcrypt hashes; if your database is leaked,
-  hash-cracking the dump is computationally expensive but possible.
-  Combine with disk encryption.
-- The `register_user` endpoint is admin-only as of the current release.
-  Earlier releases of pulse-ultimate exposed it unauthenticated — if
-  you migrated from there, make sure the first thing you do is
-  `pulse-ep-create-user` to lock it down.
-- JWT tokens carry the `role` claim. Tampering with them would
-  invalidate the signature; the secret in `PULSE_EP_JWT_SECRET_KEY`
-  must therefore be a high-entropy random string and **not** be
-  committed to version control.
-
-## See also
-
-- [Configuration → `PULSE_EP_JWT_SECRET_KEY`](../getting-started/configuration.md#security)
-  — why this variable matters.
-- [REST API → Authentication](../reference/rest-api.md#authentication)
-  — full endpoint shapes.
-- [`pulse-ep-create-user`](../reference/cli.md#pulse-ep-create-user) —
-  CLI flag reference.
+Use [configuration](../getting-started/configuration.md#security) to set a
+strong JWT secret and an appropriate bcrypt work factor.

@@ -159,7 +159,7 @@ def fig_area_per_interval(epmap, out: Path) -> Path:
 
 
 def fig_cross_vendor_delta(maps: dict, out: Path) -> Path:
-    """CARTO minus EnSiteX on the same surface, via compare_maps().
+    """CARTO minus EnSite X on the same surface, via compare_maps().
 
     Both fixtures carry the *same* field, so this is not a clinical delta: it
     is what the two decode paths disagree about, drawn with the same operation

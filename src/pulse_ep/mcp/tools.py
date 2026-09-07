@@ -480,7 +480,7 @@ def _slice(wave, start_ms, end_ms):
 
     Milliseconds are converted through the sample rate rather than used as
     indices: CARTO records at 1 kHz, where the two happen to coincide, and an
-    EnSiteX segment at 2 kHz, where treating one as the other would silently
+    EnSite X segment at 2 kHz, where treating one as the other would silently
     return half the window the caller asked for.
     """
     data, time = wave.data, wave.time

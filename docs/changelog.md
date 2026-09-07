@@ -4,6 +4,94 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-09-07
+
+A release audit: the README, the guides, the example instructions and the
+manuscript were read against the implementation, and what did not match was
+corrected in whichever of the two was wrong. Most of it was documentation, but
+not all.
+
+### Security
+
+- **`pulse-ep-check-mesh` carried a hard-coded username and password** and
+  printed the access token it received. The account was a real one, the file
+  has been in the repository since the initial commit, and CI mirrors `main`
+  to a public GitHub repository — so the credential is published and removing
+  it here does not unpublish it. **Anyone who used that password anywhere must
+  change it.** The command now takes `--username` or `PULSE_EP_USERNAME`, reads
+  the password from `PULSE_EP_PASSWORD` or a prompt, and never prints the
+  token.
+- **A ZIP member could write outside the directory it was unpacked into.**
+  `ZipSource.materialize` joined the archive's own member names onto the
+  destination, so `../`, an absolute path, a Windows drive letter or a symlink
+  already present in an explicitly supplied destination would place the file
+  elsewhere. Every member is now checked before any of them is written, so a
+  hostile archive aborts the extraction rather than leaving half of it behind.
+- **Malformed login and registration requests reached the database layer.**
+  A non-object body, or a username that was not a string, produced a 500 where
+  it should produce a 400; a duplicate username produced one too. The role
+  escalation guard is unchanged — an unauthenticated caller still cannot ask
+  for a privileged role.
+
+### Fixed
+
+- **A shared triangle edge counted twice in geodesic comparison.**
+  `coo_matrix` sums duplicate entries, and an interior edge is contributed by
+  both of its triangles — so it entered the graph at twice its length while a
+  boundary edge kept its own. Every geodesic distance across a mesh interior
+  was inflated, and with it the distance-based masking that decides which
+  vertices are compared at all.
+- **A 7-Zip member's name was joined onto the extraction root unchecked.**
+  py7zr drops the anchor when it extracts, and CARTO archives do carry
+  absolute entries, so `root / "/var/tmp/export/Study.xml"` resolved to
+  `/var/tmp/export/Study.xml` — Python's `/` discards the left side against an
+  absolute right side. The reader was opening the *original* file rather than
+  the extracted copy, and would have failed once the original was gone.
+- **`pulse-ep-init` returned generated settings without writing them.** When
+  an existing `.env` was kept, a freshly generated JWT secret existed only in
+  that process — the server started afterwards had none. Absent keys are
+  written now, standard dotenv quoting is read and preserved, and the file is
+  tightened to mode 600 whether or not this run added to it. It also says so
+  when the file or the environment overrides an explicitly requested `--mcp`,
+  instead of dropping the request silently.
+- **Replacing an EnSite X study left its dependent rows behind.** Waveform and
+  legacy point rows were not deleted with the study, so a re-import
+  accumulated them. `pulse-ep-import-carto --clear` now drops every table the
+  ORM declares rather than a hand-maintained list that had fallen behind.
+- **Importing EnSite X signals without a store failed after writing.**
+  `--waveforms` now requires `--store-dir` before anything is read.
+- The demo registers its synthetic score as a `pacemap_score` field in percent,
+  so it carries the same self-description an imported map does.
+- The generated MCP client configuration sets `PULSE_EP_MCP_ENABLED=1`, which
+  the client needs since 0.4.0 and did not receive. An unrecognised value
+  disables access without preventing the server from starting.
+- Account creation honours the configured bcrypt work factor on all three
+  paths that hash a password.
+- The Docker image installs the reporting and 7-Zip extras it was documented
+  as having, renders without a display, and mounts writable, persistent
+  directories for reports, waveforms and the drop directory.
+- **GitHub mirroring pushed `HEAD` as `main` from tag pipelines**, so tagging
+  an older commit would have rewound the public branch, and it force-pushed
+  tags, which can overwrite a published release. Neither happens now.
+- Installation, the demo, command options, roles, API responses, signal
+  handling, viewer behaviour and the client examples were reconciled with the
+  implementation; obsolete SQLite claims and instructions for clients that do
+  not exist were removed.
+
+### Changed
+
+- The citation author order is Sven Willert, Derk Frank, Evgeny Lian.
+- `pulse-ep-demo` stores its triangle areas in mm², the unit every importer
+  writes and `/get_mesh_data` declares.
+- One definition of what "on" means (`config.TRUE_VALUES`), shared by
+  `Settings`, `pulse-ep-mcp` and `pulse-ep-init`, so the three cannot drift
+  apart on a switch whose failure direction decides whether study data reaches
+  a language model.
+- English throughout the reader-facing material: the verification script's
+  output, the synthetic-fixture and publication notes. The vendor is written
+  **EnSite X**, as Abbott writes it.
+- Generated documentation and local waveform stores are ignored.
+
 ## [0.4.1] — 2026-09-07
 
 ### Fixed

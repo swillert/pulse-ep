@@ -1,111 +1,92 @@
 # Installation
 
-`pulse-ep` is a Python package with optional extras for the web server,
-figure generation, and the development toolchain. Pick the install that
-matches your role.
-
-## Requirements
-
-| Component        | Minimum | Notes                                                   |
-| ---------------- | ------- | ------------------------------------------------------- |
-| Python           | 3.10    | Tested on CPython 3.10, 3.11, 3.12, 3.13 and 3.14.      |
-| PostgreSQL       | 14      | Optional — required only to import or serve real study data. Tested on 16. |
-| Docker           | 24+     | Optional — recommended for getting a database running quickly. |
-
-If you only want to try out `pulse-ep`, you do **not** need PostgreSQL — the
-[synthetic walkthrough](quickstart.md#1-synthetic-walkthrough-no-db-needed)
-runs entirely in memory and never opens a database connection.
+Python 3.10 or newer is required. PostgreSQL is needed for persistent storage
+and the shared service; in-memory readers and the synthetic demo need no
+running database. The supplied deployment and publication checks use
+PostgreSQL 16. The CI test matrix covers CPython 3.10 through 3.14.
 
 ## From source
 
-`pulse-ep` is not published on PyPI yet, so this is how to install it —
-for deployments, contributors and reproducible-research workflows alike:
+The supported installation route is the public source repository:
 
 ```bash
 git clone https://github.com/swillert/pulse-ep.git
 cd pulse-ep
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -e ".[all]"
 ```
 
-An editable install (`-e`) means your local edits are picked up
-immediately without re-running `pip install`. The `[all]` extra includes
-`pytest`, `ruff`, `mypy` and the `mkdocs` documentation builder.
+These activation commands are for a POSIX shell. On Windows, activate the
+virtual environment with `.venv\Scripts\Activate.ps1` in PowerShell.
+An editable installation picks up changes in the checkout immediately.
+For a fixed installation, omit `-e` and install from the chosen release checkout.
 
-The extras correspond to functional capabilities, not to a separation
-between "production" and "development". You can mix them freely — for
-example `pip install -e ".[server,figures]"` on a deployment server,
-skipping `dev` and `docs`.
+## Optional dependencies
 
-## From PyPI
+The base package includes the numerical, mesh, plotting, database and Parquet
+libraries, including PyVista and VTK. Extras add these capabilities:
 
-Not published yet. Once it is, the same extras apply and the editable
-checkout above is no longer needed to run a deployment:
+| Extra | Adds | Use |
+| --- | --- | --- |
+| `server` | Flask, JWT, CORS, bcrypt, gunicorn | REST service and browser viewer |
+| `figures` | reportlab, openpyxl, simplekml | PDF, Excel and KML report generators |
+| `sevenzip` | py7zr | 7-Zip archives, including CARTO files named `.zip` |
+| `mcp` | MCP SDK | MCP stdio server and protocol example |
+| `dev` | pytest, pytest-cov, ruff, mypy | Tests and code checks |
+| `docs` | MkDocs Material, mkdocstrings and Markdown plugins | Documentation site |
+| `all` | All six extras above | Full development installation |
 
-```bash
-pip install "pulse-ep[all]"
-```
+For example, `pip install -e ".[server,figures,sevenzip]"` installs a service
+with report generation and support for both ZIP and 7-Zip exports.
+JupyterLab and R, MATLAB or ParaView are installed separately when using the
+corresponding [client examples](../examples/index.md).
 
-Verify the install:
+## Verify the installation
+
+From the activated environment and repository root:
 
 ```bash
 pulse-ep-demo
-```
-
-This should print a synthetic study summary in under five seconds and exit
-cleanly with code 0. If it does, your install is functional.
-
-## With Docker
-
-For a zero-Python-on-the-host setup, the bundled `compose.yaml` spins up
-PostgreSQL, the API server, and (optionally) pgAdmin:
-
-```bash
-git clone https://github.com/swillert/pulse-ep.git
-cd pulse-ep
-cp .env.example .env  # edit PULSE_EP_JWT_SECRET_KEY at minimum
-docker compose --profile server up -d --build
-```
-
-The full Docker workflow — including how the profiles interact — is covered
-in the [Docker deployment guide](../guides/docker-deployment.md).
-
-## Verifying the install
-
-After any install method, run the smoke tests:
-
-```bash
-pulse-ep-demo                    # synthetic end-to-end pipeline
 python -c "import pulse_ep; print(pulse_ep.__version__)"
+examples/verify.sh
 ```
 
-If `[dev]` was part of your install, also run the
-unit-test suite:
+The demo prints an in-memory synthetic mesh summary. The verification script
+parses the paired synthetic CARTO and EnSite X exports without a database.
+With `[all]` installed, run the complete local test suite:
 
 ```bash
 pytest -q
+ruff check .
+ruff format --check .
 ```
 
-The suite needs no database. You should see one skipped test — it exercises
-schema creation on SQLite, which cannot render the PostgreSQL `JSONB` and
-`ARRAY` types the ORM uses. That skip is expected, not a failure.
+The unit suite needs no live database. Tests for optional components require
+the corresponding extras; with the complete installation they should run
+rather than skip. PostgreSQL persistence is checked separately in the
+publication's integration protocol.
 
-## Optional dependencies cheat sheet
+## With Docker
 
-| Extra      | Pulls in                                              | When you need it                            |
-| ---------- | ----------------------------------------------------- | ------------------------------------------- |
-| `server`   | Flask, Flask-JWT-Extended, Flask-CORS, Flask-Bcrypt, gunicorn | Running the REST API and 3D viewer.         |
-| `sevenzip` | py7zr                                                 | Reading CARTO exports delivered as 7-Zip archives (common, and often named `.zip`). |
-| `figures`  | reportlab, openpyxl, simplekml                        | Generating PDF / Excel / KML reports.       |
-| `dev`      | pytest, pytest-cov, ruff, mypy                        | Contributing to pulse-ep itself.            |
-| `docs`     | mkdocs-material, mkdocstrings, pymdown-extensions     | Building this documentation site locally.   |
-| `all`      | `server + figures + dev + docs`                       | Just give me everything.                    |
+The repository includes PostgreSQL and an optional server container:
+
+```bash
+cp .env.example .env
+# Set PULSE_EP_JWT_SECRET_KEY and the database credentials in .env.
+docker compose --profile server up -d --build
+docker compose exec server pulse-ep-migrate
+docker compose exec server pulse-ep-populate-colormaps
+docker compose exec server pulse-ep-create-user --username admin --role admin
+```
+
+Docker Compose 2.24 or newer is required by the `env_file.required` option.
+See [Docker deployment](../guides/docker-deployment.md) for persistent signal
+storage, importing and upgrades. With this route, run commands inside the
+server container, for example `docker compose exec server pulse-ep-demo`.
 
 ## Next steps
 
-- [Quickstart](quickstart.md) — run the synthetic demo and then a real
-  CARTO or EnSiteX study through the full pipeline.
-- [Configuration](configuration.md) — set `PULSE_EP_DATABASE_URL`,
-  `PULSE_EP_JWT_SECRET_KEY` and friends.
-- [Docker deployment](../guides/docker-deployment.md) — bring up the
-  full stack with one command.
+- [Quickstart](quickstart.md): configure, import and inspect a study.
+- [Configuration](configuration.md): settings and their precedence.
+- [Examples](../examples/index.md): connect analysis environments.

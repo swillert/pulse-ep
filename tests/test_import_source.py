@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import zipfile
 
+import pytest
+
 from pulse_ep.core.importers.base import detect_vendor
 from pulse_ep.core.importers.source import DirSource, ZipSource, source_for
 
@@ -67,3 +69,39 @@ def test_detect_vendor_none_without_mesh(tmp_path):
     (tmp_path / "Contact_Mapping_Model.xml").write_text("<DIF/>")  # EnSite-ish, no .mesh
     # no EnSite importer registered yet, and CARTO needs .mesh → no match
     assert detect_vendor(DirSource(tmp_path)) is None
+
+
+@pytest.mark.parametrize(
+    "name", ["../outside.txt", "/outside.txt", r"..\outside.txt", r"C:\outside.txt"]
+)
+def test_zip_rejects_unsafe_members_before_extracting(tmp_path, name):
+    archive = tmp_path / "unsafe.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("valid.txt", "valid")
+        zf.writestr(name, "unsafe")
+    source = ZipSource(archive)
+    try:
+        with pytest.raises(ValueError, match="Unsafe ZIP member"):
+            source.materialize(dest=tmp_path / "extracted")
+        assert not (tmp_path / "extracted" / "valid.txt").exists()
+        assert not (tmp_path / "outside.txt").exists()
+    finally:
+        source.close()
+
+
+def test_zip_rejects_destination_symlink_to_outside(tmp_path):
+    destination = tmp_path / "extracted"
+    destination.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (destination / "sub").symlink_to(outside, target_is_directory=True)
+    archive = tmp_path / "unsafe.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("sub/escaped.txt", "unsafe")
+    source = ZipSource(archive)
+    try:
+        with pytest.raises(ValueError, match="Unsafe ZIP member"):
+            source.materialize(dest=destination)
+        assert not (outside / "escaped.txt").exists()
+    finally:
+        source.close()

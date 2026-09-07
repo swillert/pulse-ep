@@ -7,18 +7,10 @@ identity anonymised by default.
 
 ## What it is for
 
-If you already have a SQL tool pointed at the pulse-ep database, you can
-already ask "which studies are there". This server exists for the three things
-SQL on that database cannot answer:
-
-- **Signal samples are not in the database.** They live beside it as Parquet;
-  the table holds a `data_uri` and nothing else. `read_waveform` returns the
-  trace of a named channel around a point's annotation.
-- **`scalar_fields` is a JSONB blob of tens of thousands of numbers per
-  field.** Selecting it is unreadable and blows any context window;
-  `map_summary` answers what a map measured, in what unit, over what range.
-- **Area, comparison and geodesic correspondence are computation, not
-  query.** `area_of_range` and `compare_maps` run them and return the result.
+The tools combine data discovery, summaries, signal access and quantitative
+operations through the existing service. Signal samples are stored in Parquet
+outside PostgreSQL. Compact tools return summaries; bulk tools download
+complete stored data for analysis in the MCP host's local environment.
 
 It is a client of the same JWT REST API as the viewer and the `examples/`
 clients — there is no privileged path into the database — so it sees exactly
@@ -46,7 +38,7 @@ inherits, and it is not enabled by installing the extra.
     identity](#study-identity) — study names, paths and free-text fields —
     while map names, quantities and measured values are sent unchanged. Where
     that is not sufficient for your data, **adapt what is sent** (extend the
-    anonymiser, restrict the account's visible studies, run a local model)
+    anonymiser, use a separate deployment containing only approved studies, or use an approved local model)
     before enabling it, rather than after.
 
     Anonymisation is a safeguard against accidental disclosure, not a
@@ -95,11 +87,10 @@ what ends access for good.
 
     What does: the account. Give the MCP its own `readonly` user — a role the
     server enforces, refused on every endpoint that changes stored state —
-    and disable that user when access should end. `pulse-ep-init --mcp-user
-    mcp` creates exactly that account and prints the client configuration. The header is also worth having on its
-    own — AI access is visible in the server log as
-    `X-Pulse-EP-Client: pulse-ep-mcp/<version>`, distinguishable from a person
-    at the viewer.
+    and revoke access according to the [account guide](managing-users.md#revoking-access).
+    `pulse-ep-init --mcp --mcp-user mcp` creates that account for a new
+    configuration. The client sends `X-Pulse-EP-Client: pulse-ep-mcp/<version>`;
+    logging that header requires a suitable access-log configuration.
 
 ## Study identity
 
@@ -121,7 +112,7 @@ stored file paths, so replacing a single field would not be enough.
 | A study is called | `study/<id>` — the database id, no key file, no mapping table to keep or lose |
 | Names embedded in other strings | replaced wherever they appear |
 | Paths, `operator`, `notes`, patient fields | `[redacted]` |
-| Map names, quantities, units, values, signals | **untouched** — anatomy and measurements, not identifiers |
+| Map names, quantities, units, values, signals | Generally retained; map names and arbitrary fields still require review for identifiers |
 | Every answer | carries `"anonymized": true` |
 
 Resolving an alias is one query on the machine that holds the data:
@@ -185,6 +176,7 @@ Then register it with your MCP client. For Claude Desktop
     "pulse-ep": {
       "command": "/path/to/.venv/bin/pulse-ep-mcp",
       "env": {
+        "PULSE_EP_MCP_ENABLED": "1",
         "PULSE_EP_MCP_BASE_URL": "http://127.0.0.1:5000",
         "PULSE_EP_MCP_USERNAME": "readonly",
         "PULSE_EP_MCP_PASSWORD": "…"
@@ -194,7 +186,11 @@ Then register it with your MCP client. For Claude Desktop
 }
 ```
 
-For Claude Code: `claude mcp add pulse-ep -- /path/to/.venv/bin/pulse-ep-mcp`.
+For Claude Code, register the executable with `claude mcp add pulse-ep --
+/path/to/.venv/bin/pulse-ep-mcp`. Launch Claude Code from an environment
+containing the MCP settings above, including `PULSE_EP_MCP_ENABLED=1`.
+The local MCP process reads process environment variables, not the service
+`.env` automatically.
 
 ## The tools
 
@@ -217,33 +213,21 @@ UI, where a person is present.
 
 ## Everything is reachable — but bulk goes to a file
 
-The `fetch_*` tools hand over the complete stored data. They write it into the
-download directory and return the **path**, rather than putting it in the
-answer, and the reason is a measurement rather than a principle. One real
-map — 10 129 vertices, five scalar fields, 66 points, 66 signal windows:
+The `fetch_*` tools write data under `PULSE_EP_MCP_DOWNLOAD_DIR` (default:
+`pulse-ep-mcp` in the system temporary directory) and return a local path.
+The MCP host needs file access and code execution to analyse these downloads;
+the language model itself does not execute calculations merely by receiving
+a path. `fetch_map(inline=True)` can return the full map directly when needed.
 
-| | |
-| --- | --- |
-| `fetch_map` as a file | 3.2 MB JSON, answer is ~10 lines |
-| the same payload `inline=True` | 3 248 423 characters into the context |
-| `fetch_points` | 3.7 kB CSV, 66 rows × 9 columns |
-| `fetch_waveform` | 293 kB Parquet, 2500 × 78 |
+Filenames are reduced to basenames and downloaded metadata is passed through
+the same configured redaction process as tool responses. Numerical data remain
+sensitive where institutional rules say so. File download alone does not
+transmit the full file to a model provider, but later host actions may do so.
 
-A model that has the data in a file can compute with it — load the CSV in
-pandas, open the Parquet, feed the mesh to a script. A model that has it
-pasted into its context has spent the room it needed to think.
-
-Where the data is genuinely small, it comes inline: `read_points(map_id,
-limit=0)` returns all 66 points of that map in 13 kB, and
-`read_waveform(..., max_samples=2500)` returns an undecimated window (51 kB
-for three channels). Use `inline=True` on `fetch_map` when you really want the
-whole thing in the answer; the response tells you how big it was.
-
-Downloads land in `PULSE_EP_MCP_DOWNLOAD_DIR` (default: a `pulse-ep-mcp`
-folder in the system temp directory), and only there — a `filename` argument
-is reduced to its basename, so nothing can be written outside it. Written
-files are anonymised the same way the answers are: the model can read them,
-so they have to hold the same line.
+`read_points` defaults to 200 points (`limit=0` means all); `list_waveforms`
+defaults to 25 rows and uses a positive limit. `read_waveform` defaults to at
+most 400 returned samples per selected channel, while its statistics use every
+finite sample in the requested interval.
 
 ### The remaining limits
 
@@ -255,28 +239,20 @@ so they have to hold the same line.
   on (mapping bipole and unipole, reference), because naming all 78 is not an
   answer. `fetch_waveform` is the undecimated version.
 - **`start_ms` / `end_ms` are milliseconds**, converted through the sample
-  rate — 500 ms is 500 samples on CARTO at 1 kHz and 1000 on a 2 kHz EnSiteX
-  segment.
+  rate, relative to the start of the stored window, with an exclusive end.
+  For annotation-centred analysis, convert the exported annotation offset
+  to these window-relative bounds.
 
-## A typical session
+## Executable example
 
-> Which quantities does map 1 carry, and how much of it is a good pace match?
-
-```
-map_summary(1)      -> pacemap_score 57.6 … 93.4 %, contact_force, voltage_bipolar, …
-area_of_range(1, 90, 100, scalar_name="pacemap_score")
-                    -> area 7.7
-read_waveform(1)    -> M1 / MCC_Abl_BiPolar_1 / CS1-CS2 around the annotation
-```
-
-> Now correlate the pace-match score with contact force across the points.
-
-```
-fetch_points(1)     -> /tmp/pulse-ep-mcp/map-1-points.csv, 66 rows
-                       (then load it in pandas and compute)
-```
+The supplied [Python MCP example](https://github.com/swillert/pulse-ep/tree/main/examples/python)
+checks a map's bipolar unit, requests the area between 0 and 0.5 mV at a
+5 mm distance setting, downloads the acquisition points and computes their
+median voltage locally. It executes MCP over stdio without a language model.
+An assistant can select the same tools in response to a natural-language request.
 
 ## See also
 
-- [CLI reference: `pulse-ep-mcp`](../reference/cli.md#pulse-ep-mcp)
-- [REST API](../reference/rest-api.md) — the endpoints the server is a client of
+- [CLI reference](../reference/cli.md#pulse-ep-mcp)
+- [REST API](../reference/rest-api.md)
+- [Managing users](managing-users.md)

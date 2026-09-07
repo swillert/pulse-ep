@@ -77,7 +77,11 @@ def main(argv: list[str] | None = None) -> int:
 
     init_db()
 
-    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    from pulse_ep.core.config import get_settings
+
+    hashed = bcrypt.hashpw(
+        password.encode("utf-8"), bcrypt.gensalt(rounds=get_settings().bcrypt_log_rounds)
+    ).decode("utf-8")
 
     with get_db_session() as session:
         existing = session.query(UserModel).filter_by(username=args.username).first()

@@ -263,7 +263,7 @@ def _import_single_study(
                     session.add(pt)
 
                 # The same points in the vendor-neutral shape, so a CARTO map
-                # is comparable with an EnSiteX one. The legacy rows above stay
+                # is comparable with an EnSite X one. The legacy rows above stay
                 # as they are — this is an addition, not a replacement.
                 #
                 # Through the same serialiser the queue path uses: this loop
@@ -319,7 +319,7 @@ def _import_waveforms(session, study_dir, study_model, map_ids, store_dir) -> No
     """Store this study's per-point ECG windows and record their metadata rows.
 
     The samples never enter the relational DB — they go to the WaveformStore
-    as Parquet and the row keeps the uri, exactly as for EnSiteX signals.
+    as Parquet and the row keeps the uri, exactly as for EnSite X signals.
     ``map_ids`` (``{map name: id}``) is what lets each window hang off the map
     it was acquired on rather than off the study as a whole.
     """
@@ -353,30 +353,13 @@ def _import_waveforms(session, study_dir, study_model, map_ids, store_dir) -> No
 # ── DB wipe helper ───────────────────────────────────────────────────────
 def _wipe_database(progress: bool) -> None:
     """Drop and recreate all pulse-ep tables, then reseed metadata."""
-    from sqlalchemy import text
-
-    from pulse_ep.core.database import (
-        create_db_engine,
-        get_db_session,
-        seed_attribute_metadata,
-    )
+    from pulse_ep.core.database import create_db_engine, get_db_session, seed_attribute_metadata
     from pulse_ep.core.models import Base
 
     engine = create_db_engine()
-    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        for tbl in [
-            "ep_map_points",
-            "epmap_attributes",
-            "reports",
-            "epmaps",
-            "studies",
-            "attribute_metadata",
-            "colormaps",
-            "users",
-        ]:
-            conn.execute(text(f"DROP TABLE IF EXISTS {tbl} CASCADE"))
+    Base.metadata.drop_all(engine)
     if not progress:
-        log.info("Dropped all tables.")
+        log.info("Dropped all application tables.")
     Base.metadata.create_all(engine)
     if not progress:
         log.info("Recreated tables.")
@@ -465,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         # An archive is a perfectly ordinary way to hand over an export — the
-        # EnSiteX command has always taken one, and CARTO exports arrive as
+        # EnSite X command has always taken one, and CARTO exports arrive as
         # archives just as often. ImportSource decides what the file actually
         # is by its content signature, which matters here: real exports turn
         # up as 7-Zip archives carrying a .zip extension.

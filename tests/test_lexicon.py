@@ -71,7 +71,7 @@ def test_the_unit_comes_from_the_inventory_not_the_lexicon():
 
 
 def test_both_vendors_name_bipolar_voltage_identically():
-    """The whole point: one query spans CARTO and EnSiteX."""
+    """The whole point: one query spans CARTO and EnSite X."""
     carto = field_name(VOLTAGE_BIPOLAR)
     ensite = field_name(resolve(ENSITE_POLARITY, "bi"))
     assert carto == ensite == "voltage_bipolar"

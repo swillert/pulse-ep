@@ -1,12 +1,12 @@
-# Importing EnSiteX studies
+# Importing EnSite X studies
 
-How an Abbott EnSiteX (St. Jude) export is decoded, what pulse-ep takes
+How an Abbott EnSite X export is decoded, what pulse-ep takes
 from it, and how to drive the import — by command line or through the
 browser review queue.
 
 ## What an export contains
 
-An EnSiteX export is a folder (or ZIP of one) of `SJM_DIF_5.0` XML meshes
+An EnSite X export is a folder (or ZIP of one) of `SJM_DIF_5.0` XML meshes
 and DxL CSV tables. pulse-ep reads these:
 
 | File | What it becomes |
@@ -112,9 +112,7 @@ the map count, the vertex counts, the number of point files and any
 
 ## The import queue
 
-For routine use there is a queue instead of a command line. An export
-dropped into the watched directory is detected, planned, and held for
-review:
+The import queue supports a review workflow through `/import`:
 
 ```
 detected → needs_review → importing → done | error
@@ -136,7 +134,7 @@ The same lifecycle is available over REST — see
 
 ## Comparing two maps
 
-Because EnSiteX often exports several map runs over one identical mesh
+Because EnSite X often exports several map runs over one identical mesh
 (a pre-map and a remap, say), a delta between them is directly
 meaningful:
 

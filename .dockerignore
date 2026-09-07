@@ -42,3 +42,23 @@ docs/
 *.bak
 *.orig
 .DS_Store
+
+# Clinical inputs, generated documentation and local working notes
+data/
+raw_data/
+raw-data/
+exports/
+drop/
+waveforms/
+site/
+public/
+examples/
+publication/
+tests/
+CLAUDE.md
+*.zip
+*.7z
+*.log
+study.csv
+studies.csv
+*.patient.csv

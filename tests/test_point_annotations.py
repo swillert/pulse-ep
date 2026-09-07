@@ -4,7 +4,7 @@
 pace-match score. The components it was derived from (the window's start, the
 reference and mapping annotations, the window of interest) survived only in
 CARTO's fixed-column ``ep_map_points``, which the queue import path never
-writes and no EnSiteX study has at all. Since signal windows are imported,
+writes and no EnSite X study has at all. Since signal windows are imported,
 those components are what tells a reader where in 2500 samples to look.
 """
 

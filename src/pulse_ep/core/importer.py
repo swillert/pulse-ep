@@ -216,7 +216,7 @@ def import_carto(filename: str, filter=None):
             ) = import_carto_points(path, carto_point_export_filenames)
 
             # The same points in the vendor-neutral shape, so CARTO maps carry
-            # measurement points exactly as EnSiteX ones do. Best-effort: the
+            # measurement points exactly as EnSite X ones do. Best-effort: the
             # legacy arrays above stay populated either way.
             try:
                 from pulse_ep.core.importers.carto import (

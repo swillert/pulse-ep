@@ -1,8 +1,7 @@
 # Python API reference
 
-The pulse-ep Python toolkit lives in `pulse_ep.core`. The public surface
-is re-exported from the top-level `pulse_ep` package — anything you
-need for typical analyses is one `from pulse_ep import …` away.
+The pulse-ep Python toolkit lives in `pulse_ep.core`. Common legacy entry points are re-exported from `pulse_ep`; vendor-neutral
+fields, points, importers and operations are imported from their modules.
 
 ## Quick map
 
@@ -14,7 +13,7 @@ need for typical analyses is one `from pulse_ep import …` away.
 | [`StudyModel`][pulse_ep.StudyModel]                 | ORM model for a study.                        |
 | [`get_db_session`][pulse_ep.get_db_session]         | Transactional context manager.                |
 | [`import_carto`][pulse_ep.import_carto]             | Import a single CARTO export.                 |
-| [`import_studies`][pulse_ep.import_studies]         | Import many studies from a CSV.               |
+| [`import_studies`][pulse_ep.import_studies]         | Legacy batch import helper; prefer the current vendor CLIs.               |
 | [`read_carto_mesh`][pulse_ep.read_carto_mesh]       | Parse a CARTO `.mesh` text file.              |
 | [`get_settings`][pulse_ep.core.config.get_settings] | Cached singleton of the typed settings.       |
 
@@ -106,3 +105,36 @@ need for typical analyses is one `from pulse_ep import …` away.
         - AttributeMetadata
       heading_level: 3
       show_if_no_docstring: true
+
+## Vendor-neutral fields and measurements
+
+::: pulse_ep.core.scalar_field.ScalarField
+    options:
+      heading_level: 3
+
+::: pulse_ep.core.measurement.MeasurementPoint
+    options:
+      heading_level: 3
+
+## Vendor import workflow
+
+::: pulse_ep.core.importers.base
+    options:
+      members: [detect_vendor, get_importer, prepare_plan, commit_plan]
+      heading_level: 3
+
+::: pulse_ep.core.importers.source
+    options:
+      members: [source_for, DirSource, ZipSource, SevenZipSource]
+      heading_level: 3
+
+## Map comparison and interpolation
+
+::: pulse_ep.core.comparison.compare_maps
+    options:
+      heading_level: 3
+
+::: pulse_ep.core.interpolation
+    options:
+      members: [gaussian_interpolate, heat_interpolate]
+      heading_level: 3

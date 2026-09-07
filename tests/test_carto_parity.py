@@ -1,9 +1,9 @@
-"""CARTO reaching the same shape as EnSiteX: points, plan, commit.
+"""CARTO reaching the same shape as EnSite X: points, plan, commit.
 
 CARTO's per-point data was always parsed, but stopped at the fixed-column
 legacy table, and the importer had no ``prepare``/``commit`` at all — so a
 CARTO bundle could not be reviewed, and its points could not be compared with
-an EnSiteX point set. These tests pin the parity.
+an EnSite X point set. These tests pin the parity.
 """
 
 from __future__ import annotations

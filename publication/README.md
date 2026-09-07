@@ -1,54 +1,54 @@
-# Veröffentlichungsmaterial
+# Publication material
 
-Alles, was für die Publikation gezeigt wird, entsteht hier — aus den
-synthetischen Exporten, nicht aus Patientendaten.
+Supplementary figures generated from the synthetic exports. The clinical
+application figures of the SoftwareX manuscript are documented separately in
+the reproducibility supplement.
 
 ```
-make_figures.py     erzeugt jede Abbildung aus tests/fixtures/synthetic/
-test_figures.py     prüft, dass sie sich reproduzieren lassen
-figures/            die erzeugten Abbildungen
+make_figures.py     generates this directory's five figures from tests/fixtures/synthetic/
+test_figures.py     checks that they reproduce
+figures/            the generated figures
 ```
 
-Die Eingangsdaten liegen bewusst nicht hier, sondern unter
-`tests/fixtures/synthetic/` — dieselben Dateien, die die Testsuite und
-`examples/verify.sh` benutzen. Eine zweite Kopie würde nur auseinanderlaufen.
+The input data deliberately does not live here but under
+`tests/fixtures/synthetic/` — the same files the test suite and
+`examples/verify.sh` use. A second copy would only drift apart.
 
-## Erzeugen
+## Generating
 
 ```bash
 python publication/make_figures.py
 pytest publication/test_figures.py
 ```
 
-Kein Server, keine Datenbank, keine Patientendaten. Ein frischer Checkout
-genügt.
+No server, no database, no patient data. An installed checkout with the
+numerical and plotting dependencies is required.
 
-## Die Abbildungen
+## The figures
 
-| Datei | Was sie zeigt |
+| File | What it shows |
 | --- | --- |
-| `map_ensite.png` | EnSiteX-Export: bipolare Spannung mit Niedervoltage-Areal und Randzone, dazu die 64 Messpunkte |
-| `map_carto.png` | CARTO-Export derselben Oberfläche: Aktivierungszeit, spät im selben Areal |
-| `area_per_interval.png` | Fläche je Spannungsintervall — die Auswertung, die alle Klienten in `examples/` reproduzieren |
-| `scalar_histograms.png` | Werteverteilung beider Hersteller |
-| `cross_vendor_delta.png` | CARTO minus EnSiteX auf derselben Oberfläche |
+| `map_ensite.png` | EnSite X export: bipolar voltage with a low-voltage area and border zone, plus the 64 measurement points |
+| `map_carto.png` | CARTO export of the same surface: activation time, late in the same area |
+| `area_per_interval.png` | Area per voltage interval — the same server-side operation the area examples use |
+| `scalar_histograms.png` | Value distribution for both vendors |
+| `cross_vendor_delta.png` | CARTO minus EnSite X on the same surface |
 
-## Zur letzten Abbildung
+## On the last figure
 
-Sie ist **kein** klinischer Unterschied. Beide Exporte tragen dasselbe Feld;
-gezeigt wird, worin die zwei Dekodierpfade voneinander abweichen — berechnet
-mit derselben `compare_maps()`-Operation, die ein echter Karte-gegen-Karte-
-Vergleich benutzt. Das Residuum beträgt **5·10⁻⁵ mV** und ist die
-Rechengenauigkeit der Formate selbst (CARTO speichert drei Nachkommastellen),
-keine Interpretationsdifferenz. `test_figures.py` hält diesen Wert fest: eine
-Regression in einem der beiden Leser würde ihn um Größenordnungen verschieben
-und die Bildunterschrift falsch machen.
+It is **not** a clinical difference. Both exports carry the same field; what is
+shown is where the two decode paths diverge — computed with the same
+`compare_maps()` operation a real map-versus-map comparison uses. The residual
+is **5·10⁻⁵ mV** and is the rounding difference of the files generated here; it
+is not a general accuracy limit of the vendor formats. `test_figures.py` pins
+this value: a regression in either reader would shift it by orders of magnitude
+and make the caption wrong.
 
-## Was das Material belegt
+## What this material establishes
 
-Dass die Verarbeitungskette von der Herstellerdatei bis zur Auswertung
-vollständig und reproduzierbar durchläuft, für beide Formate.
+That the processing chain runs from vendor file to analysis completely and
+reproducibly, for both formats.
 
-Es belegt **nicht**, dass die Feldbedeutungen klinisch korrekt sind — dafür
-braucht es echte Exporte, die nicht Teil dieses Repositoriums sind. Siehe
+It does **not** establish that the field meanings are clinically correct — that
+needs real exports, which are not part of this repository. See
 `tests/fixtures/synthetic/README.md`.

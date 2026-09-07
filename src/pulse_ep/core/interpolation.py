@@ -5,7 +5,7 @@ thousands of vertices, so something has to decide what every other vertex
 shows. There are two different answers, and pulse-ep only ever had the first:
 
 ``mask``
-    Trust the vendor. CARTO and EnSiteX already write an interpolated value
+    Trust the vendor. CARTO and EnSite X already write an interpolated value
     per vertex; we only hide the ones too far from any real measurement. This
     is what :meth:`EPMap.interpolate_scalar_values` has always done — despite
     its name it interpolates nothing, it masks.
@@ -21,14 +21,12 @@ back on itself — a point on the far side of a thin wall is millimetres away
 through blood and centimetres away along tissue. ``geodesic`` measures along
 the surface instead.
 
-Geodesic weighting is done with the heat kernel rather than with one distance
-field per measurement point: on a surface, heat diffused for time ``t``
-arrives with weight ``exp(-d²/4t)`` where ``d`` is the *geodesic* distance
-(Varadhan's formula, the same identity the Heat Method in
-:mod:`~pulse_ep.core.geodesic` rests on). So diffusing the measured values and
-diffusing an indicator of where measurements exist, then dividing, is exactly
-a geodesic Gaussian-weighted average — in two sparse solves, instead of one
-solve per measurement point.
+The `geodesic` method uses normalised diffusion on the mesh: it projects
+measurements to mesh vertices, applies a discrete implicit heat step to the
+values and to their sampling weights, then divides the results. The heat
+kernel's short-time relation to surface distance motivates this smoothing;
+the discrete solve is not an exact Gaussian weighting by geodesic distance.
+Results depend on mesh resolution, source projection and the diffusion scale.
 
 Cyclic quantities ("early meets late")
 --------------------------------------
@@ -166,16 +164,15 @@ def heat_interpolate(
     distance_threshold: float | None = None,
     cycle_length: float | None = None,
 ) -> np.ndarray:
-    """Gaussian-weighted average with distance measured *along the surface*.
+    """Normalised discrete diffusion of measurements along the mesh surface.
 
     ``source_vertices`` are the vertex indices the measurements project onto
     (several measurements may share one vertex — they are averaged there).
 
-    The weighting is the heat kernel for ``t = sigma**2 / 2``, which is the
-    Gaussian ``exp(-d**2 / 2 sigma**2)`` in geodesic distance. ``t`` is floored
-    at one mean edge length squared: heat cannot resolve a kernel narrower than
-    the mesh it flows on, and silently returning noise there would be worse
-    than a slightly wider kernel.
+    Uses one implicit diffusion step with ``t = sigma**2 / 2``, floored at
+    the squared mean length of the first edge of each triangle. This is a
+    mesh-dependent smoothing approximation, not an exact Gaussian convolution
+    in geodesic distance.
 
     :param distance_threshold: masked geodesically as well, so the boundary of
         the shown region follows the tissue rather than the air gap.

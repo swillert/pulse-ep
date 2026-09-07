@@ -1,7 +1,7 @@
 # Configuration
 
 `pulse-ep` follows the [twelve-factor](https://12factor.net/config) pattern:
-every operational setting is an environment variable, with a `.env` file
+service settings are environment variables, with a `.env` file
 for convenience and a legacy `config.ini` fallback for backwards
 compatibility with pre-open-source deployments.
 
@@ -26,8 +26,10 @@ Values are resolved in this order; the first match wins.
 
 !!! tip "Tip — single source of truth across local & Docker"
 
-    The same `.env` file is consumed by `pulse-ep-server` running locally
-    **and** by `docker compose`. Set it once, use it everywhere.
+    Both local services and Docker Compose read `.env`. Compose overrides the
+    in-container host, port, database URL and storage paths; it builds the
+    database URL from `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`.
+    The separate MCP process requires its own environment configuration.
 
 ## Quick start
 
@@ -35,13 +37,14 @@ Values are resolved in this order; the first match wins.
 cp .env.example .env
 ```
 
-Edit `.env`, then either `pulse-ep-server` or `docker compose --profile server up`
-will pick up the settings automatically.
+Edit `.env`, then follow the [quickstart](quickstart.md) to initialise the
+database and accounts before starting the service.
 
-## All settings
+## Service settings
 
 The full reference table — what each variable does, its default, validation
-rules, and which subsystem cares about it.
+rules, and which subsystem cares about it. MCP-process connection and download
+settings are listed separately in the [MCP guide](../guides/mcp.md).
 
 | Variable                          | Default               | Type                | Where it is used                                                  |
 | --------------------------------- | --------------------- | ------------------- | ----------------------------------------------------------------- |
@@ -51,13 +54,16 @@ rules, and which subsystem cares about it.
 | `PULSE_EP_DATABASE_HOST`          | _none_                | string              | Component-mode: host.                                             |
 | `PULSE_EP_DATABASE_PORT`          | `5432`                | int                 | Component-mode: port.                                             |
 | `PULSE_EP_DATABASE_NAME`          | _none_                | string              | Component-mode: database name.                                    |
-| `PULSE_EP_HOST`                   | `127.0.0.1`           | string              | Bind address for `pulse-ep-server` / gunicorn.                    |
+| `PULSE_EP_HOST`                   | `127.0.0.1`           | string              | Bind address for `pulse-ep-server`; the Docker gunicorn command also reads it.                    |
 | `PULSE_EP_PORT`                   | `5000`                | int                 | HTTP port.                                                        |
 | `PULSE_EP_DEBUG`                  | `false`               | bool                | Flask debug mode. **Never enable in production.**                 |
 | `PULSE_EP_JWT_SECRET_KEY`         | _dev placeholder_     | `SecretStr`         | Signs JWT access tokens. **Required for any non-dev deployment.** |
-| `PULSE_EP_BCRYPT_LOG_ROUNDS`      | `12`                  | int (4–20)          | bcrypt cost factor. 12 ≈ 250 ms per hash on a 2024 laptop.        |
+| `PULSE_EP_BCRYPT_LOG_ROUNDS`      | `12`                  | int (4–20)          | bcrypt cost factor. Higher values increase password-hashing work.        |
 | `PULSE_EP_CORS_ORIGINS`           | `*`                   | comma-separated     | Allowed CORS origins.                                             |
 | `PULSE_EP_REPORTS_DIR`            | `reports`             | path                | Directory for generated Excel / KML reports.                      |
+| `PULSE_EP_DROP_DIR` | `drop` | path | Directory scanned by the import queue on request. |
+| `PULSE_EP_WAVEFORM_STORE_DIR` | empty | path | Parquet store used by queue import and authenticated downloads. |
+| `PULSE_EP_MCP_ENABLED` | `false` | bool | Explicit opt-in for identified MCP requests; also set in the MCP process. |
 | `PULSE_EP_ENV_FILE`               | `.env`                | path                | Where to look for the `.env` file.                                |
 | `PULSE_EP_CONFIG`                 | `config.ini`          | path                | Legacy INI-style config fallback path.                            |
 
@@ -120,8 +126,8 @@ from pulse_ep.core.config import get_settings, reset_settings
 
 s = get_settings()
 print(s.host, s.port, s.bcrypt_log_rounds)
-print(s.resolved_database_url)   # may be None if nothing is configured
-print(s.resolved_jwt_secret_key) # ditto
+print("Database configured:", s.resolved_database_url is not None)
+print("Explicit JWT secret configured:", s.jwt_secret_key is not None)
 ```
 
 [`get_settings`][pulse_ep.core.config.get_settings] returns a cached
@@ -170,8 +176,7 @@ fresh read.
        PULSE_EP_DATABASE_URL=postgresql://${user}:${password}@${host}:${port}/${dbname}
        PULSE_EP_JWT_SECRET_KEY=${jwt_secret_key}
        ```
-    3. Delete the `config.ini` once `.env`-based runs match the legacy
-       behaviour.
+    3. Retire the legacy configuration after verifying the equivalent settings.
 
 ## See also
 

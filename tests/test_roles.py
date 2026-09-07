@@ -167,3 +167,39 @@ def test_an_unknown_role_is_refused_by_name(http):
         )
     assert response.status_code == 400
     assert str(list(ROLES)) in response.get_json()["msg"]
+
+
+@pytest.mark.parametrize("path", ["/login_user", "/register_user"])
+@pytest.mark.parametrize(
+    "body", [[], {"username": [], "password": "x"}, {"username": "u", "password": 12}, {}]
+)
+def test_invalid_login_and_registration_bodies_are_client_errors(http, path, body):
+    with http.test_client() as client:
+        response = client.post(path, json=body)
+    assert response.status_code == 400
+    assert response.is_json
+
+
+def test_duplicate_username_is_a_client_error(http, monkeypatch):
+    from contextlib import contextmanager
+
+    from sqlalchemy.exc import IntegrityError
+
+    from pulse_ep.server import app as app_module
+
+    @contextmanager
+    def duplicate_session():
+        class Session:
+            def add(self, user):
+                pass
+
+            def commit(self):
+                raise IntegrityError("insert", {}, Exception("duplicate"))
+
+        yield Session()
+
+    monkeypatch.setattr(app_module, "get_db_session", duplicate_session)
+    with http.test_client() as client:
+        response = client.post("/register_user", json={"username": "existing", "password": "x"})
+    assert response.status_code == 400
+    assert "already exists" in response.get_json()["msg"]

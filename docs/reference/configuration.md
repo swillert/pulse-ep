@@ -34,7 +34,7 @@ The model uses pydantic's standard validators:
 
 - `bcrypt_log_rounds`: integer in `[4, 20]`. Out-of-range values raise
   `ValidationError` at construction time.
-- `debug`: accepts the boolean spellings `1/0`, `true/false`, `yes/no`,
+- `debug` and `mcp_enabled`: accept the boolean spellings `1/0`, `true/false`, `yes/no`,
   `on/off`. Anything else is `False`.
 - `cors_origins`: a list. Comma-separated strings from environment /
   `.env` are split (and trimmed) before validation, thanks to the

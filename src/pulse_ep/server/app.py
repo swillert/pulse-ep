@@ -15,6 +15,7 @@ from flask_jwt_extended import (
     jwt_required,
     verify_jwt_in_request,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 
 from pulse_ep.core.config import get_settings
@@ -141,12 +142,21 @@ def register_user():
     An authenticated administrator may still name the role, and
     ``pulse-ep-create-user`` remains the way to bootstrap the first one.
     """
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"msg": "A JSON object is required"}), 400
     username = data.get("username")
     password = data.get("password")
+    if (
+        not isinstance(username, str)
+        or not isinstance(password, str)
+        or not username
+        or not password
+    ):
+        return jsonify({"msg": "Non-empty username and password strings are required"}), 400
     role = data.get("role", USER)
-    if not username or not password or not role:
-        return jsonify({"msg": "Username, password, and role are required"}), 400
+    if not isinstance(role, str) or not role:
+        return jsonify({"msg": "A role string is required"}), 400
 
     verify_jwt_in_request(optional=True)
     caller = (get_jwt() or {}).get("role")
@@ -156,19 +166,31 @@ def register_user():
         return jsonify({"msg": f"Unknown role {role!r}; one of {list(ROLES)}"}), 400
 
     hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
-    with get_db_session() as session:
-        user = UserModel(username=username, password=hashed_password, role=role)
-        session.add(user)
-        session.commit()
+    try:
+        with get_db_session() as session:
+            user = UserModel(username=username, password=hashed_password, role=role)
+            session.add(user)
+            session.commit()
+    except IntegrityError:
+        return jsonify({"msg": "Username already exists"}), 400
 
     return jsonify({"msg": "User registered successfully"}), 201
 
 
 @app.route("/login_user", methods=["POST"])
 def login_user():
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"msg": "A JSON object is required"}), 400
     username = data.get("username")
     password = data.get("password")
+    if (
+        not isinstance(username, str)
+        or not isinstance(password, str)
+        or not username
+        or not password
+    ):
+        return jsonify({"msg": "Non-empty username and password strings are required"}), 400
     with get_db_session() as session:
         user = session.query(UserModel).filter_by(username=username).first()
         if user and bcrypt.check_password_hash(user.password, password):
@@ -197,7 +219,7 @@ def list_epmaps_in_study(study_id):
     with get_db_session() as session:
         epmaps = StudyModel.get_epmap_list_by_id(session, study_id)
         if epmaps is None:
-            return "Study not found", 404
+            return jsonify({"error": "Study not found"}), 404
 
         epmaps_serializable = [
             {
@@ -238,7 +260,7 @@ def list_map_scalars(map_id):
     """The quantities this map actually carries.
 
     The viewer used to offer a fixed ACT / VOL dropdown — CARTO's field names —
-    so an EnSiteX map could not be displayed at all. Clients read the choices
+    so an EnSite X map could not be displayed at all. Clients read the choices
     from here instead, and each entry carries its ``kind`` and unit for
     labelling and colour scaling.
     """
@@ -474,7 +496,7 @@ def get_mesh_data():
 
     map_id = request.args.get("map_id")
     # No scalar named: let the map choose its own primary quantity, which
-    # differs per vendor ("act" was CARTO-only and 404s every EnSiteX map).
+    # differs per vendor ("act" was CARTO-only and 404s every EnSite X map).
     scalar_name = request.args.get("scalar_name") or None
 
     print(f"Received map_id: {map_id}, scalar_name: {scalar_name}")

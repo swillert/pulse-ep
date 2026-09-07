@@ -2,7 +2,7 @@
 
 These fixtures are the only vendor exports in the repository: the real ones
 are patient data and stay out. Their *structure* is taken from real CARTO 3 and
-EnSiteX exports (see ``tools/make_synthetic_fixtures.py``), their content is
+EnSite X exports (see ``tools/make_synthetic_fixtures.py``), their content is
 generated — so they pin the reader's handling of the file layout, not the
 clinical meaning of any field. ``tests/fixtures/synthetic/README.md`` says
 exactly what that does and does not establish.

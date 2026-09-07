@@ -18,7 +18,7 @@ and pulse-ep now offers both answers.
     )
     ```
 
-    CARTO and EnSiteX both write an interpolated value per vertex; this shows
+    CARTO and EnSite X both write an interpolated value per vertex; this shows
     it, with a confidence mask over it. Despite the method's name, nothing is
     interpolated here — and this is exactly what the method always did.
 
@@ -43,11 +43,9 @@ and pulse-ep now offers both answers.
 
 ## Straight-line or along the surface
 
-`gaussian` weights each measurement by straight-line distance. It is fast, and
-it is wrong wherever the surface folds back on itself: across a thin wall, at
-a ridge, in the ostium of a vein, a point can be a millimetre away through
-blood and centimetres away along tissue. Straight-line weighting then paints
-one side's values onto the other.
+`gaussian` weights up to 16 nearby measurements by straight-line distance.
+Across folds, spatially close points can be far apart along the surface, so
+Euclidean weighting can mix measurements from separate surface regions.
 
 `geodesic` measures along the surface instead, so a value only spreads as far
 as the tissue carries it.
@@ -56,14 +54,12 @@ as the tissue carries it.
 from pulse_ep.core.interpolation import gaussian_interpolate, heat_interpolate
 ```
 
-Geodesic weighting uses the **heat kernel**: heat diffused on a surface for a
-time `t` arrives with weight `exp(-d²/4t)` in the *geodesic* distance `d`
-(Varadhan's formula — the identity the Heat Method in
-`pulse_ep.core.geodesic` already rests on). Diffusing the measured values and
-diffusing an indicator of where measurements exist, then dividing, is
-therefore exactly a geodesic Gaussian-weighted average — in two sparse solves
-rather than one distance field per measurement point. On a 13 500-vertex
-CARTO map with 2 000 points it takes about 0.15 s.
+The `geodesic` method uses normalised diffusion on the mesh: it projects
+measurements to mesh vertices, applies a discrete implicit heat step to the
+values and to their sampling weights, then divides the results. The heat
+kernel's short-time relation to surface distance motivates this smoothing;
+the discrete solve is not an exact Gaussian weighting by geodesic distance.
+Results depend on mesh resolution, source projection and the diffusion scale.
 
 ## Cyclic maps: early meets late
 
@@ -82,8 +78,9 @@ mesh, values = epmap.interpolate_scalar_values(
 
 With `cycle_length` the values are carried onto the unit circle, interpolated
 there, and brought back, so late meets early the way it does in the patient.
-Use it for reentrant activation maps; leave it off for voltage, force or
-anything else that does not wrap.
+Supply a known cycle length for a cyclic activation field. The inferred
+range (`max - min`) is a numerical fallback, not an estimate validated against
+the clinical tachycardia cycle length. Leave this option off for non-cyclic quantities.
 
 ## What the options do not change
 

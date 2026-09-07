@@ -76,3 +76,17 @@ def test_bad_geodesic_solver():
     a = _map(12, lambda v: v[:, 2])
     with pytest.raises(ValueError, match="unknown geodesic_solver"):
         compare_maps(a, a, "voltage_bipolar", metric="geodesic", geodesic_solver="foo")
+
+
+def test_shared_edge_distance_is_not_multiplied_by_face_count():
+    # Vertex 0 -> 2 is the diagonal shared by two triangles. Its physical
+    # length is sqrt(2), not 2*sqrt(2) or the two-edge boundary route (2).
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], float)
+    a = EPMap("surface", "synthetic", vertices=vertices, triangles=np.array([[0, 1, 2], [0, 2, 3]]))
+    a.register_scalar("voltage_bipolar", np.ones(4), kind=VOLTAGE_BIPOLAR)
+    b = EPMap("source", "synthetic", vertices=vertices[:1], triangles=np.empty((0, 3), int))
+    b.register_scalar("voltage_bipolar", np.ones(1), kind=VOLTAGE_BIPOLAR)
+    result = compare_maps(a, b, "voltage_bipolar", metric="geodesic", max_distance=1.5)
+    assert result.distances[2] == pytest.approx(np.sqrt(2))
+    assert result.n_masked == 0
+    np.testing.assert_array_equal(result.delta, np.zeros(4))

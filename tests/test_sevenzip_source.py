@@ -86,3 +86,40 @@ def test_an_unsupported_file_still_raises(tmp_path):
     f.write_text("hello")
     with pytest.raises(ValueError, match="not a directory, ZIP or 7-Zip"):
         source_for(f)
+
+
+def test_absolute_member_names_resolve_inside_the_extraction_root(tmp_path):
+    """py7zr drops the anchor when extracting; open() has to follow it there.
+
+    A 7-Zip archive written with ``arcname=""`` records an absolute directory
+    entry, and real CARTO exports carry such entries. Joining the raw name
+    would resolve outside the extraction root — ``Path("/a") / "/b"`` is
+    ``/b`` — and silently read the original file instead of the extracted one.
+    """
+    payload = tmp_path / "payload"
+    payload.mkdir()
+    (payload / "Study.xml").write_text("<Study name='S'/>")
+    archive = tmp_path / "Export.zip"
+    with py7zr.SevenZipFile(archive, "w") as z:
+        z.writeall(payload, arcname="")
+
+    source = source_for(archive)
+    root = source.materialize().resolve()
+    for name in source.list():
+        assert source._member_path(name).is_relative_to(root)
+
+    # The extracted copy, not the original: deleting the source must not matter.
+    (payload / "Study.xml").unlink()
+    assert b"<Study" in source.open("Study.xml").read()
+
+
+def test_a_traversing_member_name_is_refused(tmp_path):
+    payload = tmp_path / "payload"
+    payload.mkdir()
+    (payload / "Study.xml").write_text("<Study/>")
+    archive = tmp_path / "Export.zip"
+    with py7zr.SevenZipFile(archive, "w") as z:
+        z.writeall(payload, arcname="")
+    source = source_for(archive)
+    # '..' segments are dropped rather than followed, so nothing escapes.
+    assert source._member_path("../../etc/passwd").is_relative_to(source.materialize().resolve())

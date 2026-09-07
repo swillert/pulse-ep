@@ -7,9 +7,9 @@ hide:
 
 **An open-source platform for programmatic access to electroanatomical mapping data.**
 
-`pulse-ep` parses **CARTO 3** (Biosense Webster / Johnson & Johnson) and **EnSiteX**
-(Abbott / St. Jude) export archives into a relational PostgreSQL database — under one
-vendor-neutral vocabulary — and exposes the data through four independent surfaces:
+`pulse-ep` parses **CARTO 3** (Biosense Webster / Johnson & Johnson) and **EnSite X**
+(Abbott) export archives into a relational PostgreSQL database — under one
+vendor-neutral vocabulary — and exposes the data through the following interfaces:
 
 <div class="grid cards" markdown>
 
@@ -56,8 +56,8 @@ vendor-neutral vocabulary — and exposes the data through four independent surf
     ---
 
     Read-only access for an AI client over the Model Context Protocol.
-    Study identity is anonymised by default, and a deployment can switch
-    it off entirely.
+    MCP is disabled by default and requires explicit activation at both ends.
+    Study names and designated identity fields are redacted by default.
 
     [:octicons-arrow-right-24: The MCP server](guides/mcp.md)
 </div>
@@ -67,14 +67,14 @@ vendor-neutral vocabulary — and exposes the data through four independent surf
 Clinical mapping systems record ablation procedures as triangulated chamber
 meshes with per-vertex activation times, bipolar voltages, and pace-mapping
 similarity scores. They are excellent for real-time clinical decision-making
-but provide **no programmatic interface** — quantitative research requires
-external access to raw mesh geometry and measurement-point coordinates.
+but store their exports in vendor-specific formats. Quantitative reuse
+requires documented access to mesh geometry, measurements and signals.
 
 They also disagree with each other: the same physical quantity carries a
 different name in every system. `pulse-ep` resolves that once, at import.
 Every value is stored under **the name of the quantity it holds** —
 `voltage_bipolar`, `activation_time` — so a single query spans a CARTO map
-and an EnSiteX map alike.
+and an EnSite X map alike.
 
 From there, heterogeneous clients — Python and MATLAB scripts, R workflows,
 Excel reports, the bundled web viewer, ParaView, or your own client — can
@@ -85,13 +85,15 @@ analyse the data on equal footing.
 ```mermaid
 flowchart LR
     A1[CARTO 3 export] --> B
-    A2[EnSiteX export] --> B
+    A2[EnSite X export] --> B
     B[pulse_ep.core.importers<br/>sniff → prepare → review → commit] --> C[(PostgreSQL)]
     C --> D[pulse_ep.server<br/>Flask + JWT REST]
     C --> E[pulse_ep.cli<br/>scriptable ops]
     C --> F[pulse_ep.core<br/>Python toolkit]
     D --> G[Three.js viewer]
     D --> H[R / MATLAB / ParaView / Jupyter clients]
+    D --> I[MCP server, disabled by default]
+    I --> J[AI assistant]
 ```
 
 The bundled web viewer and the [`examples/`](examples/index.md) for R,
@@ -99,7 +101,7 @@ MATLAB, ParaView and Jupyter are all clients of the same REST API.
 There is no privileged internal channel; what the viewer does, any
 client can do.
 
-## A 60-second taste
+## Try the in-memory demo
 
 ```bash
 # Run a self-contained synthetic walkthrough — no database needed
@@ -128,8 +130,8 @@ For real study data and the web viewer, see the [Quickstart](getting-started/qui
   REST API, command-line tools, Python API (auto-generated from docstrings),
   database schema, and every `PULSE_EP_*` configuration variable.
 - **[Examples](examples/index.md)** — runnable client code in R, MATLAB,
-  ParaView and Jupyter. The same scalar histogram and the same area-per-interval
-  table computed in four independent toolchains.
+  ParaView, Jupyter and MCP. Histograms use downloaded arrays; interval-area
+  examples request the shared service calculation.
 - **[Architecture](architecture.md)** — design rationale for contributors.
 
 ## Citation
@@ -143,10 +145,9 @@ and the accompanying software paper is in preparation for *SoftwareX*.
 
 ```bibtex
 @software{willert_pulse_ep,
-  author  = {Willert, Sven and Lian, Evgeny and Frank, Derk},
+  author  = {Willert, Sven and Frank, Derk and Lian, Evgeny},
   title   = {{pulse-ep: An open-source platform for programmatic access to multivendor electroanatomical mapping data}},
   year    = {2026},
-  version = {0.2.0},
   doi     = {10.5281/zenodo.20263542},
   url     = {https://doi.org/10.5281/zenodo.20263542},
 }

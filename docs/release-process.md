@@ -1,174 +1,86 @@
 # Release process
 
-`pulse-ep` lives on the self-hosted [GitLab](https://gitlab.willert.net/sw/pulse-ep)
-as its canonical home, with a public mirror on
-[GitHub](https://github.com/swillert/pulse-ep) for citation, Zenodo
-DOIs, and discoverability. This page documents the end-to-end
-release workflow.
+The canonical development repository is the maintainer's
+[GitLab](https://gitlab.willert.net/sw/pulse-ep). CI mirrors `main` and tags to
+[public GitHub](https://github.com/swillert/pulse-ep). GitHub hosts the public
+issue tracker and accepts contributions for maintainer integration. Direct
+edits to its `main` branch are overwritten by the canonical mirror.
 
-## Architecture
+## Prepare locally
 
-```
-gitlab.willert.net/sw/pulse-ep   ← canonical, every push lands here
-            │
-            │ GitLab CI: mirror_to_github (deploy stage)
-            ▼
-github.com/swillert/pulse-ep     ← public mirror, every push & tag
-            │
-            │ Manual: GitHub Release from tag
-            ▼
-Zenodo: pulse-ep                 ← citable DOI per release
-```
-
-A single `git push --tags origin main` from your local machine
-therefore triggers the entire chain.
-
-## One-time setup
-
-You only need to do this once, at the time the GitHub mirror is
-created.
-
-### 1. Create the GitHub repository
-
-- Sign in to [github.com](https://github.com) as `swillert`.
-- Create a new **empty, public** repository named `pulse-ep`.
-- **Important**: do *not* initialise it with a README, `.gitignore`,
-  or LICENSE; otherwise the first force-push from GitLab will
-  conflict.
-- Set the description to something like:
-  *"Open-source platform for programmatic access to CARTO 3 and EnSiteX
-  electroanatomical mapping data — public mirror of
-  gitlab.willert.net/sw/pulse-ep."*
-
-### 2. Generate a Personal Access Token
-
-- Go to
-  [github.com/settings/tokens](https://github.com/settings/tokens)
-  → *Generate new token (classic)*.
-- Scope: `repo` (full control of private and public repositories).
-- Copy the token immediately; GitHub will not show it again.
-
-### 3. Store the token in GitLab
-
-- In GitLab go to **Settings → CI/CD → Variables** for the
-  `pulse-ep` project.
-- Add two variables — both **Protected** and **Masked**:
-
-  | Key            | Value                          |
-  |----------------|--------------------------------|
-  | `GITHUB_USER`  | `swillert`                     |
-  | `GITHUB_TOKEN` | the token from step 2          |
-
-### 4. Connect Zenodo to GitHub
-
-- Sign in to [zenodo.org](https://zenodo.org) (link with GitHub
-  on first use).
-- Go to
-  [zenodo.org/account/settings/github/](https://zenodo.org/account/settings/github/).
-- Find `swillert/pulse-ep` in the repository list and flip the
-  toggle to **On**.
-- From now on, every GitHub *release* will automatically produce a
-  Zenodo deposit with a citable DOI.
-
-## Cutting a release
-
-For each tagged release (e.g.\ `v0.1.0`, `v0.1.0-softwarex`):
-
-### 1. Tag on GitLab
+1. Update `pyproject.toml`, `src/pulse_ep/__init__.py`, `CITATION.cff` and the
+   changelog together. The author order is **Sven Willert, Derk Frank, Evgeny Lian**.
+2. Check the README, guides and example commands against the implementation.
+3. Run the local verification from a complete installation:
 
 ```bash
-# In your local clone of gitlab.willert.net/sw/pulse-ep
-git checkout main
-git pull
-git tag -a v0.1.0 -m "v0.1.0 — initial open-source release"
-git push origin main --tags
+ruff check .
+ruff format --check .
+pytest -q
+examples/verify.sh
+mkdocs build --strict
+python -m pip wheel . --no-deps --wheel-dir dist
 ```
 
-GitLab CI will run, and the `mirror_to_github` job in the `deploy`
-stage will force-push the branch and tags to
-`github.com/swillert/pulse-ep`. You can watch it under **CI/CD →
-Pipelines** in GitLab.
+The paper's supplementary integration protocol checks PostgreSQL and the
+actual R, MATLAB, ParaView and MCP clients separately. Its source snapshot,
+version, hashes and results must correspond to the release being submitted.
 
-### 2. Create the matching GitHub Release
+## Publish the reviewed commit and a new tag
 
-The Zenodo integration only fires on GitHub *releases* — not bare
-tags. So after the mirror push:
-
-- Open
-  [github.com/swillert/pulse-ep/releases/new](https://github.com/swillert/pulse-ep/releases/new).
-- Pick the tag you just pushed (e.g.\ `v0.1.0`).
-- Title: the same string.
-- Description: short release notes — link to the changelog entry
-  is enough.
-- Click **Publish release**.
-
-### 3. Grab the Zenodo DOI
-
-- Within ~1 minute Zenodo deposits the release. Watch the progress
-  at
-  [zenodo.org/account/settings/github/](https://zenodo.org/account/settings/github/)
-  (each linked repo shows its latest deposit and DOI).
-- Copy the DOI (looks like `10.5281/zenodo.NNNNNNN`).
-
-### 4. Update `CITATION.cff` and any paper drafts
-
-Zenodo mints **two** DOIs: a *concept* DOI covering all versions, and a
-*version* DOI for each release. The concept DOI is already recorded and
-never changes:
-
-| DOI | Resolves to |
-|---|---|
-| `10.5281/zenodo.20263542` | The concept — always the latest release. |
-| `10.5281/zenodo.22435908` | v0.2.0 specifically. |
-| `10.5281/zenodo.20263543` | v0.1.0-softwarex specifically. |
-
-So for a new release you only append its version DOI:
-
-```yaml
-# CITATION.cff
-identifiers:
-  - description: "Concept DOI — resolves to the latest pulse-ep release"
-    type: doi
-    value: "10.5281/zenodo.20263542"
-  - description: "DOI for release v0.1.0-softwarex"
-    type: doi
-    value: "10.5281/zenodo.20263543"
-  - description: "DOI for release vX.Y.Z"          # ← add this
-    type: doi
-    value: "10.5281/zenodo.NNNNNNN"
-```
-
-Prefer the concept DOI when citing pulse-ep in general, and a version DOI
-only when an exact release must be pinned.
-
-Zenodo takes its title and author list from the release, so a deposit keeps
-whatever metadata the *previous* release carried until a new one is cut —
-check that the new deposit reflects the current `CITATION.cff`.
-
-For the SoftwareX manuscript, replace the placeholder
-`XXXXXXX` in `paper.tex` (Code & Data Availability section,
-Code Metadata Table row C3) with the real Zenodo record.
-
-## Verifying the mirror
-
-After the first run, sanity-check that GitHub really got the
-content:
+Commit the reviewed changes first. Create a **new** version tag; never move an
+already published tag to include a correction. For the current release candidate:
 
 ```bash
-git ls-remote https://github.com/swillert/pulse-ep.git | head
+git tag -a v0.4.2        # write release notes in the tag message
+git push origin main
+git push origin v0.4.2
 ```
 
-You should see your `HEAD`, `refs/heads/main` and any tags. If you
-see nothing, the most likely cause is one of the CI-variable steps
-above being skipped; check the `mirror_to_github` job log in
-GitLab.
+Run these only after the intended changes are committed on `main`. The mirror
+job runs independently of the test jobs, so a public mirror update is not
+proof of a passing pipeline. Verify both CI and the public tag before creating
+a release. A tag pipeline mirrors tags without moving GitHub's `main`; existing
+remote tags are not overwritten.
 
-## Limitations
+## GitHub Release and Zenodo
 
-- The mirror is force-pushed, so it tracks the GitLab state. **Do
-  not commit directly on GitHub** — your changes will be wiped on
-  the next mirror run.
-- Issues, MRs, and CI badges live on GitLab; the GitHub mirror is
-  intentionally read-only.
-- Zenodo only versions GitHub *releases*; pre-release tags pushed
-  but not turned into releases will be on GitHub but not on Zenodo.
+Create the matching [GitHub Release](https://github.com/swillert/pulse-ep/releases/new)
+from the new tag and include its release notes. A pushed tag alone does not
+create a Zenodo deposit. With the repository's Zenodo integration enabled, the
+published GitHub Release triggers archiving. Check the resulting deposit,
+author order, version and files before using its DOI.
+
+The project concept DOI is `10.5281/zenodo.20263542`. It covers releases
+collectively and does not identify the exact revision evaluated in the paper.
+Use the release-specific DOI when citing a fixed version. Historical records
+include `10.5281/zenodo.22435908` for v0.2.0 and
+`10.5281/zenodo.20263543` for v0.1.0-softwarex.
+
+When the new DOI exists, update the current branch's citation metadata and
+paper. Do not rewrite the archived release just to add its newly minted DOI.
+The current `CITATION.cff` lists only the concept DOI until an identifier for
+this release is available; historical version identifiers belong to those
+releases, not to the current source version.
+
+## Paper synchronisation
+
+Set metadata C1 to the evaluated version and C2 to its public immutable commit
+or release link. Update the source archive hash, reproducibility record and
+code-availability statement, then rebuild the paper and submission archives.
+If any source files change, repeat the snapshot step. The manuscript's generic
+repository URL and concept DOI alone do not pin the submitted code.
+
+## Mirror configuration
+
+The GitLab CI job needs protected, masked `GITHUB_USER` and `GITHUB_TOKEN`
+variables with permission to write to the public repository. The GitHub
+repository must already exist. Verify propagation with:
+
+```bash
+git ls-remote https://github.com/swillert/pulse-ep.git refs/heads/main refs/tags/v0.4.2
+```
+
+The documentation sources are public in `docs/`. The CI Pages job builds a
+static site; this does not imply that a public hosted documentation URL is
+configured or reachable.

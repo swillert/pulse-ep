@@ -7,9 +7,9 @@ language you work in.
 | Folder        | Language           | What it shows                                                        |
 | ------------- | ------------------ | -------------------------------------------------------------------- |
 | `paraview/`   | Python (ParaView)  | Load a map directly into ParaView via the REST API, plus a CLI VTU exporter that uses `pulse_ep.core` without a running server. |
-| `r/`          | R (httr2 + rgl)    | Minimal REST client, mesh rendering, per-vertex scalar histogram and area-per-interval table — re-computed independently in R. |
+| `r/`          | R (httr2 + rgl)    | Minimal REST client, mesh rendering, per-vertex scalar histogram and area-per-interval table returned by the shared service. |
 | `matlab/`     | MATLAB (R2020a+)   | `webread` / `webwrite` client, `trisurf` 3D, scalar histogram and area-per-interval table — the same numbers, in MATLAB. |
-| `python/` | Python | Retrieve a CARTO point and its linked waveform; plot the mesh and annotated electrograms. |
+| `python/` | Python | REST-based point-linked waveform plotting and a separate executable MCP analysis. |
 | `notebooks/`  | Jupyter / Python   | End-to-end notebook: login → study browsing → 3D plot with PyVista, scalar histogram and area-per-interval table. |
 
 ## Why these examples exist (and what they prove)
@@ -21,7 +21,7 @@ consistent API use; independent geometric calculations provide a separate
 check of the downloaded mesh. The Python waveform example additionally
 follows a source point to its stored multichannel recording.
 
-The Python end-to-end demo without any external dependencies lives at
+The Python in-memory demo, requiring the installed base package but no database, lives at
 [`src/pulse_ep/examples/demo_synthetic.py`](../src/pulse_ep/examples/demo_synthetic.py)
 and is wired as the `pulse-ep-demo` console script.
 
@@ -38,7 +38,8 @@ pulse-ep-server                       # http://127.0.0.1:5000
 docker compose --profile server up -d --build
 ```
 
-Create an admin user if you have not already:
+After configuring and migrating the database, create an account if needed
+(use `docker compose exec server` before the command in a Docker deployment):
 
 ```bash
 pulse-ep-create-user --username admin --role admin
@@ -72,7 +73,7 @@ Two prefixes, on purpose:
 
 | Prefix | What it configures | Read by |
 | --- | --- | --- |
-| `PULSE_EP_*` | the connection — same names the server itself uses | every client |
+| `PULSE_EP_*` | client connection settings (MCP uses `PULSE_EP_MCP_*`) | REST clients |
 | `PE_*` | per-run options of these examples only | R, MATLAB |
 
 ```bash
@@ -84,7 +85,7 @@ export PULSE_EP_PASSWORD="…"
 # options (optional)
 export PE_MAP_ID=12              # which map; default: first map of first study
 export PE_SCALAR_NAME=           # empty: the map's own primary quantity
-export PE_DISTANCE_MM=5.0        # projection distance
+export PE_DISTANCE_MM=5.0        # measurement-distance threshold, mm
 export PE_INTERVAL_BREAKS=       # empty: bins derived from the quantity's range
 ```
 
@@ -94,7 +95,7 @@ come from the range the server reports for that quantity.
 
 ## REST endpoints used by these examples
 
-These are the five endpoints every example touches. See `src/pulse_ep/server/app.py`
+These are common endpoints used across the examples; individual scripts use a subset. See `src/pulse_ep/server/app.py`
 for the full surface.
 
 | Method | Path                                | Purpose                                                  |

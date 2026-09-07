@@ -38,7 +38,7 @@ COPY src ./src
 
 RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --upgrade pip wheel \
- && /opt/venv/bin/pip install ".[server]"
+ && /opt/venv/bin/pip install ".[server,figures,sevenzip]"
 
 
 # -----------------------------------------------------------------------------
@@ -54,18 +54,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         libgl1 \
+        libosmesa6 \
         libglib2.0-0 \
         libxrender1 \
         libgomp1 \
         libpq5 \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --shell /usr/sbin/nologin --uid 10001 pulse \
- && mkdir -p /var/lib/pulse-ep/reports \
+ && mkdir -p /var/lib/pulse-ep/reports /var/lib/pulse-ep/waveforms /var/lib/pulse-ep/drop \
  && chown -R pulse:pulse /var/lib/pulse-ep
 
 COPY --from=builder /opt/venv /opt/venv
 
-# Keep the project on PYTHONPATH for development overrides (volume-mounted src).
+# The installed wheel supplies application code, templates and migrations.
 WORKDIR /app
 
 USER pulse
