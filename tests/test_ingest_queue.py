@@ -166,8 +166,11 @@ def test_fallback_plan_survives_the_json_roundtrip():
 
 
 class _FakeSession:
-    def __init__(self):
+    """Enough of a session for commit_job: it adds rows and looks up map ids."""
+
+    def __init__(self, maps=()):
         self.added = []
+        self._maps = list(maps)
 
     def add(self, row):
         self.added.append(row)
@@ -177,6 +180,18 @@ class _FakeSession:
 
     def rollback(self):
         pass
+
+    def flush(self):
+        pass
+
+    def query(self, _model):
+        return self
+
+    def filter_by(self, **_kwargs):
+        return self
+
+    def all(self):
+        return self._maps
 
 
 def _job(plan):
@@ -289,7 +304,11 @@ def test_commit_job_ingests_waveforms_when_a_store_is_configured(monkeypatch):
 
     q = _patch_commit_job(monkeypatch, studies=[SimpleNamespace(name="s")], existing=None)
     monkeypatch.setattr(q, "_waveform_store", lambda: "store")
-    monkeypatch.setattr(q, "ingest_waveforms", lambda plan, src, store, study_id: ["row1", "row2"])
+    monkeypatch.setattr(
+        q,
+        "ingest_waveforms",
+        lambda plan, src, store, study_id, map_ids: ["row1", "row2"] if map_ids == {"m": 9} else [],
+    )
     job = _job(
         ImportPlan(
             studies=[
@@ -301,7 +320,8 @@ def test_commit_job_ingests_waveforms_when_a_store_is_configured(monkeypatch):
             ]
         )
     )
-    session = _FakeSession()
+    session = _FakeSession(maps=[SimpleNamespace(map_name="m", id=9)])
     q.commit_job(session, job)
 
+    # the rows are stored, and the per-point windows know which map they are on
     assert session.added == ["row1", "row2"] and job.status == JOB_DONE

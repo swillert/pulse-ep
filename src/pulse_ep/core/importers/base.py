@@ -79,6 +79,30 @@ def get_importer(name: str) -> VendorImporter | None:
     return next((imp for imp in _REGISTRY if imp.name == name), None)
 
 
+def waveform_iterator(vendor: str | None):
+    """The ``iter_waveforms(study_plan, source)`` of a vendor's importer.
+
+    Signal files are the one part of an export with no vendor-neutral shape at
+    all — EnSiteX writes a handful of long multi-channel CSVs, CARTO one short
+    fixed-window file per acquired point — so the ingest path dispatches here
+    rather than hard-coding one vendor's parser as the meaning of "waveform".
+
+    :raises ValueError: for a vendor with no signal importer, rather than
+        silently importing nothing.
+    """
+    from pulse_ep.core.importers import carto_signal, ensite
+
+    iterators = {
+        "carto": carto_signal.iter_waveforms,
+        "ensite": ensite.iter_waveforms,
+        "ensitex": ensite.iter_waveforms,
+    }
+    iterator = iterators.get((vendor or "").strip().casefold())
+    if iterator is None:
+        raise ValueError(f"no waveform importer for vendor {vendor!r}")
+    return iterator
+
+
 def detect_vendor(source: ImportSource) -> VendorImporter | None:
     """First registered importer whose ``sniff`` matches, else ``None``."""
     for importer in _REGISTRY:

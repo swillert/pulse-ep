@@ -100,6 +100,24 @@ def _from_table(
     )
 
 
+def waveform_from_parquet(
+    source: bytes | str | Path,
+    channels: list[str] | None = None,
+    time_range: tuple[float, float] | None = None,
+) -> Waveform:
+    """Read a stored waveform back from Parquet bytes or a file path.
+
+    A downloaded waveform is a Parquet file with no store around it — that is
+    what ``/waveforms/<id>/download`` hands a client, and every consumer of it
+    otherwise has to know how the channels and metadata are laid out inside.
+    """
+    if isinstance(source, (str, Path)):
+        table = pq.read_table(source)
+    else:
+        table = pq.read_table(pa.BufferReader(source))
+    return _from_table(table, channels, time_range)
+
+
 class FilesystemStore:
     """Store waveforms as Parquet files under a root directory.
 

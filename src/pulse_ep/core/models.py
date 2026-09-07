@@ -263,7 +263,10 @@ class EPMapModel(Base):
         if include_points and self.points:
             xyz = np.array(
                 [
-                    [p.position_x or np.nan, p.position_y or np.nan, p.position_z or np.nan]
+                    [
+                        v if v is not None else np.nan
+                        for v in (p.position_x, p.position_y, p.position_z)
+                    ]
                     for p in sorted(self.points, key=lambda p: p.point_index)
                 ]
             )
@@ -546,6 +549,11 @@ class WaveformModel(Base):
         Integer, ForeignKey("studies.id", ondelete="CASCADE"), nullable=True, index=True
     )
     map_id = Column(Integer, ForeignKey("epmaps.id", ondelete="CASCADE"), nullable=True, index=True)
+    #: the vendor point id this window was acquired at, where signals are
+    #: per-point (CARTO). ``None`` for per-segment exports (EnSiteX). Not a
+    #: foreign key: the waveform is stored with the export, which may be
+    #: ingested without the map its points belong to.
+    point_source_id = Column(String, nullable=True, index=True)
 
     signal_type = Column(String)  # egm_bipolar | egm_unipolar | ecg
     channels = Column(PortableJSON)  # list[str]
@@ -563,13 +571,31 @@ class WaveformModel(Base):
     source = Column(String, nullable=True)
 
 
-def store_waveform(waveform, store, key, study_id=None, map_id=None) -> WaveformModel:
+def store_waveform(
+    waveform, store, key, study_id=None, map_id=None, point_source_id=None
+) -> WaveformModel:
     """Write a :class:`Waveform` to ``store`` and build its DB metadata row."""
-    uri = store.write(waveform, key)
+    return waveform_row(
+        waveform,
+        store.write(waveform, key),
+        study_id=study_id,
+        map_id=map_id,
+        point_source_id=point_source_id,
+    )
+
+
+def waveform_row(waveform, uri, study_id=None, map_id=None, point_source_id=None) -> WaveformModel:
+    """The DB metadata row for an already-stored :class:`Waveform`.
+
+    Separate from writing because one stored window can be referenced by
+    several rows: a CARTO multi-electrode acquisition takes up to ten points
+    from a single 2.5 s recording, and each of them needs to find it.
+    """
     meta = waveform.meta or {}
     return WaveformModel(
         study_id=study_id,
         map_id=map_id,
+        point_source_id=point_source_id,
         signal_type=waveform.signal_type,
         channels=[str(c) for c in waveform.channels],
         sample_rate=waveform.sample_rate,
@@ -583,23 +609,45 @@ def store_waveform(waveform, store, key, study_id=None, map_id=None) -> Waveform
     )
 
 
-def ingest_waveforms(plan, source, store, study_id=None) -> list[WaveformModel]:
-    """Parse + store the opt-in waveforms of a prepared EnSite plan.
+def ingest_waveforms(plan, source, store, study_id=None, map_ids=None) -> list[WaveformModel]:
+    """Parse + store the opt-in waveforms of a prepared plan.
 
     Only runs for studies whose ``waveforms.include`` is True (default off).
-    """
-    from pathlib import Path
+    Which parser reads them is the vendor's business — see
+    :func:`~pulse_ep.core.importers.base.waveform_iterator`; this used to call
+    the EnSite parser directly, so a CARTO plan with waveforms selected either
+    imported nothing or failed on the first file.
 
-    from pulse_ep.core.importers.ensite import parse_ensite_waveforms
+    :param map_ids: ``{map name: map id}``. CARTO signals belong to one map;
+        without this they are only reachable as study-level signals, which for
+        a few thousand per-point windows means every map appears to carry all
+        of them.
+    """
+    from pulse_ep.core.importers.base import waveform_iterator
 
     rows: list[WaveformModel] = []
     for sp in plan.studies:
         if not sp.waveforms.include:
             continue
-        for name in sp.waveforms.files:
-            wave = parse_ensite_waveforms(source.open(name).read(), name=name)
-            key = f"{sp.study_name}/{Path(name).stem}"
-            rows.append(store_waveform(wave, store, key, study_id=study_id))
+        # An iterator may yield one window several times, once per point taken
+        # from it. The samples are written on first sight and shared after
+        # that — storing them once per point would multiply a study's signal
+        # data by the number of electrodes on the catheter.
+        written: dict[str, str] = {}
+        for stem, wave, point_id, map_name in waveform_iterator(sp.vendor)(sp, source):
+            key = f"{sp.study_name}/{stem}"
+            uri = written.get(key)
+            if uri is None:
+                uri = written[key] = store.write(wave, key)
+            rows.append(
+                waveform_row(
+                    wave,
+                    uri,
+                    study_id=study_id,
+                    map_id=(map_ids or {}).get(map_name),
+                    point_source_id=point_id,
+                )
+            )
     return rows
 
 
@@ -626,6 +674,12 @@ class MeasurementPointModel(Base):
     position = Column(ARRAY(FLOAT))  # [x, y, z]
     measurements = Column(PortableJSON)  # {name: {value, kind, unit}}
     electrodes = Column(PortableJSON)  # {label: [x, y, z]}
+    tags = Column(PortableJSON)  # [name, ...] — vendor tag names on the point
+    #: {start_time, reference, map, woi_from, woi_to} — where the point's beat
+    #: sits in the signal recorded for it. Acquisition bookkeeping, not a
+    #: measured quantity, and the components ``measurements`` derives its
+    #: activation time / pace-match score from.
+    annotations = Column(PortableJSON)
 
     __table_args__ = (Index("ix_measurement_points_map_point", "map_id", "point_index"),)
 
@@ -643,6 +697,8 @@ class MeasurementPointModel(Base):
             electrodes=electrodes,
             source_id=self.source_id,
             index=self.point_index,
+            tags=[str(t) for t in (self.tags or [])],
+            annotations=dict(self.annotations or {}),
         )
 
 
@@ -663,6 +719,8 @@ def measurement_points_to_models(
                     for name, m in p.measurements.items()
                 },
                 electrodes={label: [float(x) for x in pos] for label, pos in p.electrodes.items()},
+                tags=[str(t) for t in (getattr(p, "tags", None) or [])],
+                annotations=dict(getattr(p, "annotations", None) or {}),
             )
         )
     return rows

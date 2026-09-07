@@ -5,7 +5,10 @@ For each measurement point within a map, parses:
   - Pn_Point_Export.xml → timestamps, annotations, voltages, connector list
   - *_OnAnnotation_*.txt → catheter electrode positions (CS, 20A, MEC/NAVISTAR)
 
-ECG data is NOT imported (too large for DB storage).
+ECG samples are not read here — they are far too large for the relational
+DB, and belong in the waveform store instead: see
+:mod:`pulse_ep.core.importers.carto_signal`, which reads the same points'
+``*_ECG_Export_*.txt`` windows (opt-in) and links them back by point id.
 Returns a list of dicts ready to create EPMapPoint rows.
 The reference catheter count (single vs double) must be set manually
 via EPMapAttributes, as automatic detection from connector types is
