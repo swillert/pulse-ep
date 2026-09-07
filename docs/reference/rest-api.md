@@ -139,6 +139,42 @@ and the catheter point cloud for one map.
 the `distance` radius and missing point measurements. Indices in
 `faces` are zero-based.
 
+### `GET /epmaps/<map_id>/openep`
+
+Returns the stored map in OpenEP's `userdata` layout. Use the MATLAB client
+`pe_to_openep(baseURL, token, mapId)` to restore numeric arrays and construct
+`surface.triRep` as a MATLAB triangulation.
+
+`include_points` defaults to `1`; `0`, `false` or `no` omits measurement
+points and their properties. Surface data remain available. This endpoint
+uses the stored geometry and **1-based** triangle indices.
+
+Alongside OpenEP's standard surface columns, `surface.signalMaps` carries
+all vertex-aligned named fields and `electric.signalProps` carries all
+named point measurements. Records include their declared kind and unit;
+surface records also include source and validity mask. Non-finite numeric
+values are JSON null. `systemName` identifies the source system.
+Pace scores occupy the activation slot as negative percentages, identified
+by `pulse_ep` metadata; original scores remain in the named fields.
+
+`include_signals=1` adds point-linked electrograms, unipoles, reference signals
+and available ECG channels from the waveform store; measurement points must
+be included. `ecg_channels=V1,V2` selects leads. `signal_scale_to_mv` supplies
+an explicit positive calibration for unknown signal units; absent calibration
+retains those units as unknown.
+
+`ablation_scope=study` explicitly selects the study's RF markers, or
+`ablation_ids=17,18,19` selects placed-point IDs from that study. These options
+are mutually exclusive. The default exports no RF markers. Selected RF tags
+appear in `rfindex`, with original attributes and selection information in
+`pulse_ep`. PFA markers are excluded from RF fields. Manual RF time-series
+and VisiTag grid histories are not inferred from summary markers.
+
+`notes` explains missing data and compatibility encodings. See the [OpenEP guide](../guides/openep.md) for
+field mappings, examples and validated analysis coverage.
+Returns `400` for incompatible options, invalid selection/calibration or mixed
+signal sampling rates, `401` without authentication and `404` for an absent map.
+
 ## Filtering by attributes
 
 ### `POST /epmaps/filter_by_attributes`
@@ -539,11 +575,27 @@ to point to the same store used at import. Missing files return 404; an
 unconfigured store returns 503. Signals not imported are not recoverable
 through this API. All endpoints use the existing server authentication model.
 
+For raw exports, the optional `include` parameter selects components on the
+server: `mesh`, `fields`, `points`, `markers`, `waveforms`. For example,
+`GET /get_mesh_data?map_id=12&representation=raw&include=mesh,fields` returns
+geometry and all stored surface fields with map/study metadata. Unselected
+point, marker and waveform relations are not loaded. Omitting `include`
+preserves the full response; `include=` returns metadata only. Explicit
+selections are echoed in `selection.included`, including an empty list.
+Unknown component names return 400. `scalar_name` requires `fields`; it
+selects the convenient scalar vector, not a subset of the named fields.
+Signal samples are always downloaded separately or requested in the OpenEP
+export. Component selection limits the response, not every database column
+read while constructing a map.
+
 R: `pe_get_mesh(token, id, representation="raw")`; MATLAB:
 `pe_get_mesh(baseURL, token, id, "", 5, "raw")`. Both return the complete
 response in `mesh$data` / `mesh.data`, with convenience one-based `faces`
 for native computations. The nested response retains zero-based faces.
 `pe_download_waveform` writes a Parquet file for Arrow/R or MATLAB parquetread.
+
+The [MATLAB toolbox](../guides/matlab.md) adds `pe_load_map` and the optional
+`pulseep.Client` wrapper, including server-side component selection.
 
 ParaView: set **Representation** to `raw`. Output port 0 contains the original
 surface and all named fields/validity arrays in double precision; port 1

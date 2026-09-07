@@ -113,8 +113,15 @@ def parse_carto_ecg_export(data: bytes | str, name: str = "", context: list[dict
 
     rows = [line.split() for line in lines[3:] if line.strip()]
     # A truncated final row (an export interrupted mid-write) is dropped
-    # rather than padded: a short row would silently shift every channel.
-    samples = np.array([r for r in rows if len(r) == len(channels)], dtype=float)
+    # rather than padded. Never drop interior rows: that would shift every
+    # later sample relative to the recorded reference and mapping annotations.
+    truncated_tail = bool(rows and len(rows[-1]) < len(channels))
+    if truncated_tail:
+        rows = rows[:-1]
+    for i, row in enumerate(rows, start=1):
+        if len(row) != len(channels):
+            raise ValueError(f"{name or 'ECG export'}: malformed sample row {i}")
+    samples = np.array(rows, dtype=float)
     if samples.size == 0:
         samples = np.empty((0, len(channels)))
     samples *= gain
@@ -132,6 +139,7 @@ def parse_carto_ecg_export(data: bytes | str, name: str = "", context: list[dict
         "start_time": start,
         "channel_ids": channel_ids,
         "source_file": Path(name).name if name else None,
+        "truncated_final_row": truncated_tail,
     }
     if context:
         # every point acquired in this window, each with the channels it was
@@ -155,7 +163,7 @@ def parse_carto_ecg_export(data: bytes | str, name: str = "", context: list[dict
         # The gain is applied above, so every channel of a CARTO window is in
         # millivolts. Recorded rather than assumed, now that the same store
         # also holds forces and positions.
-        units=["mV"] * len(channels),
+        units=["mV" if gain_match else "unknown"] * len(channels),
         time=time,
         meta=meta,
     )
@@ -260,6 +268,12 @@ def iter_waveforms(
     """
     index = point_index(source)
     for name in study_plan.waveforms.files:
+        force_match = re.match(r"(.+)_P(\d+)_ContactForce\.txt$", Path(name).name, re.IGNORECASE)
+        if force_match:
+            wave = parse_carto_force(source.open(name).read(), name)
+            wave.meta.update(point_id=force_match[2], map_name=force_match[1])
+            yield Path(name).stem, wave, force_match[2], force_match[1]
+            continue
         points = index.get(Path(name).name) or []
         wave = parse_carto_ecg_export(source.open(name).read(), name=name, context=points)
         map_name = map_name_for(name)
@@ -270,3 +284,44 @@ def iter_waveforms(
             continue
         for info in points:
             yield stem, wave, info.get("point_id"), map_name
+
+
+def parse_carto_force(data: bytes | str, name: str = "") -> Waveform:
+    """Read labelled CARTO force columns and the declared instantaneous value."""
+    text = data.decode("latin-1") if isinstance(data, bytes) else data
+    lines = text.splitlines()
+    header_index = next(
+        (i for i, line in enumerate(lines) if line.strip().casefold().startswith("index\t")), None
+    )
+    if header_index is None:
+        raise ValueError(f"{name}: no CARTO force column header")
+    header = lines[header_index].split()
+    matrix = np.array([line.split() for line in lines[header_index + 1 :] if line.strip()], float)
+    if matrix.ndim != 2 or matrix.shape[1] != len(header):
+        raise ValueError(f"{name}: malformed CARTO force rows")
+    index = {h.casefold(): i for i, h in enumerate(header)}
+    wanted = ["ForceValue", "AxialAngle", "LateralAngle"]
+    values = matrix[:, [index[h.casefold()] for h in wanted]]
+    time = matrix[:, index["time"]]
+    instant = {}
+    for i, line in enumerate(lines[: header_index - 1]):
+        if line.startswith("IntervalNonGraph"):
+            parts = lines[i + 1].split()
+            if len(parts) >= 4:
+                instant = dict(zip(wanted, map(float, parts[1:4]), strict=True))
+    spacing = np.diff(time)
+    rate = float(1000 / np.median(spacing)) if len(spacing) and np.all(spacing > 0) else None
+    return Waveform(
+        data=values,
+        channels=wanted,
+        units=["g", "deg", "deg"],
+        time=time,
+        sample_rate=rate,
+        signal_type="contact_force",
+        meta={
+            "format": "carto_force",
+            "time_unit": "ms",
+            "instantaneous": instant,
+            "source_file": Path(name).name,
+        },
+    )

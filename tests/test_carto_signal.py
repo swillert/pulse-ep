@@ -98,6 +98,13 @@ def test_a_truncated_row_is_dropped_not_padded(export):
     assert wave.data.shape == (4, 6)  # the short row would have shifted every channel
 
 
+def test_a_malformed_interior_row_cannot_shift_signal_timing():
+    lines = _ecg_text().splitlines()
+    lines[4] = "7"
+    with pytest.raises(ValueError, match="sample row"):
+        parse_carto_ecg_export("\n".join(lines))
+
+
 def test_a_file_that_is_not_an_ecg_export_is_refused():
     with pytest.raises(ValueError):
         parse_carto_ecg_export("t_dws,RV(D-2)\n1,2\n3,4\n5,6\n", name="ensite.csv")

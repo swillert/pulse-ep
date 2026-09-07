@@ -31,6 +31,12 @@ The paper's supplementary integration protocol checks PostgreSQL and the
 actual R, MATLAB, ParaView and MCP clients separately. Its source snapshot,
 version, hashes and results must correspond to the release being submitted.
 
+Build the MATLAB installer with `build_toolbox` from `examples/matlab` in
+MATLAB R2023a or newer. Its version follows `pyproject.toml`. Verify the
+installed `.mltbx` with the native protocol in `tests/matlab/README.md` and
+attach `dist/pulse_ep_matlab-VERSION.mltbx` to the matching release. The
+Python CI does not substitute for MATLAB installation/integration testing.
+
 ## Publish the reviewed commit and a new tag
 
 Commit the reviewed changes first. Create a **new** version tag; never move an

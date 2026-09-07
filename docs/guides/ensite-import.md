@@ -16,7 +16,8 @@ and DxL CSV tables. pulse-ep reads these:
 | `difNNN.xml` | The CT segmentation — endocardium, wall-thickness shells, channels, fat infiltration — likewise as anatomy maps. |
 | `Contact_Mapping/Map_*.csv` | The map's measurement points, one DxL channel per file. |
 | `AutoMark_Data.csv`, `Duo_AutoMarksSummaryList*.csv`, `Lesions.csv`, `Labels.csv` | Placed points: ablations, PFA applications, markers and labels. |
-| `*Waveforms*.csv`, `*ECG*.csv` | Signal traces — **opt-in**, see [Waveforms](#waveforms). |
+| `*Waveforms*.csv`, `*ECG*.csv` | Continuous signal traces — **opt-in**, see [Waveforms](#waveforms). |
+| `Wave_rov.csv`, `Wave_uni_*.csv`, `Wave_refs*.csv` | DxL signals per point/freeze group, with sample rates and source IDs — **opt-in**. |
 
 Everything else in the export (patch impedance, system configuration,
 respiration traces, notebook logs) is deliberately not imported.
@@ -59,12 +60,20 @@ vocabulary catches up.
 
 !!! warning "`adjTime` is not activation time"
 
-    The `adjTime (ms)` column is the annotation *window offset* and is
-    frequently one constant value across an entire export. It is imported
-    as `annotation_time`. A map's activation time comes from the `LAT`
-    channel.
+    The `adjTime (ms)` column records a manual reference-time adjustment.
+    It remains available as `annotation_time` and explicitly as
+    `annotations.reference_adjustment_ms`. A map's activation time comes
+    from the `LAT` channel. Left/right curtains and reference sample ticks
+    are stored separately for waveform alignment.
 
 ## Waveforms
+
+DxL `Wave_*.csv` files contain one recording per point or freeze group;
+continuous `*Waveforms*.csv` files contain sample rows. Both are supported.
+DxL point tables without a mesh create a point-only map so its signals can
+be retrieved by point ID. No surface is reconstructed for such an export.
+Missing or undeclared amplitude units remain `unknown`; see the
+[OpenEP guide](openep.md) for optional calibration and signal export.
 
 Signal traces are **off by default** — they can be larger than the rest
 of the export combined. Turn them on explicitly and say where to put

@@ -1,0 +1,9 @@
+# Public source archives include the clients and reproducible synthetic inputs.
+include CITATION.cff mkdocs.yml .env.example ARCHITECTURE.md
+include Dockerfile compose.yaml .dockerignore alembic.ini
+recursive-include docs *.md *.png *.svg *.yml *.css
+recursive-include examples *.md *.m *.R *.py *.sh *.ipynb
+recursive-include tests *.py *.m *.md
+graft tests/fixtures/synthetic
+recursive-include publication *.md *.py *.png
+global-exclude __pycache__ *.py[cod] .DS_Store
