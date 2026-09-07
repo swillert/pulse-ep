@@ -152,6 +152,10 @@ def parse_carto_ecg_export(data: bytes | str, name: str = "", context: list[dict
         # uni- and bipoles — so the per-channel type lives in the names, not
         # in one label for the file
         signal_type="ecg",
+        # The gain is applied above, so every channel of a CARTO window is in
+        # millivolts. Recorded rather than assumed, now that the same store
+        # also holds forces and positions.
+        units=["mV"] * len(channels),
         time=time,
         meta=meta,
     )

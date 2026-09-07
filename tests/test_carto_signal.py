@@ -68,6 +68,21 @@ def test_samples_are_scaled_to_millivolts(export):
     assert wave.meta["channel_ids"]["CS1-CS2"] == 101
 
 
+def test_the_scaled_samples_declare_millivolts(export):
+    """The gain is applied here, so the unit is a fact — and now recorded.
+
+    It could stay a convention while the store held only electrograms. It
+    cannot now that forces in grams and positions in millimetres go into the
+    same Parquet store.
+    """
+    from pulse_ep.core.importers.carto_signal import parse_carto_ecg_export
+
+    name = f"{MAP}_ECG_Export_{START}.txt"
+    wave = parse_carto_ecg_export((export / name).read_bytes(), name=name)
+    assert wave.units == ["mV"] * len(wave.channels)
+    assert len(wave.units) == wave.data.shape[1]
+
+
 def test_time_is_the_study_clock(export):
     """Windows from different points must land on one axis, not each on 0."""
     name = f"{MAP}_ECG_Export_{START}.txt"
