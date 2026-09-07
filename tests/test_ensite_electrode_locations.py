@@ -15,8 +15,8 @@ import pytest
 from pulse_ep.core.importers.ensite import (
     _reader_for,
     parse_channel_map,
-    parse_ensite_electrode_locations,
-    position_channel_unit,
+    parse_ensite_timeseries,
+    timeseries_channel_unit,
 )
 from pulse_ep.core.waveform import UNKNOWN_UNIT
 
@@ -53,7 +53,7 @@ t_dws,t_secs,t_usecs,t_ref,reliability,c0x,c0y,c0z,c0_ds,c0_ps,c1x,c1y,c1z,c1_ds
 
 
 def test_coordinates_are_millimetres_and_status_columns_are_not():
-    w = parse_ensite_electrode_locations(_EXPORT, name="Electrode_Locations.csv")
+    w = parse_ensite_timeseries(_EXPORT, name="Electrode_Locations.csv")
     got = dict(zip(w.channels, w.units, strict=True))
     assert got["c0x"] == got["c0y"] == got["c0z"] == "mm"
     assert got["c1z"] == "mm"
@@ -67,7 +67,7 @@ def test_the_raw_column_names_are_kept():
     The electrode labels are reachable through ``meta["channels"]`` instead of
     replacing the names, which would make the two impossible to compare.
     """
-    w = parse_ensite_electrode_locations(_EXPORT)
+    w = parse_ensite_timeseries(_EXPORT)
     assert "c0x" in w.channels
     assert not any("CS" in c for c in w.channels)
     assert w.meta["channels"]["0"]["catheter"] == "CS"
@@ -83,8 +83,8 @@ def test_the_channel_table_is_the_bridge_to_electrode_labels():
 
 
 def test_samples_rate_and_type():
-    w = parse_ensite_electrode_locations(_EXPORT, name="Electrode_Locations.csv")
-    assert w.signal_type == "electrode_position"
+    w = parse_ensite_timeseries(_EXPORT, name="Electrode_Locations.csv")
+    assert w.signal_type == "electrode_locations"
     assert w.data.shape == (2, 11)  # 15 columns minus the four t_* ones
     assert w.sample_rate == 100.0
     np.testing.assert_allclose(w.data[:, w.channels.index("c0x")], [48.162, 48.423])
@@ -92,7 +92,7 @@ def test_samples_rate_and_type():
 
 def test_the_sample_header_is_found_below_the_other_tables():
     """The channel table and the glossary both precede it in a real export."""
-    w = parse_ensite_electrode_locations(_EXPORT)
+    w = parse_ensite_timeseries(_EXPORT)
     # Neither the legend nor the channel table leaked into the channels.
     assert "IMPEDANCE_DATA_INVALID" not in w.channels
     assert "channel" not in w.channels
@@ -103,7 +103,7 @@ def test_a_file_without_a_channel_table_still_parses():
     stripped = "\n".join(
         ln for ln in _EXPORT.splitlines() if not ln.startswith(("channel,", "0,", "1,", "2,"))
     )
-    w = parse_ensite_electrode_locations(stripped)
+    w = parse_ensite_timeseries(stripped)
     assert w.meta["channels"] == {}
     assert w.data.shape[1] == 11
 
@@ -119,8 +119,8 @@ def test_a_file_without_a_channel_table_still_parses():
     ],
 )
 def test_position_unit_lookup(column, unit):
-    assert position_channel_unit(column) == unit
+    assert timeseries_channel_unit(column) == unit
 
 
 def test_the_ingest_iterator_picks_the_right_parser():
-    assert _reader_for("x/Electrode_Locations.csv") is parse_ensite_electrode_locations
+    assert _reader_for("x/Electrode_Locations.csv") is parse_ensite_timeseries

@@ -59,8 +59,8 @@ ENSITE_DXL_CHANNELS: Mapping[str, str] = {
     "pneg": VOLTAGE_PEAK_NEGATIVE,
 }
 
-#: Unit of each EnSite X contact-force channel, by its column name with any
-#: ``_<n>`` sensor suffix removed.
+#: Unit of each EnSite X per-timepoint channel, by its column name with any
+#: ``c<n>_`` channel prefix and ``_<n>`` sensor suffix removed.
 #:
 #: **The export declares no units.** Its preamble carries the software version,
 #: the segment and a data-status-bit legend, but nothing about what the numbers
@@ -70,7 +70,7 @@ ENSITE_DXL_CHANNELS: Mapping[str, str] = {
 #: differently. A column that is not listed is imported as ``unknown`` rather
 #: than given a plausible-looking unit — an ammeter reading in amps and one in
 #: milliamps look identical in a CSV.
-ENSITE_FORCE_UNITS: Mapping[str, str] = {
+ENSITE_TIMESERIES_UNITS: Mapping[str, str] = {
     "totalforce": "g",
     "meantotalforce": "g",
     "lateralforce": "g",
@@ -85,6 +85,13 @@ ENSITE_FORCE_UNITS: Mapping[str, str] = {
     "thermocouple2temp": "degC",
     "thermistortemp": "degC",
     "ablduration": "s",
+    # Magnetic location: the sensor's translation is in the same frame as the
+    # mesh, its rotation is a unit quaternion (no unit), and the midline angle
+    # is degrees like the force angles.
+    "tx": "mm",
+    "ty": "mm",
+    "tz": "mm",
+    "anglefrommidline": "deg",
 }
 
 #: The DxL channels whose quantity is decided by the polarity suffix rather
