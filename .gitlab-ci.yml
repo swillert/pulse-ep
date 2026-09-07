@@ -26,9 +26,25 @@ variables:
     - . .venv/bin/activate
     - pip install --upgrade pip wheel
   cache:
+    # The prefix is what makes this cache correct, not merely faster. Keyed on
+    # pyproject.toml alone, all eight jobs shared one entry holding a `.venv/`,
+    # and they do not run the same interpreter or install the same thing:
+    #
+    #   - Six Python versions (3.10 … 3.14, plus 3.12-slim) took turns
+    #     restoring each other's venv. `lib/python3.1x/site-packages` never
+    #     matched, so pip reinstalled everything from scratch every time and
+    #     then uploaded a bigger venv — the cache cost time instead of saving
+    #     it, and each job in the matrix ran slower than the one before.
+    #   - Worse, verify:fixtures exists to prove a *bare* install can read an
+    #     export. It could restore the venv test:py3.12 had just filled with
+    #     every extra, and pass on dependencies its own install never pulled —
+    #     silently unable to catch the one regression it is there for.
+    #
+    # Per job, still keyed on pyproject.toml so a dependency change invalidates.
     key:
       files:
         - pyproject.toml
+      prefix: "$CI_JOB_NAME_SLUG"
     paths:
       - .pip-cache/
       - .venv/
