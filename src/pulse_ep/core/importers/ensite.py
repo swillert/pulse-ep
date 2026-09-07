@@ -45,7 +45,7 @@ from pulse_ep.core.scalar_field import (
     field_name,
 )
 from pulse_ep.core.study import Study
-from pulse_ep.core.waveform import Waveform
+from pulse_ep.core.waveform import UNKNOWN_UNIT, Waveform
 
 
 @dataclass
@@ -341,6 +341,11 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
         channels=[str(c) for c in signal_cols],
         sample_rate=sample_rate,
         signal_type=_signal_type(name or meta.get("Export Data Element", "")),
+        # Not millivolts: this parser applies no gain, and the export declares
+        # neither a unit nor a scale factor anywhere in its preamble — unlike
+        # CARTO's, which carries one gain factor that carto_signal applies.
+        # Whatever these numbers are, saying so is better than asserting mV.
+        units=[UNKNOWN_UNIT] * len(signal_cols),
         time=time,
         meta={
             "segment": meta.get("Export from Segment"),

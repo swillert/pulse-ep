@@ -21,17 +21,51 @@ import pyarrow.parquet as pq
 _TIME_COL = "__time__"
 _META_KEY = b"pulse_ep_waveform"
 
+#: The unit of a channel nobody has declared one for. Explicit, because the
+#: alternative is a number whose meaning has to be guessed at every read site —
+#: which is the design :class:`~pulse_ep.core.scalar_field.ScalarField`
+#: replaced for per-vertex values.
+UNKNOWN_UNIT = "unknown"
+
 
 @dataclass
 class Waveform:
-    """A per-channel time series (``data`` is samples × channels)."""
+    """A per-channel time series (``data`` is samples × channels).
+
+    ``units`` runs parallel to ``channels``, one entry each. It is per channel
+    and not per waveform because a single vendor file mixes them: EnSite X's
+    ``Contact_Force_Computed`` carries force in grams, angles in degrees and
+    cavity distances in millimetres side by side, and its magnetic location
+    export puts a dimensionless quaternion next to a translation in mm. One
+    unit for the file would be wrong for most of its columns.
+
+    Electrograms were all millivolts, so the unit could stay a convention.
+    It cannot once positions and forces live here too.
+    """
 
     data: np.ndarray
     channels: list[str]
     sample_rate: float | None = None
-    signal_type: str = ""  # egm_bipolar | egm_unipolar | ecg
+    signal_type: str = ""  # egm_bipolar | egm_unipolar | ecg | force | position
     time: np.ndarray | None = None  # optional per-sample timestamps
     meta: dict = field(default_factory=dict)  # filters, segment, study, …
+    units: list[str] = field(default_factory=list)  # parallel to ``channels``
+
+    def __post_init__(self) -> None:
+        # Always as long as ``channels``: a short or absent list would put the
+        # burden of that check on every reader.
+        given = list(self.units or [])
+        self.units = [
+            given[i] if i < len(given) and given[i] else UNKNOWN_UNIT
+            for i in range(len(self.channels))
+        ]
+
+    def unit(self, channel: str) -> str:
+        """The unit of ``channel``, or ``unknown`` if it is not one of ours."""
+        try:
+            return self.units[self.channels.index(channel)]
+        except ValueError:
+            return UNKNOWN_UNIT
 
 
 @runtime_checkable
@@ -61,6 +95,7 @@ def _to_table(w: Waveform) -> pa.Table:
         "sample_rate": w.sample_rate,
         "signal_type": w.signal_type,
         "channels": w.channels,
+        "units": w.units,
         "meta": w.meta,
     }
     return table.replace_schema_metadata(
@@ -78,6 +113,15 @@ def _from_table(
     names = table.column_names
     stored_channels = md.get("channels") or [c for c in names if c != _TIME_COL]
     selected = channels if channels is not None else stored_channels
+    # Units follow the *projection*, not the stored order: asking for two of
+    # eight channels must not hand back the first two channels' units. A file
+    # written before units existed reads back as unknown, not as absent.
+    stored_units = md.get("units") or []
+    by_channel = {
+        ch: (stored_units[i] if i < len(stored_units) else UNKNOWN_UNIT)
+        for i, ch in enumerate(stored_channels)
+    }
+    units = [by_channel.get(ch, UNKNOWN_UNIT) for ch in selected]
 
     time = table.column(_TIME_COL).to_numpy() if _TIME_COL in names else None
     if selected:
@@ -97,6 +141,7 @@ def _from_table(
         signal_type=md.get("signal_type", ""),
         time=time,
         meta=md.get("meta", {}),
+        units=units,
     )
 
 

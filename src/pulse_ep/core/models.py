@@ -555,8 +555,12 @@ class WaveformModel(Base):
     #: ingested without the map its points belong to.
     point_source_id = Column(String, nullable=True, index=True)
 
-    signal_type = Column(String)  # egm_bipolar | egm_unipolar | ecg
+    signal_type = Column(String)  # egm_bipolar | egm_unipolar | ecg | force | position
     channels = Column(PortableJSON)  # list[str]
+    #: One unit per channel, in ``channels`` order. Per channel because a
+    #: single vendor file mixes them — grams, degrees and millimetres in one
+    #: contact-force export. ``unknown`` where the export does not say.
+    units = Column(PortableJSON, nullable=True)  # list[str]
     sample_rate = Column(Float)
     n_samples = Column(Integer)
     n_channels = Column(Integer)
@@ -598,6 +602,7 @@ def waveform_row(waveform, uri, study_id=None, map_id=None, point_source_id=None
         point_source_id=point_source_id,
         signal_type=waveform.signal_type,
         channels=[str(c) for c in waveform.channels],
+        units=[str(u) for u in waveform.units],
         sample_rate=waveform.sample_rate,
         n_samples=int(waveform.data.shape[0]),
         n_channels=int(waveform.data.shape[1]),
