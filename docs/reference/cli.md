@@ -15,6 +15,7 @@ through the [Python API](python-api.md).
 | [`pulse-ep-check-mesh`](#pulse-ep-check-mesh)                    | Mesh quality / topology check.                  |
 | [`pulse-ep-extract-meshes`](#pulse-ep-extract-meshes)            | Dump meshes as NPZ for offline analysis.        |
 | [`pulse-ep-mcp`](#pulse-ep-mcp)                                  | MCP server: read-only access for an AI client.  |
+| [`pulse-ep-init`](#pulse-ep-init)                                | Configure a fresh installation and bring it up. |
 
 All scripts accept `--help` for full flag listings. Where a flag is
 omitted below it is either obvious from the name or covered in the
@@ -66,6 +67,32 @@ checkout, where `alembic.ini` exists.
 | `--revision` | `head`  | Target revision; `head` is the newest.                 |
 | `--current`  | off     | Report the database's current revision and exit.       |
 | `--sql`      | off     | Print the SQL instead of executing it (offline mode).  |
+
+## `pulse-ep-init`
+
+```bash
+pulse-ep-init [--non-interactive] [--database-url URL] [--admin-user NAME]
+              [--mcp-user NAME] [--mcp | --no-mcp] [--env-file PATH]
+```
+
+Brings a fresh installation to a running state: writes `.env` with a
+generated JWT secret, creates the waveform and drop directories, applies the
+migrations, seeds the colormaps, creates an administrator and — with
+`--mcp-user` — a `readonly` account for the MCP server, printing the client
+configuration block to paste.
+
+| Flag | Default | Notes |
+| ---- | ------- | ----- |
+| `--non-interactive` | off | Ask nothing; flags and defaults only, generating what is missing. |
+| `--database-url` | `postgresql://pulse:pulse@localhost:5432/pulse` | Tested before anything is written to it. |
+| `--admin-user` / `--admin-password` | asked | The password is generated and printed once when omitted. |
+| `--mcp-user` / `--mcp-password` | asked | A `readonly` account; its password goes into the client block, not into `.env`. |
+| `--base-url` | `http://127.0.0.1:5000` | How the MCP server reaches this deployment. |
+| `--env-file` | `.env` | An existing file is kept unless you say otherwise (a backup is made). |
+
+Idempotent: an existing `.env` is kept, migrations are applied only when
+behind, and an account that exists is left alone — with its password
+unchanged, and never reported as if it had been reset.
 
 ## `pulse-ep-import-carto`
 
