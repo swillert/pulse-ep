@@ -23,7 +23,7 @@ authors:
   - family-names: Lian
     given-names: Evgeny
     affiliation: "University Hospital Schleswig-Holstein, Kiel, Germany"
-version: 0.4.0
+version: 0.4.1
 date-released: "2026-09-07"
 license: MIT
 repository-code: "https://github.com/swillert/pulse-ep"

@@ -4,6 +4,31 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-09-07
+
+### Fixed
+
+- **The project pointed at an address most readers cannot reach.** Homepage,
+  Repository, Issues and Documentation in the package metadata,
+  `repository-code` in `CITATION.cff`, and the clone commands and file links
+  throughout the README and `docs/` all named the self-hosted GitLab. The
+  GitHub mirror is the open-access repository — it is what the SoftwareX
+  submission and the Zenodo DOI workflow refer to, and what someone installing
+  the package from PyPI actually has. They resolve there now.
+  `docs/release-process.md` keeps its GitLab names, because there GitLab
+  genuinely is the origin that mirrors to GitHub; so does `mkdocs.yml`, which
+  still publishes to GitLab Pages.
+- The README's documentation paragraph linked the GitHub tree of `docs/` and
+  then `docs/` again as "its sources" — the same place twice.
+
+### Changed
+
+- `CITATION.cff`: author order, and the `preferred-citation` block is gone
+  until the SoftwareX article has a bibliographic record — cite the software
+  release in the meantime.
+- The Python MCP example says that MCP access is off by default and what to
+  establish before enabling it.
+
 ## [0.4.0] — 2026-09-07
 
 ### Changed
