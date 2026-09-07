@@ -387,12 +387,39 @@ def _dxl_quantity(map_type: str) -> str:
     rather than the channel token, so it is resolved against that lexicon.
     A channel neither table knows comes back :data:`UNKNOWN` and is imported
     under its raw column name — it must not inherit the voltage reading.
+
+    Polarity is decoded by :func:`split_polarity` and nowhere else. This used
+    to split on the last underscore itself, which is the arrangement that let
+    grouping and the descriptor disagree about a filename once already.
     """
-    channel, _, polarity = map_type.rpartition("_")
+    channel, polarity = split_polarity(map_type)
     token = channel or map_type
     if token.strip().casefold() in ENSITE_POLARITY_CHANNELS:
-        return resolve(ENSITE_POLARITY, polarity)
+        return resolve(ENSITE_POLARITY, polarity or "")
     return resolve(ENSITE_DXL_CHANNELS, token)
+
+
+def _dxl_measurement_name(map_type: str, kind: str, value_col: str) -> str:
+    """The name a DxL channel's measurement is stored under.
+
+    ``PP`` carries its polarity in the *kind* — ``voltage_bipolar`` and
+    ``voltage_unipolar`` are different quantities — so its name follows from
+    the kind alone. Every other channel has a polarity-agnostic kind:
+    ``CFEmean_bi`` and ``CFEmean_uni`` are one quantity measured on two
+    signals, and both resolved to one name. Since a map's channels merge by
+    point id, the unipolar file silently overwrote the bipolar one, and which
+    survived depended on the order the files were parsed in.
+
+    A bipolar channel keeps the bare name. That is what exports carry in
+    practice, and suffixing it would rename the field in every study already
+    imported, for a file nobody has yet seen. A polarity that is *not* bipolar
+    is suffixed, so the two can no longer collide.
+    """
+    name = field_name(kind, value_col)
+    channel, polarity = split_polarity(map_type)
+    if (channel or map_type).strip().casefold() in ENSITE_POLARITY_CHANNELS:
+        return name
+    return f"{name}_uni" if polarity == "unipolar" else name
 
 
 def _value_column(header: list[str]) -> str | None:
@@ -445,7 +472,7 @@ def parse_ensite_map_pp(data: bytes | str, name: str = "") -> list[MeasurementPo
     kind = _dxl_quantity(map_type)
     # An unrecognised channel keeps the export's own column name, so it is
     # imported and visible rather than dropped or mislabelled as voltage.
-    measurement = field_name(kind, value_col)
+    measurement = _dxl_measurement_name(map_type, kind, value_col)
 
     def num(fields, name):
         j = col.get(name)
