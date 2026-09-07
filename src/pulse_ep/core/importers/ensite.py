@@ -72,6 +72,30 @@ def _floats(elem) -> np.ndarray | None:
     return np.fromstring(elem.text, sep=" ")
 
 
+def dif_volume_names(xml: bytes | str) -> list[str]:
+    """The names of the volumes in a DIF file, without decoding their meshes.
+
+    ``prepare`` has to describe an import without doing it, and the anatomy
+    file is the largest in an export — a real one is 31 MB holding nine
+    volumes: the endocardium, six wall-thickness shells, the channels and the
+    fat infiltration. A reviewer told only "2 files" cannot tell that from a
+    single chamber.
+
+    Streamed on ``start`` events, so the vertex text is skipped rather than
+    read into a tree: naming the nine costs a fraction of parsing them.
+    """
+    data = xml.encode() if isinstance(xml, str) else xml
+    names: list[str] = []
+    try:
+        for _, element in etree.iterparse(io.BytesIO(data), events=("start",), tag="Volume"):
+            name = element.get("name")
+            if name:
+                names.append(name.strip())
+    except etree.XMLSyntaxError:
+        return names  # a truncated file still names what it got to
+    return names
+
+
 def parse_dif(xml: bytes | str) -> list[DifVolume]:
     """Parse DIF XML bytes into one :class:`DifVolume` per ``<Volume>``."""
     data = xml.encode() if isinstance(xml, str) else xml
@@ -706,6 +730,40 @@ def _dxl_measurement_name(map_type: str, kind: str, value_col: str) -> str:
     return f"{name}_uni" if polarity == "unipolar" else name
 
 
+def dxl_map_name(data: bytes | str) -> str | None:
+    """The operator's name for a map, from a DxL export's ``Map name:`` line.
+
+    The DIF file names a map after its file — ``Contact_Mapping_Model`` for
+    every one of them — while the point exports carry what the operator called
+    it. The value is ``<model>\t<name>``: an export whose segments read
+    ``VoXel<TAB>VT induction`` names its map ``VoXel<TAB>REMAP - SR``, the same
+    shape with the same model in front. The part after the last tab is the name;
+    the whole string is kept by the caller so nothing is invented away.
+
+    ``None`` when the line is absent or holds no name, which leaves the caller
+    with the file stem it had before.
+    """
+    text = data.decode("utf-8", "ignore") if isinstance(data, bytes) else data
+    lines = text.splitlines()
+    # ``Data starts in row,N`` is *not* the end of the preamble — in a real
+    # export it sits at line 15 and ``Map name:`` at 17. It states where the
+    # point table begins, and everything above that row is metadata.
+    limit = len(lines)
+    for line in lines[:80]:
+        if line.lower().startswith("data starts in row") and "," in line:
+            try:
+                limit = int(line.split(",")[1])
+            except ValueError:
+                pass
+            break
+    for line in lines[: min(limit, 200)]:
+        if line.lower().startswith("map name:"):
+            raw = line.split(",", 1)[1].strip() if "," in line else ""
+            name = raw.split("\t")[-1].strip()
+            return name or None
+    return None
+
+
 def _value_column(header: list[str]) -> str | None:
     """The DxL value column — the one paired with a ``"<name> valid"`` sibling.
 
@@ -1063,6 +1121,40 @@ def _is_dxl_points_table(source: ImportSource, name: str) -> bool:
     return "data starts in row" in head and "map type:" in head
 
 
+def _operator_map_name(source: ImportSource, points_files: list[str]) -> str | None:
+    """The map's name as the system showed it, from its DxL point exports.
+
+    Only the preamble of one file is needed, so this stays as cheap as the rest
+    of ``prepare``. ``None`` when the channels disagree or say nothing — a map
+    has one name or none, and picking one of two would be a guess.
+    """
+    names = set()
+    for pf in points_files:
+        try:
+            name = dxl_map_name(source.open(pf).read(65536))
+        except (OSError, ValueError):
+            continue
+        if name:
+            names.add(name)
+    return names.pop() if len(names) == 1 else None
+
+
+def _anatomy_volume_names(source: ImportSource, files: list[str]) -> list[str]:
+    """Every volume the anatomy files hold, for the reviewer to see.
+
+    Read with :func:`dif_volume_names`, which skips the vertex text — on a real
+    31 MB anatomy file naming its nine volumes takes a fourteenth of the time
+    decoding them would.
+    """
+    names: list[str] = []
+    for f in files:
+        try:
+            names.extend(dif_volume_names(source.open(f).read()))
+        except (OSError, ValueError):
+            continue  # a file that cannot be read is reported by the import, not here
+    return names
+
+
 def _points_files_for(source: ImportSource, map_files: list[str]) -> list[str]:
     """DxL point tables of a map's DIF files (in a ``Contact_Mapping/`` subdir)."""
     dirs = {str(Path(f).parent) for f in map_files}
@@ -1131,14 +1223,18 @@ class EnsiteImporter:
             for f in files:
                 kind = scalar_kind_for(parse_map_descriptor(f))
                 scalar_fields[field_name(kind)] = kind
+            points_files = _points_files_for(source, files)
             maps.append(
                 MapPlan(
-                    map_name=key,
+                    # What the operator called it, when the point exports say —
+                    # otherwise the file stem, which is Contact_Mapping_Model
+                    # for every map in the export and tells a reviewer nothing.
+                    map_name=_operator_map_name(source, points_files) or key,
                     files=files,
                     part=parse_map_descriptor(files[0]).get("part"),
                     scalar_fields=scalar_fields,
                     n_vertices=next(iter(distinct), None),
-                    points_files=_points_files_for(source, files),
+                    points_files=points_files,
                     issues=issues,
                 )
             )
@@ -1160,6 +1256,7 @@ class EnsiteImporter:
             waveforms=waveforms,
             placed_point_files=placed_files,
             anatomy_files=anatomy_files,
+            anatomy_volumes=_anatomy_volume_names(source, anatomy_files),
         )
         issues: list[str] = []
         if not maps and not anatomy_files:
@@ -1189,12 +1286,19 @@ class EnsiteImporter:
                 items = [(f, parse_dif(source.open(f).read())[0]) for f in mp.files]
                 try:
                     epmap = merge_dif_group(items, sp.study_name, src_tag)
+                    # The plan's name wins: it is the operator's, and a
+                    # reviewer may have corrected it. The file stem is kept so
+                    # a map can still be traced back to what it came from.
+                    if mp.map_name and mp.map_name != epmap.map_name:
+                        epmap.attributes.setdefault("source_stem", epmap.map_name)
+                        epmap.map_name = mp.map_name
                     if mp.include_points and mp.points_files:
-                        sets = [
-                            parse_ensite_map_pp(source.open(pf).read(), name=pf)
-                            for pf in mp.points_files
-                        ]
-                        epmap.measurement_points = _merge_point_sets(sets)
+                        epmap.measurement_points = _merge_point_sets(
+                            [
+                                parse_ensite_map_pp(source.open(pf).read(), name=pf)
+                                for pf in mp.points_files
+                            ]
+                        )
                     study.add_epmap(epmap)
                 except GeometryMismatch:
                     for f, vol in items:  # geometry differs → keep separate

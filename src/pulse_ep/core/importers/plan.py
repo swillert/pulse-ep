@@ -50,6 +50,10 @@ class StudyPlan:
     placed_point_files: list[str] = field(default_factory=list)  # AutoMark/Lesions/Labels
     include_placed_points: bool = True
     anatomy_files: list[str] = field(default_factory=list)  # Model_Groups.xml
+    #: Names of the volumes inside those files. One EnSite X anatomy file holds
+    #: nine — endocardium, six wall-thickness shells, channels, fat — and a
+    #: reviewer shown only a file count cannot tell that from a single chamber.
+    anatomy_volumes: list[str] = field(default_factory=list)
     include_anatomy: bool = True
 
 
@@ -81,6 +85,7 @@ def plan_from_dict(d: dict) -> ImportPlan:
                 placed_point_files=s.get("placed_point_files", []),
                 include_placed_points=s.get("include_placed_points", True),
                 anatomy_files=s.get("anatomy_files", []),
+                anatomy_volumes=s.get("anatomy_volumes", []),
                 include_anatomy=s.get("include_anatomy", True),
             )
         )

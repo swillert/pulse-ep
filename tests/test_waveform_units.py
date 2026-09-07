@@ -107,3 +107,69 @@ def test_the_two_signal_importers_declare_what_they_know():
     w = parse_ensite_waveforms(_WF, name="EP_Catheter_Bipolar_Waveforms_Filtered")
     assert w.units == [UNKNOWN_UNIT] * len(w.channels)
     assert len(w.units) == w.data.shape[1]
+
+
+def test_the_row_records_what_a_download_will_cost(tmp_path):
+    """Parquet compresses, so the size does not follow from the sample count —
+    only the store can say, and the listing endpoints report it."""
+    from pulse_ep.core.models import store_waveform
+
+    store = FilesystemStore(tmp_path)
+    row = store_waveform(_mixed(), store, "study/1/force")
+    assert row.size_bytes is not None and row.size_bytes > 0
+    assert row.size_bytes == (tmp_path / row.data_uri).stat().st_size
+
+
+def test_a_store_that_cannot_say_leaves_it_empty(tmp_path):
+    """The size is optional in the protocol; an object store may not know."""
+    from pulse_ep.core.models import store_waveform
+
+    class _Silent:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def write(self, waveform, key):
+            return self._inner.write(waveform, key)
+
+    row = store_waveform(_mixed(), _Silent(FilesystemStore(tmp_path)), "study/1/force")
+    assert row.size_bytes is None
+
+
+def test_the_ingest_path_records_the_size_too(tmp_path):
+    """Both paths that write a row must fill it, not only the direct one.
+
+    ``ingest_waveforms`` is what an import actually runs; it builds its rows
+    itself rather than through ``store_waveform``, and shares one written file
+    across the several points taken from it.
+    """
+    from types import SimpleNamespace
+
+    from pulse_ep.core.models import ingest_waveforms
+
+    wave = _mixed()
+    plan = SimpleNamespace(
+        studies=[
+            SimpleNamespace(
+                vendor="stub",
+                study_name="s",
+                waveforms=SimpleNamespace(include=True),
+            )
+        ]
+    )
+    store = FilesystemStore(tmp_path)
+
+    import pulse_ep.core.importers.base as base
+
+    original = base.waveform_iterator
+    base.waveform_iterator = lambda vendor: (
+        lambda sp, source: [("win", wave, "p1", None), ("win", wave, "p2", None)]
+    )
+    try:
+        rows = ingest_waveforms(plan, None, store)
+    finally:
+        base.waveform_iterator = original
+
+    assert len(rows) == 2
+    # One file, shared by both points — and both rows know what it costs.
+    assert {r.data_uri for r in rows} == {rows[0].data_uri}
+    assert all(r.size_bytes == (tmp_path / rows[0].data_uri).stat().st_size for r in rows)
