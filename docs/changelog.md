@@ -6,7 +6,72 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.5] — 2026-09-07
 
+The files an EnSite X export has always carried and pulse-ep never read. Five
+families of per-timepoint data are imported now, and with them the question
+they answer: **how densely was this chamber actually sampled** — and therefore
+where a map rests on measurement and where on interpolation.
+
+### Added
+
+- **Contact force, electrode locations, contact index and the four magnetic
+  location variants.** They are one family — a preamble, legend blocks, a
+  `t_dws` header and a sample matrix — so one reader serves all seven files,
+  and they go into the Parquet store the signals already use: same shape,
+  same study clock, same reason to live outside the database. Opt-in with the
+  waveforms, since that is what they are.
+- **The model point cloud.** Every position the mapping catheter's electrodes
+  reported while the anatomy was collected — 198 186 of them on a real export,
+  over two hours ten. It is the one export spanning the whole study rather than
+  a segment, and the only one that can say how well a chamber was covered: on
+  that export half the mapping mesh's vertices have a collected point within
+  1.9 mm and none is further than 10 mm from one. Both coordinate frames are
+  kept, so the registration between them is recoverable from the pairs; it is
+  recorded nowhere else. 14.7 MB of CSV becomes 4.2 MB of Parquet.
+- **A unit for every stored channel** (`waveforms.units`, migration
+  `a1c3e5f70b92`, additive). Per channel and not per waveform because one
+  vendor file mixes them: a contact-force export carries grams, degrees,
+  millimetres and degrees Celsius side by side. A projection takes its own
+  channels' units, and a file written before this reads back as `unknown`.
+- **`waveforms.size_bytes` is filled** — what a client is about to download.
+  Only the store can say it, since Parquet compresses; it is set on both paths
+  that write a row.
+
+### Changed
+
+- **A map is named what the operator called it.** Every EnSite X DIF mesh is
+  called `Contact_Mapping_Model`, so the file stem named the file and not the
+  map; the DxL point exports carry `Map name:`, which is what stood on the
+  system's screen. The stem moves to `attributes["source_stem"]`, and the
+  plan's name wins at commit so a reviewer's correction sticks. **Existing
+  studies keep the names they were imported under**; this changes what a new
+  import stores.
+- **The import review lists the anatomy volumes**, not a file count. An import
+  reading "2 files" held ten volumes — a left atrium, an endocardium, six
+  wall-thickness shells, the channels and the fat infiltration. The names are
+  read by streaming the DIF, so the 31 MB of vertex text is skipped: naming
+  nine volumes costs a fourteenth of decoding them.
+- **VisiTag ablation sites are no longer flagged as unverified.** A co-author
+  confirmed the parser against a real export, so the warning the import plan
+  showed every reviewer — telling them to check the sites before relying on
+  them — is gone. The docstring records what was verified and what the
+  fixtures do and do not stand for.
+
 ### Fixed
+
+- **A unipolar DxL channel overwrote its bipolar namesake.** Only `PP` carries
+  polarity in its *kind*; `CFEmean_bi` and `CFEmean_uni` both resolved to
+  `cfe_mean`, and since a map's channels merge by point id the file parsed last
+  won and the other measurement vanished without a word. Polarity is also
+  decoded in one place again — `_dxl_quantity` had grown a second decoder
+  beside `split_polarity`, the arrangement that once let grouping and the
+  descriptor disagree about a filename.
+- **EnSite X signals are not millivolts, and no longer claim to be.** The
+  parser applies no gain and the export declares neither a unit nor a scale
+  anywhere in its preamble. Those channels read `unknown`. CARTO's do apply a
+  gain, so theirs say `mV` — a fact rather than a convention now.
+- **The trailing `EOF` marker is not a sample.** Every one of these exports
+  ends with one, and the CSV reader turns it into a row carrying a timestamp
+  and nothing else. Dropped centrally rather than in each reader.
 
 - Geometry-only EnSite X anatomy meshes now render in the web viewer without
   requiring or inventing scalar values. The viewer uses a neutral surface
@@ -22,11 +87,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Validation
 
-- 445 tests pass, including four regressions for geometry-only display and
-  scalar validation. Real CARTO and EnSite X imports were checked against
-  PostgreSQL, covering 23 maps, 5,240 measurement points and signal downloads.
-  All 23 maps pass raw and display API checks after the fixes; a real Chrome
-  session verifies anatomy rendering without JavaScript errors.
+- 507 tests pass. Real CARTO and EnSite X imports were checked against
+  PostgreSQL, covering 23 maps, 5,240 measurement points and signal downloads;
+  all 23 pass raw and display API checks, and a real Chrome session verifies
+  anatomy rendering without JavaScript errors. The per-timepoint exports were
+  imported end to end from a real 6.0.0 EnSite X archive — sixteen windows,
+  their units read back out of Parquet, and migration a1c3e5f70b92 applied,
+  reverted and re-applied against PostgreSQL 16.
 
 ## [0.4.3] — 2026-09-07
 
