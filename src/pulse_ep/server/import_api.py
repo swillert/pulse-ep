@@ -16,6 +16,7 @@ from pulse_ep.core.database import get_db_session
 from pulse_ep.core.ingest_queue import commit_job, enqueue, prepare_job
 from pulse_ep.core.ingest_watcher import scan_and_enqueue
 from pulse_ep.core.models import ImportJobModel
+from pulse_ep.server.roles import writes
 
 import_api = Blueprint("import_api", __name__, url_prefix="/api/import-jobs")
 
@@ -61,6 +62,7 @@ def get_job(job_id: int):
 
 @import_api.patch("/<int:job_id>/plan")
 @jwt_required()
+@writes
 def update_plan(job_id: int):
     plan = request.get_json(silent=True)
     if not isinstance(plan, dict):
@@ -77,6 +79,7 @@ def update_plan(job_id: int):
 
 @import_api.post("/scan")
 @jwt_required()
+@writes
 def scan():
     with get_db_session() as session:
         jobs = scan_and_enqueue(session, get_settings().drop_dir)
@@ -85,6 +88,7 @@ def scan():
 
 @import_api.post("")
 @jwt_required()
+@writes
 def enqueue_path():
     data = request.get_json(silent=True) or {}
     path = data.get("path")
@@ -96,6 +100,7 @@ def enqueue_path():
 
 @import_api.post("/<int:job_id>/prepare")
 @jwt_required()
+@writes
 def prepare(job_id: int):
     with get_db_session() as session:
         job = session.get(ImportJobModel, job_id)
@@ -106,6 +111,7 @@ def prepare(job_id: int):
 
 @import_api.post("/<int:job_id>/commit")
 @jwt_required()
+@writes
 def commit(job_id: int):
     with get_db_session() as session:
         job = session.get(ImportJobModel, job_id)

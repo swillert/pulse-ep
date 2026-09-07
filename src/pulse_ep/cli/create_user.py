@@ -25,6 +25,8 @@ import argparse
 import getpass
 import sys
 
+from pulse_ep.core.roles import ROLES
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -35,8 +37,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--role",
         default="admin",
-        choices=["admin", "user"],
-        help="Role granted to the account (default: admin)",
+        choices=list(ROLES),
+        help=(
+            "Role granted to the account (default: admin). 'readonly' cannot "
+            "change anything stored — the account to give an MCP server."
+        ),
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--password", help="Password (avoid in shell history)")
