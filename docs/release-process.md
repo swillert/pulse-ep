@@ -3,8 +3,13 @@
 The canonical development repository is the maintainer's
 [GitLab](https://gitlab.willert.net/sw/pulse-ep). CI mirrors `main` and tags to
 [public GitHub](https://github.com/swillert/pulse-ep). GitHub hosts the public
-issue tracker and accepts contributions for maintainer integration. Direct
-edits to its `main` branch are overwritten by the canonical mirror.
+issue tracker and accepts contributions for maintainer integration. Its `main`
+branch is written only by the mirror job, which pushes the current tip of the
+canonical `main` without `--force`: a commit made directly on GitHub does not
+get overwritten, it makes every later mirror run fail until someone resets that
+branch by hand. That is deliberate — a forced push cannot tell a stray commit
+from a pipeline arriving out of order, and the second one silently deletes
+work.
 
 ## Prepare locally
 
