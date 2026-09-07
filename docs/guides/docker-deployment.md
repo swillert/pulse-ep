@@ -32,7 +32,7 @@ docker compose --profile server --profile admin up -d --build
 ## First-time setup
 
 ```bash
-git clone https://gitlab.willert.net/sw/pulse-ep.git
+git clone https://github.com/swillert/pulse-ep.git
 cd pulse-ep
 
 # 1. Configure

@@ -8,7 +8,7 @@ broader project rationale and architecture decisions live in
 ## Reporting issues
 
 Open an issue on the
-[GitLab tracker](https://gitlab.willert.net/sw/pulse-ep/-/issues). Useful
+[GitHub tracker](https://github.com/swillert/pulse-ep/issues). Useful
 information:
 
 - pulse-ep version (`python -c "import pulse_ep; print(pulse_ep.__version__)"`).
@@ -22,7 +22,7 @@ information:
 ## Setting up a dev environment
 
 ```bash
-git clone https://gitlab.willert.net/sw/pulse-ep.git
+git clone https://github.com/swillert/pulse-ep.git
 cd pulse-ep
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
@@ -129,4 +129,4 @@ firm up the API; each one is called out in the
 
 By contributing to pulse-ep you agree that your contributions are
 licensed under the
-[MIT License](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/LICENSE).
+[MIT License](https://github.com/swillert/pulse-ep/blob/main/LICENSE).

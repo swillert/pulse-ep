@@ -97,7 +97,7 @@ pip install "pulse-ep[all]"
 ### From source
 
 ```bash
-git clone https://gitlab.willert.net/sw/pulse-ep.git
+git clone https://github.com/swillert/pulse-ep.git
 cd pulse-ep
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
@@ -247,10 +247,8 @@ examples/           # Cross-language client examples — see examples/README.md
 ## Documentation
 
 Full documentation — installation, configuration, per-vendor import
-guides, REST reference and the data model — is at
-<https://sw.gitlab-pages.willert.net/pulse-ep/>, and its sources live in
-[`docs/`](docs/). Start with
-[Installation](docs/getting-started/installation.md) and the
+guides, REST reference and the data model — lives in [`docs/`](docs/).
+Start with [Installation](docs/getting-started/installation.md) and the
 [Quickstart](docs/getting-started/quickstart.md).
 
 ## Interoperability examples
@@ -289,6 +287,6 @@ MIT — see [LICENSE](LICENSE).
 
 ## Contributing
 
-Issue tracker: [GitLab Issues](https://gitlab.willert.net/sw/pulse-ep/-/issues).
+Issue tracker: [GitHub Issues](https://github.com/swillert/pulse-ep/issues).
 PRs welcome; please run `ruff check .`, `ruff format --check .` and
 `pytest` before opening one.

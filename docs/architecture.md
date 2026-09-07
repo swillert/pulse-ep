@@ -1,7 +1,7 @@
 # Architecture
 
 This page is the internal engineering reference for contributors. The
-canonical source is [`ARCHITECTURE.md`](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/ARCHITECTURE.md)
+canonical source is [`ARCHITECTURE.md`](https://github.com/swillert/pulse-ep/blob/main/ARCHITECTURE.md)
 at the repository root — included verbatim below so the documentation
 and the in-repo file never drift.
 

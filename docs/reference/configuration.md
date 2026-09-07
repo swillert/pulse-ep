@@ -45,6 +45,6 @@ The model uses pydantic's standard validators:
 
 ## Tests
 
-[`tests/test_config.py`](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/tests/test_config.py)
+[`tests/test_config.py`](https://github.com/swillert/pulse-ep/blob/main/tests/test_config.py)
 exercises every precedence rule, the secret-redaction behaviour and the
 .env-file loading. It is the executable specification of this module.

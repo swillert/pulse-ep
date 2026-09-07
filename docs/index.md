@@ -135,7 +135,7 @@ If you use `pulse-ep` in academic work, please cite the archived release.
 The DOI below is the *concept* DOI — it always resolves to the latest
 version; use a release's own DOI to pin an exact one. Machine-readable
 metadata is in
-[`CITATION.cff`](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/CITATION.cff),
+[`CITATION.cff`](https://github.com/swillert/pulse-ep/blob/main/CITATION.cff),
 and the accompanying software paper is in preparation for *SoftwareX*.
 
 ```bibtex
@@ -151,5 +151,5 @@ and the accompanying software paper is in preparation for *SoftwareX*.
 
 ## License
 
-`pulse-ep` is released under the [MIT License](https://gitlab.willert.net/sw/pulse-ep/-/blob/main/LICENSE).
+`pulse-ep` is released under the [MIT License](https://github.com/swillert/pulse-ep/blob/main/LICENSE).
 Use, modify, redistribute — within or outside academia — without restriction beyond attribution.

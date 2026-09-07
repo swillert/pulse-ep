@@ -47,6 +47,9 @@ session. It represents the tool workflow for this research request:
 
 Install `pulse-ep[mcp]` and configure `PULSE_EP_MCP_BASE_URL`,
 `PULSE_EP_MCP_USERNAME` and `PULSE_EP_MCP_PASSWORD` (or a token).
+MCP is disabled by default. Review your institution's rules on data disclosure
+before setting `PULSE_EP_MCP_ENABLED=1` on both the service and in the local
+MCP process environment. Use a `readonly` account for this example.
 Set `PULSE_EP_MCP_DOWNLOAD_DIR` to a private local directory. Run:
 
 ```sh
