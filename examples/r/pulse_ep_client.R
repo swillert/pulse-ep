@@ -74,7 +74,7 @@ pe_list_maps <- function(token, study_id, base_url = NULL) {
 #'
 #' `intervals` is a list of length-2 numeric vectors, e.g.
 #'   list(c(50, 60), c(60, 70), c(70, 80), c(80, 90), c(90, 100)).
-#' Returns a numeric vector of areas in cm^2, NA for empty bins.
+#' Returns a numeric vector of areas in cm^2, zero for empty bins.
 pe_areas_per_interval <- function(token, map_id, intervals,
                                   scalar_name = NULL, distance = 5.0,
                                   base_url = NULL) {

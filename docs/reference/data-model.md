@@ -136,7 +136,7 @@ row also carries `study_name` to avoid a join when listing maps.
 | `mesh_file`          | text    | Source mesh path, where one exists.                     |
 | `vertices`           | float[] | Vertex coordinates, shape N × 3, in mm.                                |
 | `triangles`          | int[] | Triangle vertex indices, shape F × 3, 0-based.                       |
-| `triangle_areas`     | float[] | Pre-computed per-triangle areas in cm².                        |
+| `triangle_areas`     | float[] | Optional stored per-triangle areas in mm²; null when not supplied. Public area operations return cm².                        |
 | `is_vertex_at_edge`  | bool[] | Boundary flag per vertex.                               |
 | `normals`            | float[] | Per-vertex normals.                                     |
 | `act_bip`            | float[] | **Legacy** CARTO two-column slot; kept for figure/tag consumers. New code reads `scalar_fields`. |

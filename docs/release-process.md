@@ -34,12 +34,14 @@ version, hashes and results must correspond to the release being submitted.
 ## Publish the reviewed commit and a new tag
 
 Commit the reviewed changes first. Create a **new** version tag; never move an
-already published tag to include a correction. For the current release candidate:
+already published tag to include a correction. Choose an unused version and
+update the metadata listed above before committing. For example, if `v0.4.3`
+does not yet exist locally or on either remote:
 
 ```bash
-git tag -a v0.4.2        # write release notes in the tag message
+git tag -a v0.4.3        # write release notes in the tag message
 git push origin main
-git push origin v0.4.2
+git push origin v0.4.3
 ```
 
 Run these only after the intended changes are committed on `main`. The mirror
@@ -83,7 +85,7 @@ variables with permission to write to the public repository. The GitHub
 repository must already exist. Verify propagation with:
 
 ```bash
-git ls-remote https://github.com/swillert/pulse-ep.git refs/heads/main refs/tags/v0.4.2
+git ls-remote https://github.com/swillert/pulse-ep.git refs/heads/main refs/tags/v0.4.3
 ```
 
 The documentation sources are public in `docs/`. The CI Pages job builds a

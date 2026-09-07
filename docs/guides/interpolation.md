@@ -47,8 +47,8 @@ and pulse-ep now offers both answers.
 Across folds, spatially close points can be far apart along the surface, so
 Euclidean weighting can mix measurements from separate surface regions.
 
-`geodesic` measures along the surface instead, so a value only spreads as far
-as the tissue carries it.
+`geodesic` smooths along the connected mesh surface, avoiding direct mixing
+across a spatial gap between disconnected surface regions.
 
 ```python
 from pulse_ep.core.interpolation import gaussian_interpolate, heat_interpolate

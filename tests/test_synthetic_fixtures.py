@@ -114,7 +114,7 @@ def test_both_vendors_describe_the_same_surface():
 
     The tolerance is not arbitrary: a CARTO ``.mesh`` stores coordinates with
     three decimals (``47.460``), the DIF export with more, so the same surface
-    cannot round-trip to the same number. The observed gap is ~3e-6 relative;
+    cannot round-trip to the same number. The observed gap is ~9.37e-6 relative;
     anything at 1e-4 is a decode difference, not rounding.
     """
     areas = {}

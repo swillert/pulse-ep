@@ -70,10 +70,11 @@ The Flask server connects to PostgreSQL. The web viewer, external REST
 clients and MCP server connect to Flask; the Python toolkit and import
 commands also support direct database access.
 
-An export is auto-detected, turned into a **reviewable import plan**
-(what would be imported, with issues flagged), and only written once the
-plan is committed — by CLI, or through the drop-directory watcher and the
-browser review UI.
+The vendor-neutral Python pipeline and drop-directory watcher auto-detect
+exports and prepare a **reviewable import plan** (what would be imported,
+with issues flagged). The browser review UI commits the plan after review.
+The import commands also support direct import; the CARTO command's
+`--dry-run` previews its input without offering an editable plan.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the internal engineering
 documentation (module layout, design choices, quality gate).
@@ -147,8 +148,10 @@ Resolution order (highest priority first):
 3. Legacy `config.ini` (`PULSE_EP_CONFIG`)
 4. Field defaults defined on `pulse_ep.core.config.Settings`
 
-The same `.env` file is consumed by `docker compose` (see below), so a
-single source of truth covers both local development and the Docker stack.
+Docker Compose also reads `.env`, but uses `POSTGRES_*` variables to construct
+the container database connection and overrides internal bind and storage paths.
+See the [deployment guide](docs/guides/docker-deployment.md) when switching
+between host and container commands.
 
 ## Quickstart
 

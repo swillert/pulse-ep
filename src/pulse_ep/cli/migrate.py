@@ -20,7 +20,8 @@ def _alembic_config(url: str):
 
     cfg = Config()
     cfg.set_main_option("script_location", str(MIGRATIONS))
-    cfg.set_main_option("sqlalchemy.url", url)
+    # Alembic's ConfigParser interprets %, including URL-encoded passwords.
+    cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
     return cfg
 
 

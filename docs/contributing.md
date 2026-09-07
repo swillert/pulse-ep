@@ -51,8 +51,8 @@ data field or setting. Verify example commands against the current code.
 Fork the public GitHub repository, branch from `main`, make the change and
 run the relevant checks. Open a pull request describing the problem, resulting
 behaviour and validation. The maintainer integrates accepted changes through
-the canonical GitLab repository; direct GitHub branch edits are overwritten
-by the mirror. See [Release process](release-process.md).
+the canonical GitLab repository; direct commits to GitHub `main` block the non-forcing mirror until the
+branches are reconciled. See [Release process](release-process.md).
 
 Use a short, descriptive commit message. Conventional Commit prefixes such
 as `fix:`, `docs:` or `feat:` are welcome. Add tests for changed behaviour and

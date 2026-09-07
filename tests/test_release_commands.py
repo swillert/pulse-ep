@@ -62,3 +62,10 @@ def test_ensite_cli_rejects_missing_signal_store_before_import(monkeypatch):
     assert exc.value.code == 2
     with pytest.raises(ValueError, match="store-dir"):
         import_ensite.import_ensite("unused.zip", waveforms=True)
+
+
+def test_migration_config_preserves_percent_encoded_passwords():
+    from pulse_ep.cli.migrate import _alembic_config
+
+    url = "postgresql://example:p%40ss%25word@localhost/example"
+    assert _alembic_config(url).get_main_option("sqlalchemy.url") == url

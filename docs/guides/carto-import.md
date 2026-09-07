@@ -1,162 +1,114 @@
-# Importing EnSite X studies
+# Importing CARTO 3 studies
 
-How an Abbott EnSite X export is decoded, what pulse-ep takes
-from it, and how to drive the import — by command line or through the
-browser review queue.
+pulse-ep reads Biosense Webster CARTO 3 study exports containing a study
+catalogue, anatomical meshes and per-point files. Keep the export's directory
+structure and related files together; a mesh alone does not contain all
+acquisition measurements or signal references.
 
-## What an export contains
+## What is imported
 
-An EnSite X export is a folder (or ZIP of one) of `SJM_DIF_5.0` XML meshes
-and DxL CSV tables. pulse-ep reads these:
+- The study XML identifies maps, reported point counts, acquisition coordinates
+  and point tags.
+- `.mesh` files provide geometry and named per-vertex quantities. The importer
+  removes unused vertices and triangles and conditions missing-value sentinels.
+- Per-point XML and electrode-position files provide available point measurements,
+  channel assignments, timing annotations and catheter electrode coordinates.
+- Per-point ECG text exports can be imported separately as Parquet signals.
+- VisiTag files can be selected in the review workflow, but their parser remains
+  unverified against a real VisiTag export.
 
-| File | What it becomes |
-| ---- | --------------- |
-| `Contact_Mapping_Model*.xml` | An EP map: geometry plus its per-vertex voltage field. |
-| `Model_Groups.xml` | Chamber shells, as geometry-only anatomy maps. |
-| `difNNN.xml` | The CT segmentation — endocardium, wall-thickness shells, channels, fat infiltration — likewise as anatomy maps. |
-| `Contact_Mapping/Map_*.csv` | The map's measurement points, one DxL channel per file. |
-| `AutoMark_Data.csv`, `Duo_AutoMarksSummaryList*.csv`, `Lesions.csv`, `Labels.csv` | Placed points: ablations, PFA applications, markers and labels. |
-| `*Waveforms*.csv`, `*ECG*.csv` | Signal traces — **opt-in**, see [Waveforms](#waveforms). |
-
-Everything else in the export (patch impedance, system configuration,
-respiration traces, notebook logs) is deliberately not imported.
-
-!!! note "Filenames are not trustworthy"
-
-    Operators rename maps by hand, so the same map can arrive as
-    `…_RVStimPre-unipolar.xml` and `…_RvStimPre-bipolar.xml`, or with a
-    typo like `-bpolar`. Grouping is therefore case-insensitive and the
-    polarity suffix is matched tolerantly. If a pair still fails to merge,
-    the plan says so rather than silently producing two half-maps.
-
-## bipolar and unipolar are one map
-
-A map's bipolar and unipolar exports are separate files that share
-identical geometry. pulse-ep merges them into **one** map carrying both
-`voltage_bipolar` and `voltage_unipolar`. If the grouped files turn out
-not to share vertices, they are kept separate instead of merged blindly.
-
-## Measurement points
-
-A map exports its point set **once per DxL channel** — the same columns
-and the same point ids, with only the value column differing. pulse-ep
-merges them back into one set of points, each carrying every measurement:
-
-| `Map type:` | Quantity | Unit |
-| ----------- | -------- | ---- |
-| `PP_bi` / `PP_uni` / `PP_omni` | `voltage_bipolar` / `voltage_unipolar` | mV |
-| `LAT` | `activation_time` | ms |
-| `Score` | `map_score` | — |
-| `CFEmean` | `cfe_mean` | ms |
-| `CFEstdDev` | `cfe_stddev` | ms |
-| `Fractionation` | `fractionation` | — |
-| `PFreq` | `peak_frequency` | Hz |
-| `PNeg` | `voltage_peak_negative` | mV |
-
-A channel this list does not cover is still imported, under the export's
-own column name with kind `unknown`, so nothing is lost while the
-vocabulary catches up.
-
-!!! warning "`adjTime` is not activation time"
-
-    The `adjTime (ms)` column is the annotation *window offset* and is
-    frequently one constant value across an entire export. It is imported
-    as `annotation_time`. A map's activation time comes from the `LAT`
-    channel.
-
-## Waveforms
-
-Signal traces are **off by default** — they can be larger than the rest
-of the export combined. Turn them on explicitly and say where to put
-them; they are stored as Parquet outside the database, with only a
-reference row in it.
-
-```bash
-pulse-ep-import-ensite -i /path/to/export.zip \
-    --waveforms --store-dir /var/pulse/waveforms
-```
-
-For the [import queue](#the-import-queue), the store location comes from
-`PULSE_EP_WAVEFORM_STORE_DIR` instead. Selecting waveforms with no store
-configured fails the job **before** anything is written, rather than
-quietly dropping the signals.
+This is a structured research import, not a lossless copy of every vendor file.
+The raw API returns the stored, importer-conditioned data. Coordinates and
+stored triangle areas use mm and mm²; area calculations return cm².
 
 ## Command-line import
 
-```bash
-# 1. See what would happen. Writes nothing.
-pulse-ep-import-ensite -i /path/to/export.zip --dry-run
-
-# 2. Import it.
-pulse-ep-import-ensite -i /path/to/export.zip
-
-# 3. Re-import a study that is already in the database.
-pulse-ep-import-ensite -i /path/to/export.zip --clear
-```
-
-The input may be a folder or a ZIP. Imports are idempotent by the
-export's study GUID: running the same import twice does nothing the
-second time unless `--clear` is given.
-
-A dry run prints the plan:
-
-```
-study 70538697-25b4-43bd-854c-a9000da6fa96  (vendor=ensite)
-  map Contact_Mapping_Model  verts=65739  fields=['voltage_bipolar']  point-files=8
-  waveforms: 6 files ~3.3 MB (include=False)
-```
-
-Read it before importing an export from a site you have not seen before:
-the map count, the vertex counts, the number of point files and any
-`issues=[…]` are exactly what the importer will act on.
-
-## The import queue
-
-The import queue supports a review workflow through `/import`:
-
-```
-detected → needs_review → importing → done | error
-```
-
-1. Copy a complete export folder or `.zip` bundle to `PULSE_EP_DROP_DIR`.
-2. Open `/import` and select **Scan drop directory**. The scanner enqueues
-   previously unseen paths whose files have been unchanged for at least five
-   seconds; scanning is requested explicitly, not run by a background daemon.
-3. Prepare the job, inspect the proposed plan, adjust selections and commit.
-
-For automated transfers, finish copying before scanning. Python callers can
-use `scan_and_enqueue(..., require_marker=True)` to require a sibling
-`<name>.done` completion marker instead of a quiescence interval.
-
-Repeat scans skip already queued paths. Commit checks for existing study
-identities; keep the source location stable and avoid concurrent imports of
-the same study, because study names are not protected by a uniqueness constraint.
-
-The same lifecycle is available over REST — see
-[`/api/import-jobs`](../reference/rest-api.md#import-queue).
-
-## Comparing two maps
-
-Maps in the same coordinate frame can be compared numerically, for example:
+From a configured installation with PostgreSQL running:
 
 ```bash
-curl -s -X POST "$PULSE_EP_BASE_URL/api/compare" \
-    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-    -d '{"map_a_id": 12, "map_b_id": 13,
-         "scalar_name": "voltage_bipolar", "metric": "geodesic"}'
+pulse-ep-import-carto -i /path/to/carto-export.zip --dry-run
+pulse-ep-import-carto -i /path/to/carto-export.zip --progress
 ```
 
-`euclidean` uses the nearest vertex in space. `geodesic` first places B
-vertices on their nearest A vertices, then propagates correspondence along
-A's surface. Both require aligned coordinate frames. Initial projection can
-still select the wrong surface near folds; neither method performs registration
-or establishes biological comparability.
+Input may be a directory, ZIP or 7-Zip archive. Detection uses archive content,
+so a 7-Zip file named `.zip` is supported with the `sevenzip` extra installed.
+The dry run discovers studies and lists candidate maps and point counts. It
+neither writes the database nor fully validates every mesh and recording.
 
-## See also
+Maps with fewer than five reported points are skipped. Restrict map names
+with a case-insensitive regular expression:
 
-- [CARTO import guide](carto-import.md) — the other supported vendor.
-- [Command-line tools](../reference/cli.md#pulse-ep-import-ensite)
-- [Configuration](../getting-started/configuration.md) —
-  `PULSE_EP_DROP_DIR`, `PULSE_EP_WAVEFORM_STORE_DIR`.
-- [Data model](../reference/data-model.md) — how scalar fields,
-  measurement points and placed points are stored.
+```bash
+pulse-ep-import-carto -i /path/to/unpacked-export --map-filter 'PaceMap|LAT'
+```
+
+`--pattern` changes the study-XML discovery pattern; `--no-recursive` disables
+recursive discovery. Use `--help` for the complete command options.
+
+Existing map names in the same identified study are skipped. CARTO study
+identity includes source-path context, so repeated imports from temporary
+archive-extraction directories need not resolve to the same study. For repeat
+imports, unpack once into a fixed directory and keep that path stable.
+
+**`--clear` drops and recreates all application tables**, including users,
+reports and studies from both vendors. It is a whole-database reset, not a
+single-study replacement option. It does not remove external Parquet files.
+
+## Named quantities and interpretation
+
+Populated columns such as `Bipolar`, `Unipolar` and `Paso` become named fields
+with units and source-column provenance. Unknown populated columns retain
+the vendor token and kind `unknown`; entirely missing columns are omitted.
+Values at or above the CARTO missing-data sentinel are excluded.
+
+The overloaded `LAT` column needs special care. The reader infers a
+pace-mapping score from an entirely negative LAT field and changes its sign;
+other LAT fields retain the activation-time interpretation. An explicit score
+column such as `Paso` is identified separately. An activation map
+with entirely negative times can therefore be ambiguous. Check the quantity,
+sign and source provenance against the acquisition system before analysis.
+Shared field names do not validate a map's clinical interpretation.
+
+## Optional signals
+
+```bash
+pulse-ep-import-carto -i /path/to/unpacked-export \
+  --waveforms --store-dir /var/pulse/waveforms
+```
+
+`--waveforms` requires `--store-dir`. The importer applies the exported gain
+and retains available sampling, channel and annotation metadata. Signals are
+stored outside PostgreSQL; database rows link them to their source points.
+Set `PULSE_EP_WAVEFORM_STORE_DIR` on the service to the same directory so that
+clients can download them. Back up both the database and this store.
+
+See the [point-linked waveform example](https://github.com/swillert/pulse-ep/blob/main/examples/python/README.md).
+
+## Review through the import queue
+
+1. Copy a complete export folder or archive to `PULSE_EP_DROP_DIR`.
+2. Open `/import` and request **Scan drop directory** after the files have
+   stopped changing for at least five seconds.
+3. Prepare the job, inspect its study and map selection, then commit it.
+
+The CARTO preparation step reads the study catalogue. Unlike EnSite X
+preparation, it does not decode mesh fields in advance; an import plan is
+not a complete validation of all export contents. Waveforms are opt-in and
+require `PULSE_EP_WAVEFORM_STORE_DIR` on the service. The scanner runs on
+request, not as an unattended background daemon.
+
+Python applications use the same `prepare_plan` / `commit_plan` interface.
+Avoid concurrent imports of the same study; study-name uniqueness is checked
+by application code rather than a database constraint.
+
+## Distributable example
+
+```bash
+pulse-ep-import-carto -i tests/fixtures/synthetic/carto/synthetic_study --dry-run
+pulse-ep-import-carto -i tests/fixtures/synthetic/carto/synthetic_study
+```
+
+This fixture contains 962 vertices, 1,920 triangles and 64 measurement points.
+Its geometry and values are generated, and it contains no clinical recordings.
+See the [fixture scope](https://github.com/swillert/pulse-ep/blob/main/tests/fixtures/synthetic/README.md),
+[EnSite X guide](ensite-import.md) and [REST API reference](../reference/rest-api.md).
