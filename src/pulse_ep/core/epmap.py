@@ -844,7 +844,9 @@ class EPMap:
         areas = []
         for min_value, max_value in intervals:
             area = self.area_of_range(
-                min_value, max_value, scalar_name=scalar_name,
+                min_value,
+                max_value,
+                scalar_name=scalar_name,
                 include_upper=max_value == final_upper,
             )
             areas.append(area)
