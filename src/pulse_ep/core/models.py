@@ -570,7 +570,9 @@ class WaveformModel(Base):
     # ── Out-of-DB signal storage ──
     data_uri = Column(String, nullable=False)  # store-relative path
     data_format = Column(String, default="parquet")
-    size_bytes = Column(Integer, nullable=True)
+    size_bytes = Column(Integer, nullable=True)  # of the stored Parquet file
+    #: Deliberately unset: nothing verifies it, and a checksum nobody checks is
+    #: decoration. Fill it together with the code that would detect a mismatch.
     checksum = Column(String, nullable=True)
     source = Column(String, nullable=True)
 
@@ -579,16 +581,32 @@ def store_waveform(
     waveform, store, key, study_id=None, map_id=None, point_source_id=None
 ) -> WaveformModel:
     """Write a :class:`Waveform` to ``store`` and build its DB metadata row."""
+    uri = store.write(waveform, key)
     return waveform_row(
         waveform,
-        store.write(waveform, key),
+        uri,
         study_id=study_id,
         map_id=map_id,
         point_source_id=point_source_id,
+        size_bytes=_stored_size(store, uri),
     )
 
 
-def waveform_row(waveform, uri, study_id=None, map_id=None, point_source_id=None) -> WaveformModel:
+def _stored_size(store, uri: str) -> int | None:
+    """Bytes the written window occupies, when the store can say.
+
+    Only it can: Parquet compresses, so the size does not follow from the
+    sample count. It is what a client is about to download, which is why the
+    listing endpoints report it — and it has to be filled on *both* paths that
+    write a row, the direct one and the queue's ``ingest_waveforms``.
+    """
+    size = getattr(store, "size", None)
+    return size(uri) if callable(size) else None
+
+
+def waveform_row(
+    waveform, uri, study_id=None, map_id=None, point_source_id=None, size_bytes=None
+) -> WaveformModel:
     """The DB metadata row for an already-stored :class:`Waveform`.
 
     Separate from writing because one stored window can be referenced by
@@ -610,6 +628,7 @@ def waveform_row(waveform, uri, study_id=None, map_id=None, point_source_id=None
         filters=meta.get("filters"),
         data_uri=uri,
         data_format="parquet",
+        size_bytes=size_bytes,
         source=meta.get("software_version"),
     )
 
@@ -638,12 +657,14 @@ def ingest_waveforms(plan, source, store, study_id=None, map_ids=None) -> list[W
         # from it. The samples are written on first sight and shared after
         # that — storing them once per point would multiply a study's signal
         # data by the number of electrodes on the catheter.
-        written: dict[str, str] = {}
+        written: dict[str, tuple[str, int | None]] = {}
         for stem, wave, point_id, map_name in waveform_iterator(sp.vendor)(sp, source):
             key = f"{sp.study_name}/{stem}"
-            uri = written.get(key)
-            if uri is None:
-                uri = written[key] = store.write(wave, key)
+            stored = written.get(key)
+            if stored is None:
+                uri = store.write(wave, key)
+                stored = written[key] = (uri, _stored_size(store, uri))
+            uri, size = stored
             rows.append(
                 waveform_row(
                     wave,
@@ -651,6 +672,7 @@ def ingest_waveforms(plan, source, store, study_id=None, map_ids=None) -> list[W
                     study_id=study_id,
                     map_id=(map_ids or {}).get(map_name),
                     point_source_id=point_id,
+                    size_bytes=size,
                 )
             )
     return rows

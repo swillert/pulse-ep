@@ -152,3 +152,54 @@ def test_polarity_is_decoded_in_one_place_only():
     # The tolerant suffix pattern that filenames get, applied to `Map type:`.
     assert split_polarity("CFEmean_bpolar") == ("CFEmean", "bipolar")
     assert _dxl_quantity("PP_bpolar") == "voltage_bipolar"
+
+
+_NAMED = (
+    "Export Data Element: DxL\n"
+    "Field Scaling: off\n"
+    "Data starts in row,10\n"
+    "\n"
+    "Map name:,VoXel\tREMAP - SR\n"
+    "Map type:,PP_bi\n"
+    "# mapping pts:,1\n"
+    "\n"
+    f"{_HDR}\n"
+    "HDGX A1-A2,A1 A2,99 100,1,37,..,..,49.8,-208.3,391.6,42.0,-215.2,392.0,"
+    "-0.7,-0.7,0.0,1,0,0,0.965,1,1781787673.5,8,20,319,3.2,10000,\n"
+)
+
+
+def test_the_map_name_is_read_from_below_the_data_row_marker():
+    """``Data starts in row,N`` is not the end of the preamble.
+
+    In a real export it sits at line 15 and ``Map name:`` at 17 — a reader that
+    stops at the marker finds nothing and the map keeps its file name.
+    """
+    from pulse_ep.core.importers.ensite import dxl_map_name
+
+    assert dxl_map_name(_NAMED) == "REMAP - SR"
+
+
+def test_the_model_prefix_before_the_tab_is_not_part_of_the_name():
+    """``Map name:`` is ``<model>\\t<name>``, the same shape the segment lines
+    have — an export whose segments read ``VoXel<TAB>VT induction`` names its
+    map ``VoXel<TAB>REMAP - SR``."""
+    from pulse_ep.core.importers.ensite import dxl_map_name
+
+    assert dxl_map_name("Map name:,Model\tThe Map\nData starts in row,3\n") == "The Map"
+    assert dxl_map_name("Map name:,No Tab Here\n") == "No Tab Here"
+
+
+def test_no_map_name_line_leaves_the_caller_with_the_stem():
+    from pulse_ep.core.importers.ensite import dxl_map_name
+
+    assert dxl_map_name(_MAP_PP.replace("Map name:,Test Map\n", "")) is None
+    assert dxl_map_name("Map name:,\n") is None
+
+
+def test_channels_that_disagree_about_the_name_yield_none():
+    """A map has one name or none — picking one of two would be a guess."""
+    from pulse_ep.core.importers.ensite import dxl_map_name
+
+    other = _NAMED.replace("REMAP - SR", "Something Else")
+    assert dxl_map_name(_NAMED) != dxl_map_name(other)

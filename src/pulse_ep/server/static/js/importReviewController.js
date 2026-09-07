@@ -16,6 +16,21 @@
   const base = (p) => String(p || '').split('/').filter(Boolean).pop() || p;
   const mb = (b) => `${((b || 0) / 1e6).toFixed(1)} MB`;
 
+  // What the anatomy files actually contain. One EnSite X file holds nine
+  // volumes — the endocardium, six wall-thickness shells, the channels and the
+  // fat infiltration — so a file count tells a reviewer nothing about what is
+  // about to be imported. The names come from the plan, which reads them
+  // without decoding the meshes.
+  const anatomySummary = (sp) => {
+    const files = (sp.anatomy_files || []).length;
+    const volumes = sp.anatomy_volumes || [];
+    if (!files) return 'none';
+    if (!volumes.length) return `${files} file${files === 1 ? '' : 's'}`;
+    const shown = volumes.slice(0, 4).map(esc).join(', ');
+    const rest = volumes.length - 4;
+    return `${volumes.length} volumes: ${shown}${rest > 0 ? `, +${rest} more` : ''}`;
+  };
+
   async function api(path, opts = {}) {
     const r = await fetch(API + path, { ...opts, headers: headers(opts.body != null) });
     if (r.status === 401) { location.href = '/login'; return null; }
@@ -102,7 +117,7 @@
           Placed points — ${(sp.placed_point_files || []).length} files</label><br>
         <label class="chk"><input type="checkbox" id="anInc" ${sp.include_anatomy ? 'checked' : ''}
           ${(sp.anatomy_files || []).length ? '' : 'disabled'}>
-          Anatomy (Model Groups) — ${(sp.anatomy_files || []).length} files</label>
+          Anatomy — ${anatomySummary(sp)}</label>
       </div>
 
       <div class="actions">

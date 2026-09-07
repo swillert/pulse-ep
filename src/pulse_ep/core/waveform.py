@@ -83,6 +83,15 @@ class WaveformStore(Protocol):
         """Load a waveform, optionally projecting channels / slicing time."""
         ...
 
+    def size(self, uri: str) -> int | None:
+        """Bytes the stored window occupies, or ``None`` if the store cannot say.
+
+        What a client is about to download. Only the store knows it — the
+        window itself is an array in memory, and Parquet's compression means
+        the number cannot be derived from the sample count.
+        """
+        ...
+
 
 def _to_table(w: Waveform) -> pa.Table:
     arrays: dict[str, np.ndarray] = {}
@@ -181,6 +190,12 @@ class FilesystemStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         pq.write_table(_to_table(waveform), path, compression="zstd")
         return rel
+
+    def size(self, uri: str) -> int | None:
+        try:
+            return (self.root / uri).stat().st_size
+        except OSError:
+            return None
 
     def read(
         self,

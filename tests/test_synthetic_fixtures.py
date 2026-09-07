@@ -26,7 +26,11 @@ FIXTURES = Path(__file__).parent / "fixtures" / "synthetic"
 EXPECTED = {
     "ensite": {
         "vendor": "ensite",
-        "map_name": "Contact_Mapping_Model",
+        # What the operator called it, from the DxL export's ``Map name:``.
+        # The DIF mesh is called Contact_Mapping_Model in every EnSite X
+        # export, so the file stem names the file and not the map; it is kept
+        # in the map's attributes.
+        "map_name": "synthetic map",
         "vertices": 962,
         "triangles": 1920,
         "fields": {"voltage_bipolar"},
