@@ -115,10 +115,9 @@ export class MeshHelper {
                     });
                 }
             } else {
-                console.warn('No scalar data found in mesh data.');
                 this.eventEmitter.emit('updateProperties', {
                     mapId,
-                    mapName: 'No data',
+                    mapName,
                     studyName,
                     minScalar: 'N/A',
                     maxScalar: 'N/A'
@@ -126,7 +125,8 @@ export class MeshHelper {
             }
 
             const material = new THREE.MeshBasicMaterial({
-                vertexColors: true,
+                vertexColors: geometry.hasAttribute('color'),
+                color: geometry.hasAttribute('color') ? 0xffffff : 0xb0b8c0,
                 side: THREE.DoubleSide
             });
 

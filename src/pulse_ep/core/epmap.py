@@ -727,11 +727,27 @@ class EPMap:
         self, scalar_name: str | None = None, distance: float | None = None
     ) -> dict:
         scalar_name = scalar_name or self.primary_scalar()
-        if scalar_name is None:
-            scalar_name = self.primary_scalar()
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh()
+
+        # EnSite chamber shells and CT segmentations have geometry only.
+        # Display them without inventing a measured scalar field.
+        if scalar_name is None:
+            return {
+                "scalar_name": None,
+                "mesh_data": {
+                    "vertices": pv_mesh.points,
+                    "faces": pv_mesh.faces.reshape((-1, 4))[:, 1:],
+                    "scalar_data": np.empty(0),
+                    "normalized_scalar_data": np.empty(0),
+                },
+                "point_data": {
+                    "coordinates": np.empty((0, 3)),
+                    "scalar_data": np.empty(0),
+                    "normalized_scalar_data": np.empty(0),
+                },
+            }
 
         # Resolve already-conditioned values via the vendor-neutral resolver;
         # no scalar-specific handling lives here anymore.
@@ -830,7 +846,7 @@ class EPMap:
         """
         scalar_name = scalar_name or self.primary_scalar()
         if scalar_name is None:
-            scalar_name = self.primary_scalar()
+            raise ValueError("This map has no scalar fields for interval area analysis.")
 
         # Generate anatomical_pv_mesh and interpolate scalar values
         pv_mesh = self.generate_anatomical_pv_mesh(simplify=False)

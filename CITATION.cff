@@ -18,14 +18,14 @@ authors:
   - family-names: Willert
     given-names: Sven
     email: sw@willert.net
-    affiliation: "University Hospital Schleswig-Holstein, Kiel, Germany"
+    affiliation: "Department of Internal Medicine III, Cardiology and Internal Intensive Care Medicine, University Hospital Schleswig-Holstein, Campus Kiel, Kiel University, Germany"
   - family-names: Frank
     given-names: Derk
-    affiliation: "University Hospital Schleswig-Holstein, Kiel, Germany"
+    affiliation: "Department of Internal Medicine III, Cardiology and Internal Intensive Care Medicine, University Hospital Schleswig-Holstein, Campus Kiel, Kiel University, Germany"
   - family-names: Lian
     given-names: Evgeny
-    affiliation: "University Hospital Schleswig-Holstein, Kiel, Germany"
-version: 0.4.3
+    affiliation: "Department of Internal Medicine III, Cardiology and Internal Intensive Care Medicine, University Hospital Schleswig-Holstein, Campus Kiel, Kiel University, Germany"
+version: 0.4.5
 date-released: "2026-09-07"
 license: MIT
 repository-code: "https://github.com/swillert/pulse-ep"
