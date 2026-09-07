@@ -103,6 +103,50 @@ def get_connector_filenames(xml_tree, point_file_name):
     return connector_filenames
 
 
+def get_tag_names(xml_tree) -> dict[int, str]:
+    """The study's tag table as ``{tag id: full name}``.
+
+    Tags are study-specific: the built-in ones (``Location Only``, ``Scar``,
+    ``Pacing Site`` …) share ids across studies, but ids from 25 upwards are
+    operator-defined labels that mean something different in every export.
+    Resolving them here, against the catalogue that defined them, is the only
+    reliable way. A catalogue without a table yields ``{}``.
+    """
+    tags_table = xml_tree.find(".//Maps/TagsTable")
+    if tags_table is None:
+        return {}
+    names: dict[int, str] = {}
+    for tag_elem in tags_table.findall("Tag"):
+        try:
+            tag_id = int(tag_elem.get("ID"))
+        except (TypeError, ValueError):
+            continue
+        names[tag_id] = tag_elem.get("Full_Name") or tag_elem.get("Short_Name") or str(tag_id)
+    return names
+
+
+def get_point_tags(map_element) -> list[list[int]]:
+    """The tag ids on every point of a map, in ``CartoPoints`` order.
+
+    A point's ``<Tags Count="n">`` element lists its tag ids, whitespace
+    separated; a point without the element, or with ``Count="0"``, gets an
+    empty list. Parallel to :func:`get_xyz`, so the two align by index.
+    """
+    points = map_element.find("CartoPoints").findall("Point")
+    tags: list[list[int]] = []
+    for point in points:
+        elem = point.find("Tags")
+        ids: list[int] = []
+        if elem is not None and elem.text:
+            for token in elem.text.split():
+                try:
+                    ids.append(int(token))
+                except ValueError:
+                    continue
+        tags.append(ids)
+    return tags
+
+
 def process_tags(xml_tree):
     # Get the tags information
     tags_table = xml_tree.find(".//Maps/TagsTable")
@@ -121,8 +165,14 @@ def process_tags(xml_tree):
 
 
 def str2var(s):
-    if len(s) == 0:  # if string is empty, return the string as is
-        return s
+    """The text of a catalogue element, kept as it is.
+
+    This used to return ``None`` for every non-empty string — a stub of the
+    MATLAB ``str2var`` it was ported from — and :func:`process_xml` assigned
+    that back, so every element text in a parsed catalogue was discarded.
+    Nothing read the texts then; the per-point ``<Tags>`` element does now.
+    """
+    return s
 
 
 def process_string(s):
