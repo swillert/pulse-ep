@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulse-ep"
-version = "0.4.0"
+version = "0.4.1"
 description = "Open-source platform for programmatic access to CARTO 3 and EnSiteX electroanatomical mapping data — REST API, 3D viewer, and Python toolkit for cardiac electrophysiology research."
 readme = "README.md"
 requires-python = ">=3.10"
