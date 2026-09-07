@@ -347,6 +347,14 @@ def parse_dws_table(data: bytes | str) -> tuple[dict, pd.DataFrame]:
 
     df = pd.read_csv(io.StringIO("\n".join(lines[header_idx:])))
     df = df.loc[:, [c for c in df.columns if not str(c).startswith("Unnamed")]]
+
+    # Every one of these files ends with a literal ``EOF`` line, which the CSV
+    # reader turns into a row with a timestamp column and nothing else. Dropped
+    # here rather than in each reader: it is a property of the format, and a
+    # caller that missed it would store one all-NaN sample per window.
+    values = [c for c in df.columns if c not in _TIME_COLS]
+    if values:
+        df = df[~df[values].isna().all(axis=1)]
     return meta, df
 
 
@@ -373,8 +381,6 @@ def parse_ensite_waveforms(data: bytes | str, name: str = "") -> Waveform:
     signal_cols = [
         c for c in df.columns if c not in _TIME_COLS and not str(c).endswith(("_ds", "_ps"))
     ]
-    # drop trailing partial rows that carry a timestamp but no signal samples
-    df = df[~df[signal_cols].isna().all(axis=1)]
     signal = df[signal_cols].to_numpy(dtype=float)
 
     time, sample_rate = _dws_time(df)
