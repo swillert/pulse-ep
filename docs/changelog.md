@@ -4,9 +4,22 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.3] — 2026-09-07
+
+What a fresh installation found. The 0.4.2 audit read the documentation
+against the implementation; this one installed the package into an empty
+directory and ran what the documentation says to run.
 
 ### Fixed
+
+- **Mirroring to GitHub could rewind the public branch.** The job pushed its
+  own pipeline's `HEAD` with `--force`, and jobs are not ordered: with a
+  single runner an older pipeline can reach the deploy stage after a newer one
+  has already mirrored. On 2026-09-07 pipeline #510 undid #512 that way, and
+  two commits were missing from the public repository until the next push. It
+  pushes the current tip of `main` now, without `--force`, so a stale push is
+  refused rather than destroying history — at the price that a commit made
+  directly on GitHub blocks mirroring until someone resets that branch.
 
 - The Docker image applies versioned migrations before starting its workers.
   Creating tables first had caused the documented first-time migration to
