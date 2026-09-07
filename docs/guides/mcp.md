@@ -52,8 +52,10 @@ $ echo $?
     switch stops a **forgotten, inherited or misconfigured** MCP, which is the
     case that actually happens. It does not stop someone who wants in.
 
-    What does: the account. Give the MCP its own read-only user, and disable
-    that user when access should end. The header is also worth having on its
+    What does: the account. Give the MCP its own `readonly` user — a role the
+    server enforces, refused on every endpoint that changes stored state —
+    and disable that user when access should end. `pulse-ep-init --mcp-user
+    mcp` creates exactly that account and prints the client configuration. The header is also worth having on its
     own — AI access is visible in the server log as
     `X-Pulse-EP-Client: pulse-ep-mcp/<version>`, distinguishable from a person
     at the viewer.
@@ -113,7 +115,7 @@ and how to log in:
 | -------- | ------- |
 | `PULSE_EP_MCP_BASE_URL` | pulse-ep server (default `http://localhost:5000`) |
 | `PULSE_EP_MCP_TOKEN` | a JWT, if you have one … |
-| `PULSE_EP_MCP_USERNAME` / `PULSE_EP_MCP_PASSWORD` | … or an account to log in with |
+| `PULSE_EP_MCP_USERNAME` / `PULSE_EP_MCP_PASSWORD` | … or an account to log in with — give it the `readonly` role |
 | `PULSE_EP_MCP_ANONYMIZE` | `0` turns anonymisation off (default: on) |
 | `PULSE_EP_MCP_TIMEOUT` | seconds per request (default 60) |
 | `PULSE_EP_MCP_DOWNLOAD_DIR` | where `fetch_*` writes bulk data (default: system temp) |

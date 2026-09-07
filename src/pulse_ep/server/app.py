@@ -8,7 +8,13 @@ from flask import Flask, jsonify, redirect, render_template, request, send_file,
 from flask import json as flask_json
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required
+from flask_jwt_extended import (
+    JWTManager,
+    create_access_token,
+    get_jwt,
+    jwt_required,
+    verify_jwt_in_request,
+)
 from sqlalchemy.orm.attributes import flag_modified
 
 from pulse_ep.core.config import get_settings
@@ -24,6 +30,7 @@ from pulse_ep.core.models import (
     UserModel,
 )
 from pulse_ep.core.scalar_field import default_unit
+from pulse_ep.server.roles import ADMIN, ROLES, USER, admin_only, writes
 
 _settings = get_settings()
 
@@ -121,12 +128,31 @@ def import_review():
 
 @app.route("/register_user", methods=["POST"])
 def register_user():
+    """Create an account.
+
+    Registration is open — the bundled UI has a page for it — but an
+    unauthenticated caller may only ever create a plain ``user``. It used to
+    take the role straight from the request body with no authentication at
+    all, so anyone who could reach the server could mint themselves an
+    administrator; the REST reference has always described this endpoint as
+    admin-only.
+
+    An authenticated administrator may still name the role, and
+    ``pulse-ep-create-user`` remains the way to bootstrap the first one.
+    """
     data = request.get_json()
     username = data.get("username")
     password = data.get("password")
-    role = data.get("role", "user")  # Default role is 'user'
+    role = data.get("role", USER)
     if not username or not password or not role:
         return jsonify({"msg": "Username, password, and role are required"}), 400
+
+    verify_jwt_in_request(optional=True)
+    caller = (get_jwt() or {}).get("role")
+    if role != USER and caller != ADMIN:
+        return jsonify({"msg": "Only an administrator may create a privileged account"}), 403
+    if role not in ROLES:
+        return jsonify({"msg": f"Unknown role {role!r}; one of {list(ROLES)}"}), 400
 
     hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
     with get_db_session() as session:
@@ -597,6 +623,7 @@ def filter_epmaps_by_attributes():
 
 @app.route("/epmaps/set_attributes", methods=["POST"])
 @jwt_required()
+@admin_only
 def set_attributes_for_epmaps():
     """
     Endpoint to set or update a list of attributes for a given list of map_ids in EPMapAttributes.
@@ -757,6 +784,7 @@ def calculate_areas_for_intervals_endpoint():
 
 @app.route("/colormaps", methods=["POST"])
 @jwt_required()
+@admin_only
 def create_colormap():
     data = request.get_json()
     name = data.get("name")
@@ -817,6 +845,7 @@ def get_colormap_by_name(name):
 
 @app.route("/colormaps/<int:id>", methods=["PUT"])
 @jwt_required()
+@admin_only
 def update_colormap(id):
     data = request.get_json()
     name = data.get("name")
@@ -856,6 +885,7 @@ def update_colormap(id):
 
 @app.route("/colormaps/<int:id>", methods=["DELETE"])
 @jwt_required()
+@admin_only
 def delete_colormap(id):
     with get_db_session() as session:
         colormap = ColormapModel.find_by_id(id, session)
@@ -882,6 +912,7 @@ def get_reports():
 
 @app.route("/reports/<int:report_id>", methods=["DELETE"])
 @jwt_required()
+@writes
 def delete_report(report_id):
     """
     Delete a report by ID.
@@ -898,6 +929,7 @@ def delete_report(report_id):
 
 @app.route("/save_report", methods=["POST"])
 @jwt_required()
+@writes
 def save_report():
     """
     Save a new report with the provided data.
@@ -1114,6 +1146,7 @@ def _build_report_excel(report_id):
 
 @app.route("/reports/<int:report_id>/generate", methods=["POST"])
 @jwt_required()
+@writes
 def generate_report(report_id):
     """Start background Excel generation; returns 202 immediately."""
     with get_db_session() as session:

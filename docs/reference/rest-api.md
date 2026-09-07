@@ -31,6 +31,13 @@ Content-Type: application/json
 
 `401 Unauthorized` on bad credentials.
 
+The token carries a `role` claim, and it is enforced: `admin` may do
+everything, `user` may read and write, `readonly` is refused on every
+endpoint that changes stored state and gets `403` with the role it has and
+the roles the endpoint wants. Reads that arrive as `POST` — a filter, an
+area integration, a comparison — stay open to `readonly`, because what
+decides is what an endpoint does, not the verb it came under.
+
 The token must accompany every subsequent request as
 `Authorization: Bearer <token>`. It carries a `role` claim
 (`admin` | `user`) and a 1-hour expiry by default
@@ -38,7 +45,10 @@ The token must accompany every subsequent request as
 
 ### `POST /register_user`
 
-Create a new user. **Admin only** in the current release.
+Create a new user. Registration is open — the bundled UI has a page for it —
+but an unauthenticated caller may only ever create a plain `user`. Naming a
+privileged role requires an administrator's token; `pulse-ep-create-user`
+bootstraps the first one.
 
 ```http
 POST /register_user
