@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 # Resolve the connection from pulse-ep settings (overrides alembic.ini).
 _db_url = get_settings().resolved_database_url
 if _db_url:
-    config.set_main_option("sqlalchemy.url", _db_url)
+    config.set_main_option("sqlalchemy.url", _db_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

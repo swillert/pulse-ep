@@ -4,6 +4,34 @@ All notable changes to `pulse-ep` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The Docker image applies versioned migrations before starting its workers.
+  Creating tables first had caused the documented first-time migration to
+  fail with duplicate-table errors.
+- Migration configuration preserves percent-encoded database passwords.
+- The shipped Jupyter notebook uses its documented static rendering backend
+  and labels histograms with the retrieved quantity instead of a fixed `act`.
+- CARTO import plans now respect a completely deselected map list,
+  study-specific selections when map names repeat, exact map names and the
+  option to omit acquisition points. Previously an empty selection imported
+  every map, and a selected name could also include a deselected map in
+  another study.
+- The MATLAB interval-area client now preserves the nested request shape
+  for a single interval as well as multiple intervals. Empty bins return
+  zero; the R and MATLAB client comments now state this correctly.
+- The data-model reference identifies stored triangle areas as mm² and
+  distinguishes them from analysis results in cm².
+- The CARTO import guide now describes CARTO; it had contained the EnSite X
+  guide. It documents catalogue-only preparation, quantity inference and the
+  whole-database scope of `--clear`.
+- The README distinguishes direct CLI imports from reviewed import plans.
+  The example login command correctly escapes special characters in credentials.
+- Release instructions use a new version as an example instead of the
+  already existing v0.4.2 tag.
+
 ## [0.4.2] — 2026-09-07
 
 A release audit: the README, the guides, the example instructions and the

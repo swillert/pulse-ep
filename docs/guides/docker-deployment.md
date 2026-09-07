@@ -17,7 +17,8 @@ docker compose exec server pulse-ep-create-user --username admin --role admin
 ```
 
 Open `http://localhost:5000`. The image installs the server, reporting and
-7-Zip extras and runs gunicorn as a non-root user. It does not include an
+7-Zip extras, applies migrations before startup and runs gunicorn as a
+non-root user. It does not include an
 MCP host; MCP clients connect separately to the REST service.
 
 ## Profiles and configuration

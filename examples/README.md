@@ -57,9 +57,11 @@ export PULSE_EP_PASSWORD="…"
 A quick smoke test from any shell:
 
 ```bash
-TOKEN=$(curl -s -X POST "$PULSE_EP_BASE_URL/login_user" \
-    -H "Content-Type: application/json" \
-    -d "{\"username\":\"$PULSE_EP_USERNAME\",\"password\":\"$PULSE_EP_PASSWORD\"}" \
+TOKEN=$(python -c 'import json, os; print(json.dumps({
+    "username": os.environ["PULSE_EP_USERNAME"],
+    "password": os.environ["PULSE_EP_PASSWORD"]}))' \
+    | curl -fsS -X POST "$PULSE_EP_BASE_URL/login_user" \
+        -H "Content-Type: application/json" --data-binary @- \
     | python -c 'import sys, json; print(json.load(sys.stdin)["access_token"])')
 curl -s "$PULSE_EP_BASE_URL/list_studies" -H "Authorization: Bearer $TOKEN"
 ```

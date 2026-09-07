@@ -77,7 +77,6 @@ ENV PULSE_EP_HOST=0.0.0.0 \
 
 EXPOSE 5000
 
-# gunicorn is the production WSGI runner; it imports the module-level
-# `app` from pulse_ep.server.app. We still call init_db() ourselves on
-# startup so the first hit doesn't pay a schema-creation tax.
-CMD ["sh", "-c", "python -c 'from pulse_ep.core.database import init_db; init_db()' && exec gunicorn --bind ${PULSE_EP_HOST}:${PULSE_EP_PORT} --workers 2 --threads 4 --timeout 120 pulse_ep.server.app:app"]
+# Apply versioned migrations before starting workers. Calling create_all()
+# first creates unversioned tables and makes the first migration fail.
+CMD ["sh", "-c", "pulse-ep-migrate && exec gunicorn --bind ${PULSE_EP_HOST}:${PULSE_EP_PORT} --workers 2 --threads 4 --timeout 120 pulse_ep.server.app:app"]

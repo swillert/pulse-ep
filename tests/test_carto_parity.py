@@ -174,3 +174,56 @@ def test_prepare_and_the_cli_derive_the_same_study_name(tmp_path):
     d = _study_dir(tmp_path)
     plan = CartoImporter().prepare(DirSource(d))
     assert plan.studies[0].study_name == study_name_for(str(d / "Study.xml"), "TestStudy")
+
+
+def test_commit_with_every_map_deselected_imports_nothing():
+    from pathlib import Path
+
+    source = DirSource(Path(__file__).parent / "fixtures/synthetic/carto/synthetic_study")
+    importer = CartoImporter()
+    plan = importer.prepare(source)
+    for study in plan.studies:
+        for entry in study.maps:
+            entry.include = False
+    assert importer.commit(plan, source) == []
+
+
+def test_commit_applies_selections_per_study_and_exact_map_name(monkeypatch):
+    from pulse_ep.core.epmap import EPMap
+    from pulse_ep.core.importers.plan import ImportPlan, MapPlan, StudyPlan
+    from pulse_ep.core.study import Study
+
+    importer = CartoImporter()
+    decoded = [
+        Study("one", [EPMap("LA", "one"), EPMap("la", "one")]),
+        Study("two", [EPMap("LA", "two")]),
+    ]
+    monkeypatch.setattr(importer, "_parse", lambda source, map_filter: decoded)
+    plan = ImportPlan(
+        studies=[
+            StudyPlan(
+                "one",
+                "carto",
+                maps=[MapPlan("LA", [], include=True), MapPlan("la", [], include=False)],
+            ),
+            StudyPlan("two", "carto", maps=[MapPlan("LA", [], include=False)]),
+        ]
+    )
+    result = importer.commit(plan, object())
+    assert [(s.name, [m.map_name for m in s.epmaps]) for s in result] == [("one", ["LA"])]
+
+
+def test_commit_can_omit_carto_acquisition_points():
+    from pathlib import Path
+
+    source = DirSource(Path(__file__).parent / "fixtures/synthetic/carto/synthetic_study")
+    importer = CartoImporter()
+    plan = importer.prepare(source)
+    plan.studies[0].maps[0].include_points = False
+    result = importer.commit(plan, source)[0].epmaps[0]
+    assert len(result.vertices) == 962
+    assert result.measurement_points == []
+    assert result.xyz is None
+    assert result.reference_annotation is None
+    assert result.map_annotation is None
+    assert result.bipolar is None

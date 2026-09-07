@@ -624,25 +624,43 @@ class CartoImporter:
 
     def commit(self, plan: ImportPlan, source: ImportSource) -> list[Study]:
         """Import the maps the reviewer kept, plus any VisiTag ablation sites."""
-        selected = {
-            m.map_name for sp in plan.studies for m in sp.maps if m.include and sp.maps is not None
-        }
+        selected = {m.map_name for sp in plan.studies for m in sp.maps if m.include}
         # ``import_carto`` filters by regex over map names; anchor an exact
         # alternation of the selection so no unselected map slips through.
         map_filter = (
             "^(?:" + "|".join(re.escape(n) for n in sorted(selected)) + ")$" if selected else None
         )
-        studies = self._parse(source, map_filter)
-
-        wanted = {
-            sp.study_name: sp.placed_point_files
-            for sp in plan.studies
-            if sp.include_placed_points and sp.placed_point_files
-        }
-        for study in studies:
-            for f in wanted.get(study.name, []):
-                study.placed_points += parse_carto_visitag_sites(source.open(f).read(), name=f)
-        return studies
+        decoded = self._parse(source, map_filter) if selected else []
+        by_name = {study.name: study for study in decoded}
+        result = []
+        for sp in plan.studies:
+            study = by_name.get(sp.study_name)
+            if study is None:
+                study = Study(sp.study_name, vendor=self.name, provenance=sp.provenance)
+            # The legacy regex is case-insensitive and shared by all studies.
+            # Apply the actual selections to each study after decoding too.
+            wanted = {m.map_name: m for m in sp.maps if m.include}
+            study.epmaps = [m for m in study.epmaps if m.map_name in wanted]
+            for epmap in study.epmaps:
+                if not wanted[epmap.map_name].include_points:
+                    epmap.measurement_points = []
+                    for attr in (
+                        "xyz",
+                        "woi",
+                        "reference_annotation",
+                        "map_annotation",
+                        "unipolar",
+                        "bipolar",
+                        "impedance_time",
+                        "impedance_value",
+                    ):
+                        setattr(epmap, attr, None)
+            if sp.include_placed_points:
+                for f in sp.placed_point_files:
+                    study.placed_points += parse_carto_visitag_sites(source.open(f).read(), name=f)
+            if study.epmaps or study.placed_points:
+                result.append(study)
+        return result
 
     def parse(self, source: ImportSource) -> list[Study]:
         return self._parse(source, None)
