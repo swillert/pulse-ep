@@ -117,6 +117,7 @@ pulse-ep-check-mesh = "pulse_ep.cli.check_mesh:main"
 pulse-ep-create-user = "pulse_ep.cli.create_user:main"
 pulse-ep-demo = "pulse_ep.examples.demo_synthetic:main"
 pulse-ep-server = "pulse_ep.server.app:main"
+pulse-ep-init = "pulse_ep.cli.init:main"
 pulse-ep-migrate = "pulse_ep.cli.migrate:main"
 pulse-ep-mcp = "pulse_ep.mcp.server:main"
 

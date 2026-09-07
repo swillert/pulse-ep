@@ -39,6 +39,26 @@ cleanly, your install is healthy.
       90–100 %: 3.32 cm²
     ```
 
+
+## The short way
+
+```bash
+pip install -e ".[all]"
+docker compose up -d          # PostgreSQL
+pulse-ep-init                 # asks what it cannot work out, does the rest
+pulse-ep-server
+```
+
+`pulse-ep-init` writes `.env` with a generated JWT secret, creates the
+waveform and drop directories, applies the migrations, seeds the colormaps
+(forgetting this is why a viewer shows no colours), creates an
+administrator, and — if you want one — a **read-only** account for the MCP
+server, printing the client configuration to paste. It is idempotent: run it
+again after an upgrade.
+
+`--non-interactive` asks nothing and takes flags and defaults, for a
+scripted install. The rest of this page is the same steps by hand.
+
 ## 2. A real study, local Python install
 
 This is the workflow for researchers running pulse-ep on their own laptop
