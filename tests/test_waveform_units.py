@@ -93,7 +93,7 @@ def test_the_db_row_records_the_units():
     assert row.units == ["g", "deg", "mm"]
 
 
-def test_the_two_signal_importers_declare_what_they_know():
+def test_the_two_signal_importers_declare_what_they_know(ensite_waveform_csv):
     """CARTO applies its gain, so millivolts is a fact about the values.
 
     EnSite X declares neither a unit nor a scale factor anywhere in its export
@@ -102,9 +102,8 @@ def test_the_two_signal_importers_declare_what_they_know():
     forgot to fill in.
     """
     from pulse_ep.core.importers.ensite import parse_ensite_waveforms
-    from tests.test_ensite_waveforms import _WF
 
-    w = parse_ensite_waveforms(_WF, name="EP_Catheter_Bipolar_Waveforms_Filtered")
+    w = parse_ensite_waveforms(ensite_waveform_csv, name="EP_Catheter_Bipolar_Waveforms_Filtered")
     assert w.units == [UNKNOWN_UNIT] * len(w.channels)
     assert len(w.units) == w.data.shape[1]
 
