@@ -130,3 +130,22 @@ def test_every_family_reaches_the_one_reader():
     ):
         assert _reader_for(name) is parse_ensite_timeseries
     assert _reader_for("x/EP_Catheter_Bipolar_Waveforms.csv") is parse_ensite_waveforms
+
+
+def test_the_trailing_eof_marker_is_not_a_sample():
+    """Every one of these exports ends with a literal ``EOF`` line.
+
+    The CSV reader turns it into a row carrying a timestamp and nothing else.
+    Left in, each stored window would end with one all-NaN sample — and the
+    sample count in the database would be one too high.
+    """
+    import numpy as np
+
+    plain = parse_ensite_timeseries(_MAGNETIC)
+    with_eof = parse_ensite_timeseries(_MAGNETIC + "EOF\n")
+    assert with_eof.data.shape == plain.data.shape == (2, 13)
+    assert not np.isnan(with_eof.data).any()
+
+    from tests.test_ensite_waveforms import _WF
+
+    assert parse_ensite_waveforms(_WF + "EOF\n").data.shape[0] == 3
