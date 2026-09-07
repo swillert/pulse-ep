@@ -44,6 +44,16 @@ def _cotan_laplacian_mass(V: np.ndarray, F: np.ndarray):
     return L, m
 
 
+def laplacian_mass(vertices, triangles):
+    """Public entry to the cotangent Laplacian ``L`` and lumped mass ``m``.
+
+    Diffusion on a mesh is not only the Heat Method's business — scattered
+    data interpolation (:mod:`~pulse_ep.core.interpolation`) solves with the
+    same operator — so it is offered rather than re-derived.
+    """
+    return _cotan_laplacian_mass(np.asarray(vertices, dtype=float), np.asarray(triangles))
+
+
 def _face_gradient(V, F, u):
     """Per-face gradient of a per-vertex scalar ``u``."""
     v1, v2, v3 = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]

@@ -4,6 +4,7 @@ import pymeshfix
 import pyvista as pv
 from scipy.spatial import cKDTree
 
+from pulse_ep.core import interpolation
 from pulse_ep.core import plot_proc as plot_proc
 from pulse_ep.core.scalar_field import ScalarField
 
@@ -159,6 +160,32 @@ class EPMap:
             return np.array([p.position for p in self.measurement_points], dtype=float)
         return None
 
+    def measured_field(self, scalar_name: str) -> tuple[np.ndarray, np.ndarray]:
+        """``(positions, values)`` of one quantity across this map's points.
+
+        The scattered data behind a map: what was actually measured, where.
+        Only the points carrying that quantity are returned, so an unannotated
+        point does not enter an interpolation as a zero.
+
+        A name is normally a kind (see :func:`~pulse_ep.core.scalar_field.field_name`),
+        but a point may carry the quantity under a vendor token, so the kind is
+        the fallback lookup.
+        """
+        positions, values = [], []
+        for point in self.measurement_points:
+            value = point.get(scalar_name)
+            if value is None:
+                value = next(
+                    (m.value for m in point.measurements.values() if m.kind == scalar_name), None
+                )
+            if value is None:
+                continue
+            positions.append(point.position)
+            values.append(value)
+        if not positions:
+            return np.empty((0, 3)), np.empty(0)
+        return np.asarray(positions, dtype=float), np.asarray(values, dtype=float)
+
     def project_measurements_to_mesh(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Project this map's measurement positions to the nearest mesh vertices.
@@ -261,20 +288,56 @@ class EPMap:
         scalar_name: str | None = None,
         distance_threshold: float | None = None,
         scalars_on_vertices: bool = True,
+        method: str = "mask",
+        sigma: float | None = None,
+        cycle_length: float | None = None,
     ) -> pv.PolyData:
         """
-        Interpolate scalar values for all vertices (points) that are within a certain distance from the points in the map.
+        Decide what every mesh vertex shows for one quantity.
 
-        :param scalar: Original scalar values.
+        Two different things can happen here, and ``method`` picks which:
+
+        ``"mask"`` (default, and all this method ever did)
+            Keep the **vendor's** per-vertex field and hide the vertices
+            farther than ``distance_threshold`` from any measurement. Nothing
+            is interpolated — the acquisition system already did that.
+
+        ``"gaussian"`` / ``"geodesic"``
+            **Recompute** the field from this map's measurement points, so the
+            result follows from the raw data rather than from the vendor's
+            undocumented interpolation. ``geodesic`` measures distance along
+            the surface, which matters wherever the wall is thin enough for a
+            straight line to cross it. See
+            :mod:`~pulse_ep.core.interpolation`.
+
+        :param scalar: Original (vendor) scalar values — used by ``"mask"``.
         :param scalar_name: Scalar attribute name; defaults to the map's primary scalar.
         :param distance_threshold: Maximum distance for interpolation. Defaults to None.
         :param scalars_on_vertices: Flag indicating if scalar values are based on vertices (True) or xyz points (False). Defaults to True.
+        :param sigma: kernel width of the computed methods (default: the
+            median spacing of the measurement points).
+        :param cycle_length: interpolate cyclically — for a reentrant
+            activation map, where late meets early (``0`` = infer the cycle
+            length from the values).
         :return: Interpolated PyVista mesh.
+        :raises ValueError: for an unknown ``method``, or for a computed method
+            on a map whose measurement points do not carry this quantity.
         """
         scalar_name = scalar_name or self.primary_scalar()
         # Generate pv_mesh if not already generated
         if self.pv_mesh is None:
             self.generate_anatomical_pv_mesh()
+
+        if method not in interpolation.METHODS:
+            raise ValueError(
+                f"unknown interpolation method {method!r}; use one of {interpolation.METHODS}"
+            )
+        if method != "mask":
+            values = self._computed_scalar_values(
+                scalar_name, method, distance_threshold, sigma, cycle_length
+            )
+            self.pv_mesh.point_data[scalar_name] = values
+            return self.pv_mesh, values
 
         # The distance threshold is a confidence mask: only show scalar values
         # near where the map was actually measured. A map with no measurement
@@ -312,6 +375,45 @@ class EPMap:
 
         # Return the mesh with interpolated scalars
         return self.pv_mesh, interpolated_scalars
+
+    def _computed_scalar_values(
+        self,
+        scalar_name: str,
+        method: str,
+        distance_threshold: float | None,
+        sigma: float | None,
+        cycle_length: float | None,
+    ) -> np.ndarray:
+        """The field this map's own measurements imply, on the current mesh."""
+        positions, values = self.measured_field(scalar_name)
+        if positions.size == 0:
+            raise ValueError(
+                f"cannot compute {scalar_name!r} from measurements: this map's points carry no "
+                f"such quantity (method={method!r}; use method='mask' to show the vendor's field)"
+            )
+
+        if method == "gaussian":
+            return interpolation.gaussian_interpolate(
+                self.pv_mesh.points,
+                positions,
+                values,
+                sigma=sigma,
+                distance_threshold=distance_threshold,
+                cycle_length=cycle_length,
+            )
+
+        # geodesic: measurements enter the diffusion at the vertex they sit on
+        source_vertices = cKDTree(self.pv_mesh.points).query(positions)[1]
+        triangles = self.pv_mesh.faces.reshape((-1, 4))[:, 1:]
+        return interpolation.heat_interpolate(
+            self.pv_mesh.points,
+            triangles,
+            source_vertices,
+            values,
+            sigma=sigma,
+            distance_threshold=distance_threshold,
+            cycle_length=cycle_length,
+        )
 
         # Commented-out original RBF interpolation logic:
         # if scalars_on_vertices:
@@ -737,10 +839,14 @@ class EPMap:
             scalar_data, scalar_name=scalar_name, distance_threshold=distance
         )
 
-        # Calculate areas for each interval
+        # Adjacent bins share no boundary values; include the final upper edge.
+        final_upper = max((hi for _, hi in intervals), default=None)
         areas = []
         for min_value, max_value in intervals:
-            area = self.area_of_range(min_value, max_value, scalar_name=scalar_name)
+            area = self.area_of_range(
+                min_value, max_value, scalar_name=scalar_name,
+                include_upper=max_value == final_upper,
+            )
             areas.append(area)
 
         return areas
@@ -753,7 +859,10 @@ class EPMap:
         pv_mesh = self.generate_anatomical_pv_mesh()
         pv_mesh.save(filename)
 
-    def area_of_range(self, min_value, max_value, scalar_name: str | None = None):
+    def area_of_range(
+        self, min_value, max_value, scalar_name: str | None = None, *, include_upper: bool = False
+    ):
+        """Area in [min_value, max_value), optionally including the upper edge."""
         scalar_name = scalar_name or self.primary_scalar()
         if "Area" not in self.pv_mesh.cell_data:
             self.precompute_areas()
@@ -762,7 +871,8 @@ class EPMap:
         cell_data = self.point_data_to_cell_data(scalar_name)
 
         # Filter based on the scalar range
-        mask = (cell_data >= min_value) & (cell_data <= max_value)
+        upper = cell_data <= max_value if include_upper else cell_data < max_value
+        mask = (cell_data >= min_value) & upper
 
         # Retrieve and sum the precomputed areas
         selected_areas = self.pv_mesh.cell_data["Area"][mask]
