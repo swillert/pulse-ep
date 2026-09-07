@@ -191,7 +191,7 @@ export imports without renaming — but reading it needs the optional `py7zr`
 package:
 
 ```bash
-pip install "pulse-ep[sevenzip]"
+pip install -e ".[sevenzip]"
 ```
 
 Without it, a 7-Zip export raises a message naming the missing package rather

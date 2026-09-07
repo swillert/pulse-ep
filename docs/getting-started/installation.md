@@ -16,30 +16,10 @@ If you only want to try out `pulse-ep`, you do **not** need PostgreSQL — the
 [synthetic walkthrough](quickstart.md#1-synthetic-walkthrough-no-db-needed)
 runs entirely in memory and never opens a database connection.
 
-## From PyPI
-
-```bash
-# Core: importer, ORM, Python toolkit, CLI utilities
-pip install pulse-ep
-
-# Add the Flask REST API and 3D viewer
-pip install "pulse-ep[server]"
-
-# Add the figure / Excel / KML report generators
-pip install "pulse-ep[figures]"
-
-# Everything (server + figures + dev tools + docs builder)
-pip install "pulse-ep[all]"
-```
-
-The extras correspond to functional capabilities, not to a separation
-between "production" and "development". You can mix them freely — for
-example, install `pulse-ep[server,figures]` on a deployment server but
-skip `dev` and `docs`.
-
 ## From source
 
-For contributors and reproducible-research workflows:
+`pulse-ep` is not published on PyPI yet, so this is how to install it —
+for deployments, contributors and reproducible-research workflows alike:
 
 ```bash
 git clone https://github.com/swillert/pulse-ep.git
@@ -51,6 +31,20 @@ pip install -e ".[all]"
 An editable install (`-e`) means your local edits are picked up
 immediately without re-running `pip install`. The `[all]` extra includes
 `pytest`, `ruff`, `mypy` and the `mkdocs` documentation builder.
+
+The extras correspond to functional capabilities, not to a separation
+between "production" and "development". You can mix them freely — for
+example `pip install -e ".[server,figures]"` on a deployment server,
+skipping `dev` and `docs`.
+
+## From PyPI
+
+Not published yet. Once it is, the same extras apply and the editable
+checkout above is no longer needed to run a deployment:
+
+```bash
+pip install "pulse-ep[all]"
+```
 
 Verify the install:
 
@@ -85,7 +79,7 @@ pulse-ep-demo                    # synthetic end-to-end pipeline
 python -c "import pulse_ep; print(pulse_ep.__version__)"
 ```
 
-If `pip install "pulse-ep[dev]"` was part of your install, also run the
+If `[dev]` was part of your install, also run the
 unit-test suite:
 
 ```bash

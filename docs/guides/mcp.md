@@ -146,7 +146,7 @@ the names — start the server with `--no-anonymize` or set
 ## Setup
 
 ```bash
-pip install "pulse-ep[mcp]"
+pip install -e ".[mcp]"
 ```
 
 The server talks to a running `pulse-ep-server`, so configure where that is
