@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulse-ep"
-version = "0.2.3"
+version = "0.3.0"
 description = "Open-source platform for programmatic access to CARTO 3 and EnSiteX electroanatomical mapping data — REST API, 3D viewer, and Python toolkit for cardiac electrophysiology research."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -77,6 +77,9 @@ server = [
 sevenzip = [
     "py7zr>=0.21,<2",   # CARTO exports are often 7-Zip archives named .zip
 ]
+mcp = [
+    "mcp>=1.2,<2",      # MCP server; the REST client itself needs only requests
+]
 figures = [
     "reportlab>=4.2,<5",
     "openpyxl>=3.1,<4",
@@ -95,7 +98,7 @@ docs = [
     "pymdown-extensions>=10.9,<11",
 ]
 all = [
-    "pulse-ep[server,figures,sevenzip,dev,docs]",
+    "pulse-ep[server,figures,sevenzip,mcp,dev,docs]",
 ]
 
 [project.urls]
@@ -115,6 +118,7 @@ pulse-ep-create-user = "pulse_ep.cli.create_user:main"
 pulse-ep-demo = "pulse_ep.examples.demo_synthetic:main"
 pulse-ep-server = "pulse_ep.server.app:main"
 pulse-ep-migrate = "pulse_ep.cli.migrate:main"
+pulse-ep-mcp = "pulse_ep.mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

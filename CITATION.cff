@@ -23,8 +23,8 @@ authors:
   - family-names: Frank
     given-names: Derk
     affiliation: "University Hospital Schleswig-Holstein, Kiel, Germany"
-version: 0.2.3
-date-released: "2026-09-06"
+version: 0.3.0
+date-released: "2026-09-07"
 license: MIT
 repository-code: "https://gitlab.willert.net/sw/pulse-ep"
 identifiers:
