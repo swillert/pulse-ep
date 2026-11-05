@@ -110,14 +110,33 @@ def seed_attribute_metadata(session):
 
 
 def init_db(engine=None):
-    """Create all tables and seed metadata. Safe to call multiple times.
+    """Create a missing schema, bring an existing one up to date, seed metadata.
 
-    Server entry points (e.g. ``pulse_ep.server.app``) should call this
-    once at startup. It is **not** invoked automatically anymore to keep
-    package imports side-effect-free.
+    Server entry points (e.g. ``pulse_ep.server.app``) call this once at
+    startup; it is idempotent. Three situations:
+
+    - fresh database: ``create_all()`` builds the current schema and the head
+      revision is stamped, so later ``pulse-ep-migrate`` runs start from there
+      instead of trying to create the tables again;
+    - database without ``alembic_version`` (created by ``create_all()`` on an
+      earlier release): missing tables are created, the columns the baseline
+      revision added are completed and the revision the schema matches is
+      stamped (:func:`pulse_ep.cli.migrate.adopt_legacy_database`);
+    - database under Alembic: pending migrations are applied; ``create_all()``
+      is not used, so the schema never drifts ahead of its stamp.
     """
+    import sqlalchemy as sa
+    from alembic import command
+
+    from pulse_ep.cli.migrate import _alembic_config, adopt_legacy_database
+
     if engine is None:
         engine = create_db_engine()
-    Base.metadata.create_all(engine)
+    url = engine.url.render_as_string(hide_password=False)
+    cfg = _alembic_config(url)
+    if "alembic_version" not in sa.inspect(engine).get_table_names():
+        Base.metadata.create_all(engine)
+        adopt_legacy_database(cfg, url)
+    command.upgrade(cfg, "head")
     with get_db_session() as session:
         seed_attribute_metadata(session)

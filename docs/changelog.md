@@ -6,6 +6,21 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `pulse-ep-migrate` adopts databases that have no `alembic_version` table
+  instead of failing with "relation already exists": a database created by
+  `create_all()` up to 0.5 receives the three baseline columns (`studies.vendor`,
+  `studies.provenance`, `epmaps.scalar_fields`) and is stamped at the baseline
+  revision; a database that `init_db()` created on a later release is stamped at
+  the revision its objects match. The later revisions then apply as usual.
+  `tools/upgrade_legacy_database.sql` is the same upgrade as plain SQL.
+- `init_db()` (server start, `pulse-ep-create-user`) no longer lets the schema
+  drift ahead of its Alembic stamp: a fresh database is created with
+  `create_all()` and stamped at head; a database without a stamp is adopted as
+  above; a database under Alembic gets its pending migrations applied instead of
+  `create_all()`.
+
 ## [0.6.0] — 2026-09-08
 
 ### Added

@@ -341,14 +341,20 @@ run on every release without data loss.
 
 Two paths exist, and they are not interchangeable:
 
-- `init_db()` runs `Base.metadata.create_all()` at server startup. It
-  creates *missing* tables and is what makes a fresh database usable; it
-  never alters an existing one.
+- `init_db()` runs at server startup. On a fresh database it runs
+  `Base.metadata.create_all()` and stamps the head revision; on a database
+  under Alembic it applies the pending migrations; a database without a stamp
+  is adopted (below). It never alters an existing table itself.
 - `pulse-ep-migrate` applies the migrations, which ship inside the package
   (`pulse_ep/migrations/versions/`) so an installed deployment can upgrade
   too; `alembic upgrade head` does the same from a source checkout.
   This is what brings an existing database in step with a new release, and
-  is the step to run after upgrading.
+  is the step to run after upgrading. A database without an `alembic_version`
+  table (created by `create_all()` before the migrations existed, or by
+  `init_db()` on a later release) is adopted on the first run: it is stamped at
+  the revision its tables and columns match — after adding the three columns
+  the baseline revision introduced, if they are missing — and the remaining
+  revisions are applied.
 
 Alembic reads `PULSE_EP_DATABASE_URL` through `Settings`, so it needs no
 configuration of its own. Any breaking schema change must additionally be
