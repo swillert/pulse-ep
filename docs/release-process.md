@@ -72,9 +72,10 @@ include `10.5281/zenodo.22435908` for v0.2.0 and
 
 When the new DOI exists, update the current branch's citation metadata and
 paper. Do not rewrite the archived release just to add its newly minted DOI.
-The current `CITATION.cff` lists only the concept DOI until an identifier for
-this release is available; historical version identifiers belong to those
-releases, not to the current source version.
+Use the top-level `doi` in `CITATION.cff` for the matching version DOI and
+retain the concept DOI under `identifiers`. Until a new version DOI exists,
+omit the top-level DOI rather than carrying forward the previous release's
+identifier. Historical version identifiers belong to those releases.
 
 ## Paper synchronisation
 

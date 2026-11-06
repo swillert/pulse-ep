@@ -288,6 +288,8 @@ provides another way to inspect maps and calculate interval areas.
 The [MATLAB toolbox](docs/guides/matlab.md) packages the client functions and
 an optional session object for login, study/map queries, selective raw data,
 waveform downloads and OpenEP access. The direct functions remain supported.
+The tested [0.6.0 installer](https://github.com/swillert/pulse-ep/releases/download/v0.6.0/pulse_ep_matlab-0.6.0.mltbx)
+is available from the matching GitHub release.
 
 Clients retrieve data through the shared service. Histograms and custom
 calculations operate on downloaded arrays; the interval-area examples call
@@ -295,16 +297,33 @@ the same server operation. Use the raw mesh representation for full stored
 geometry, all fields and acquisition measurements. The paper's supplementary
 verification additionally checks independent local surface-area calculations.
 
+## Companion packages
+
+Analyses that build on the pulse-ep data model live in separate packages that
+read from a pulse-ep database through its ORM and otherwise work on plain
+arrays:
+
+- [pulse-ep-decay](https://github.com/swillert/pulse-ep-decay) — geodesic decay
+  analysis of pace-mapping score maps (decay width σ in mm, R² and focality
+  flags; the method paper *Geodesic Decay Analysis*, Computer Methods and
+  Programs in Biomedicine). `pip install "pulse-ep-decay[pulse-ep] @ git+https://github.com/swillert/pulse-ep-decay"`,
+  then `pulse-ep-decay run --out widths.csv` analyses every pace map of the
+  configured database; `pulse-ep-decay seed-synthetic` writes a synthetic test
+  study.
+- [pulse-ep-timeref](https://github.com/swillert/pulse-ep-timeref) — activation-timing
+  reference analysis.
+
 ## Citation
 
 If you use `pulse-ep` in academic work, please cite the archived release:
 
 > Willert, S., Frank, D., & Lian, E. *pulse-ep: An open-source platform for
 > programmatic access to multivendor electroanatomical mapping data.*
-> Zenodo. <https://doi.org/10.5281/zenodo.20263542>
+> Version 0.6.0. Zenodo. <https://doi.org/10.5281/zenodo.22675729>
 
-That is the **concept DOI** — it always resolves to the latest release. To
-pin an exact version, use that release's own DOI instead. Machine-readable
+This version DOI identifies the 0.6.0 source archive. The
+[concept DOI](https://doi.org/10.5281/zenodo.20263542) groups all releases and
+resolves to the latest archived version. Machine-readable
 metadata is in [CITATION.cff](CITATION.cff); the accompanying software paper
 is in preparation for SoftwareX.
 

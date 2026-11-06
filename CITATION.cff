@@ -29,9 +29,10 @@ version: 0.6.0
 date-released: "2026-09-08"
 license: MIT
 repository-code: "https://github.com/swillert/pulse-ep"
+doi: "10.5281/zenodo.22675729"
 identifiers:
-  # Cite the concept DOI unless you need to pin an exact release: it always
-  # resolves to the latest version. Each release also mints its own DOI.
+  # The top-level DOI identifies version 0.6.0. This concept DOI groups
+  # all releases and resolves to the latest archived version.
   - description: "Concept DOI — resolves to the latest pulse-ep release"
     type: doi
     value: "10.5281/zenodo.20263542"

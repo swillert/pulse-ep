@@ -88,6 +88,12 @@ studies.csv
 # Jupyter
 .ipynb_checkpoints/
 
+# R session leftovers. An interactive session writes these wherever it was
+# started, and the command history can hold a real study name or path.
+.Rhistory
+.RData
+.Rproj.user/
+
 # Misc
 *.bak
 *.orig
